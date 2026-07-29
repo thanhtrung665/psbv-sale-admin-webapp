@@ -3,9 +3,10 @@ import { RFQItem, RFQ } from "@prisma/client";
 /**
  * CBU (Cost Build-Up) Engine
  * 
- * Performs Cost Build-Up calculation for an RFQ line item.
- * Calculations are based on standard algebraic rules to determine 
- * Cost, Margin, and Final DDP Price in USD & VND.
+ * Performs Cost Build-Up calculation for an RFQ line item based on:
+ * - Duty = (MaterialCost + Logistics) * DutyRate
+ * - BaseCost = MaterialCost + Logistics + Duty + BankFee
+ * - DDP Price USD = BaseCost / (1 - MarginRate - CommRate - (CommRate * CITRate))
  */
 
 export function calculateRFQItemCBU(
@@ -15,50 +16,56 @@ export function calculateRFQItemCBU(
   const qty = item.qty || 1;
   const supplierUnitPrice = item.supplierUnitPrice || 0;
   
-  // 1. Supplier Ext. Price
-  const extPrice = supplierUnitPrice * qty;
+  // Material Cost (Ext Price)
+  const materialCost = supplierUnitPrice * qty;
   
-  // 2. Add-ons & Duty
-  // Assume Duty is applied to (Ext Price + Logistics + Bank Fee)
-  const logisticsFee = item.logisticsFee || 0;
+  const logistics = item.logisticsFee || 0;
   const bankFee = item.bankFee || 0;
   
-  const baseForDuty = extPrice + logisticsFee + bankFee;
-  const dutyAmt = baseForDuty * ((item.dutyPercent || 0) / 100);
+  const dutyRate = (item.dutyPercent || 0) / 100;
+  const commRate = (item.commissionPercent || 0) / 100;
+  const citRate = (item.citPercent || 0) / 100;
+  const marginRate = (item.marginPercent || 0) / 100;
   
-  const totalCostBeforeCommission = baseForDuty + dutyAmt;
+  // 1. Thuế NK: duty = (materialCost + logistics) * dutyRate
+  const duty = (materialCost + logistics) * dutyRate;
   
-  // 3. Commission & CIT
-  const commissionAmt = totalCostBeforeCommission * ((item.commissionPercent || 0) / 100);
-  const citAmt = totalCostBeforeCommission * ((item.citPercent || 0) / 100);
+  // 2. BaseCost = materialCost + logistics + duty + bankFee
+  const baseCost = materialCost + logistics + duty + bankFee;
   
-  // 4. Total Cost USD
-  const totalCostUsd = totalCostBeforeCommission + commissionAmt + citAmt;
+  // 3. ĐẠI SỐ ĐẢO NGƯỢC: ddpUsd = BaseCost / (1 - marginRate - commRate - (commRate * citRate))
+  let ddpUsd = item.ddpPriceUsd; 
+  if (!ddpUsd) {
+    const divisor = 1 - marginRate - commRate - (commRate * citRate);
+    ddpUsd = divisor > 0 ? baseCost / divisor : baseCost;
+  }
+  
+  // 4. LÀM TRÒN TIỀN VND (ROUNDUP -4 Excel): ddpVnd = Math.ceil((ddpUsd * exchangeRate) / 10000) * 10000
+  const ddpVnd = Math.ceil((ddpUsd * exchangeRate) / 10000) * 10000;
+  
+  // 5. commissionUsd = ddpUsd * commRate
+  const commissionUsd = ddpUsd * commRate;
+  
+  // 6. citUsd = commissionUsd * citRate
+  const citUsd = commissionUsd * citRate;
+  
+  // 7. unitCostUsd = materialCost + commissionUsd + citUsd + bankFee + logistics + duty
+  const totalCostUsd = materialCost + commissionUsd + citUsd + bankFee + logistics + duty;
   const unitCostUsd = qty > 0 ? totalCostUsd / qty : 0;
   
-  // 5. Margin & Final Price Calculation
-  // Standard algebraic reverse math: Price = Cost / (1 - Margin%)
-  const marginPct = (item.marginPercent || 0) / 100;
-  
-  // Prevent division by zero or negative prices if margin >= 100%
-  const ddpPriceUsd = marginPct < 1 ? totalCostUsd / (1 - marginPct) : totalCostUsd;
-  
-  // Margin USD
-  const marginPerUnitUsd = qty > 0 ? (ddpPriceUsd - totalCostUsd) / qty : 0;
-  
-  // Final Price VND (Roundup to nearest integer)
-  const ddpPriceVnd = BigInt(Math.ceil(ddpPriceUsd * exchangeRate));
-  
+  // 8. marginPerUnit = ddpUsd - totalCostUsd 
+  const marginPerUnitUsd = qty > 0 ? (ddpUsd - totalCostUsd) / qty : 0;
+
   return {
     ...item,
-    supplierExtPrice: extPrice,
-    dutyAmount: dutyAmt,
-    commissionAmount: commissionAmt,
-    citAmount: citAmt,
-    unitCostUsd,
-    ddpPriceUsd,
-    ddpPriceVnd,
-    marginPerUnitUsd
+    supplierExtPrice: materialCost,
+    dutyAmount: duty,
+    commissionAmount: commissionUsd,
+    citAmount: citUsd,
+    unitCostUsd: qty > 0 ? totalCostUsd / qty : 0, 
+    ddpPriceUsd: ddpUsd,
+    ddpPriceVnd: BigInt(ddpVnd),
+    marginPerUnitUsd: marginPerUnitUsd
   };
 }
 
@@ -74,6 +81,7 @@ export function calculateRFQCBU(
   let totalRevenueVnd = 0n;
   
   calculatedItems.forEach(item => {
+    // Calculated item ddpPriceUsd is total line DDP
     totalCostUsd += (item.unitCostUsd || 0) * (item.qty || 1);
     totalRevenueUsd += (item.ddpPriceUsd || 0);
     totalRevenueVnd += (item.ddpPriceVnd || 0n);

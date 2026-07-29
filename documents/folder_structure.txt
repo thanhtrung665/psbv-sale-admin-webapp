@@ -1,0 +1,98 @@
+psbv-sales-agent-saas/
+├── .spec/                          # Thư mục Specs phục vụ Vibe Coding với Claude Code
+│   ├── 01-db-schema.md             # Prisma Schema & Database Rules
+│   ├── 02-cbu-engine.md            # Đúng công thức toán CBU, Đại số tính ngược, Roundup
+│   ├── 03-rbac-matrix.md           # Quy định phân quyền ADMIN vs SALE_ADMIN
+│   └── 04-pdf-templates.md         # Template HTML & CSS cho file Báo giá MVPO
+├── app/                            # Next.js 14 App Router
+│   ├── (auth)/                     # Luồng Xác thực
+│   │   ├── login/
+│   │   │   └── page.tsx            # Trang Đăng nhập
+│   │   └── layout.tsx
+│   ├── (dashboard)/                # Luồng Dashboard Chính (Cần Đăng nhập)
+│   │   ├── layout.tsx              # Sidebar, Header, Notification, User Profile
+│   │   ├── overview/               # Bàn làm việc Thống kê & KPI
+│   │   │   └── page.tsx            # Thống kê Doanh thu, Margin, Chart (Cả 2 Role xem)
+│   │   ├── rfq/                    # Module Quản lý Đơn hàng (Cả 2 Role)
+│   │   │   ├── page.tsx            # Danh sách RFQ (Phân loại theo 7 Status Tab)
+│   │   │   ├── new/
+│   │   │   │   └── page.tsx        # Upload Inquiry mới (PDF/XLSX/Image/Text)
+│   │   │   └── [id]/
+│   │   │       ├── page.tsx        # Workspace Chi tiết RFQ
+│   │   │       ├── rfo-review/     # Tab Review Bóc tách Inquiry & Duyệt RFO
+│   │   │       ├── cbu-calc/       # Tab Form tính CBU & Live Preview
+│   │   │       └── quote-preview/  # Tab Xem PDF MVPO & Bấm Phê duyệt gửi Khách
+│   │   ├── clients/                # Quản lý Danh mục Khách hàng
+│   │   │   └── page.tsx
+│   │   ├── system-users/           # MODULE ĐẶC QUYỀN CHỈ DÀNH CHO ROLE: ADMIN
+│   │   │   ├── page.tsx            # Danh sách Tài khoản & Cấp Role (ADMIN / SALE_ADMIN)
+│   │   │   └── new/                # Form Tạo Tài khoản Mới
+│   │   └── settings/               # Cấu hình Hệ thống (Chỉ ADMIN)
+│   │       └── page.tsx            # Chỉnh Tỷ giá USD/VND, Prompt AI Gemini, Email Server
+│   ├── api/                        # REST API Endpoints & Webhooks
+│   │   ├── auth/                   # NextAuth / JWT API
+│   │   │   └── [...nextauth]/route.ts
+│   │   ├── webhooks/
+│   │   │   └── inbound-email/route.ts # Webhook nhận email tự động từ Gmail/SendGrid
+│   │   ├── rfq/
+│   │   │   ├── route.ts            # GET/POST RFQ List
+│   │   │   └── [id]/
+│   │   │       ├── route.ts
+│   │   │       ├── parse-inquiry/  # Gọi Gemini bóc file OCR/PDF
+│   │   │       ├── send-rfo/       # Gửi Email RFO cho Hãng
+│   │   │       ├── calculate-cbu/  # API chạy Động cơ CBU
+│   │   │       └── send-quote/     # API Duyệt & Gửi Báo giá cho Khách
+│   │   ├── users/                  # API Quản lý User (Chỉ ADMIN truy cập)
+│   │   │   └── route.ts
+│   │   └── pdf/
+│   │       └── generate/route.ts   # API Render HTML-to-PDF
+│   ├── favicon.ico
+│   ├── globals.css
+│   └── layout.tsx
+├── components/                     # React Components (UI Building Blocks)
+│   ├── ui/                         # Shadcn UI Components (Button, Dialog, Table, Badge...)
+│   │   ├── button.tsx
+│   │   ├── table.tsx
+│   │   ├── badge.tsx
+│   │   └── dialog.tsx
+│   ├── shared/                     # Components Dùng chung
+│   │   ├── sidebar.tsx             # Sidebar tự động ẩn tab /system-users nếu là SALE_ADMIN
+│   │   ├── header.tsx
+│   │   ├── status-badge.tsx        # Render 7 Mẫu Badge Trạng thái
+│   │   └── role-guard.tsx          # Component bọc Phân quyền Client-side
+│   ├── dashboard/                  # Components cho trang Overview
+│   │   ├── kpi-cards.tsx           # Thẻ Thống kê Doanh thu, Margin, Tổng đơn
+│   │   └── margin-chart.tsx        # Biểu đồ Lợi nhuận
+│   ├── rfq/                        # Components cho luồng Xử lý Đơn hàng
+│   │   ├── inquiry-uploader.tsx    # Drag-and-drop Upload File PDF/Image/Excel
+│   │   ├── rfo-table.tsx           # Bảng sửa Part Number, Description
+│   │   ├── cbu-form.tsx            # Form Nhập Logistics, Duty %, Margin %
+│   │   └── pdf-viewer.tsx          # Iframe Preview File PDF MVPO
+│   └── users/                      # Components Quản lý Tài khoản (Chỉ ADMIN)
+│       ├── user-table.tsx
+│       └── create-user-modal.tsx
+├── lib/                            # Pure Business Logic & Integrations (Cốt lõi)
+│   ├── prisma.ts                   # Instance kết nối Database Postgres
+│   ├── cbu-engine.ts               # Pure TS Utility: Động cơ tính toán CBU (Đại số đảo ngược)
+│   ├── gemini.ts                   # Integration Google Gemini 1.5 Pro API (Parser & Vision OCR)
+│   ├── pdf-renderer.ts             # Puppeteer/Playwright Render HTML to PDF
+│   ├── email.ts                    # Nodemailer / Resend Gửi Email tự động
+│   ├── fuzzy-catalog.ts            # Thuật toán Khớp tên Part Number chuẩn
+│   └── auth.ts                     # Auth Utilities & RBAC Middleware Checkers
+├── prisma/
+│   ├── schema.prisma               # File Cấu trúc Cơ sở Dữ liệu
+│   └── seed.ts                     # Data khởi tạo (Tạo sẵn 1 Account ADMIN Master)
+├── public/
+│   ├── images/
+│   │   └── psbv-logo.png           # Logo Công ty dùng cho PDF & Web Header
+│   └── templates/
+│       └── quotation-template.html # Template HTML Báo giá MVPO Chuẩn
+├── types/                          # TypeScript Interfaces & Definitions
+│   ├── index.d.ts
+│   └── rfq.ts
+├── .env.example                    # File Mẫu Biến Môi Trường
+├── middleware.ts                   # Next.js Middleware: Chặn Route theo Role (ADMIN vs SALE_ADMIN)
+├── next.config.js
+├── package.json
+├── tailwind.config.js
+└── tsconfig.json

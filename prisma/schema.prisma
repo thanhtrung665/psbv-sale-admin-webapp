@@ -1,0 +1,118 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Cập nhật Enum Role: Chỉ còn ADMIN và SALE_ADMIN
+enum Role {
+  ADMIN       // Master Admin: Toàn quyền hệ thống + Quản lý User
+  SALE_ADMIN  // Sale Admin: Toàn quyền Vận hành, Tính CBU, Duyệt & Xem Dashboard
+}
+
+enum OrderStatus {
+  INQUIRY_RECEIVED          // 1. Khách gửi Yêu cầu (AI bóc)
+  RFO_PENDING_ADMIN         // 2. Chờ Sale Admin / Admin kiểm tra & duyệt RFO
+  RFO_SENT_TO_SUPPLIER      // 3. Đã gửi Hãng (Đang đợi Hãng trả Quote)
+  SUPPLIER_QUOTED           // 4. Hãng đã báo giá (AI bóc PDF Quote)
+  CBU_PENDING_ADMIN         // 5. Chờ Sale Admin / Admin nhập phí & chạy CBU
+  QUOTATION_DRAFTED         // 6. Đã tính CBU & Sinh file PDF Quotation nháp
+  QUOTED_TO_CLIENT          // 7. Đã duyệt & Phát hành Báo giá gửi Khách
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Password mã hóa bcrypt
+  name      String
+  role      Role     @default(SALE_ADMIN)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id          String   @id @default(uuid())
+  name        String
+  companyName String
+  email       String   @unique
+  phone       String?
+  address     String?
+  rfqs        RFQ[]
+}
+
+model RFQ {
+  id                String       @id @default(uuid())
+  rfqCode           String       @unique // Ví dụ: RFO_PSBV_2026_001
+  clientId          String
+  client            Client       @relation(fields: [clientId], references: [id])
+  status            OrderStatus  @default(INQUIRY_RECEIVED)
+  
+  isProcessing      Boolean      @default(false)
+  extractionError   String?      
+  
+  // Thông tin Hãng
+  supplierQuoteCode String?      
+  supplierName      String?
+  
+  // Tài chính CBU
+  exchangeRate      Float        @default(25500)
+  totalCostUsd      Float?
+  totalRevenueUsd   Float?
+  totalRevenueVnd   BigInt?
+  totalMarginUsd    Float?
+  actualMarginPct   Float?
+  
+  // Người xử lý/Duyệt
+  createdById       String?
+  approvedById      String?
+  
+  items             RFQItem[]
+  documents         Document[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model RFQItem {
+  id                String   @id @default(uuid())
+  rfqId             String
+  rfq               RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  lineNo            Int
+  
+  rawPartNumber     String
+  rawDescription    String?
+  standardPartNo    String?  
+  qty               Float    @default(1)
+  
+  netWeightLbs      Float?
+  supplierUnitPrice Float?   
+  supplierExtPrice  Float?
+  leadTime          String?
+  
+  logisticsFee      Float?   @default(0)
+  bankFee           Float?   @default(0)
+  dutyPercent       Float?   @default(0)
+  dutyAmount        Float?   @default(0)
+  commissionPercent Float?   @default(0)
+  commissionAmount  Float?   @default(0)
+  citPercent        Float?   @default(0)
+  citAmount         Float?   @default(0)
+  marginPercent     Float?   @default(0)
+  
+  unitCostUsd       Float?
+  ddpPriceUsd       Float?
+  ddpPriceVnd       BigInt?  
+  marginPerUnitUsd  Float?
+}
+
+model Document {
+  id        String   @id @default(uuid())
+  rfqId     String
+  rfq       RFQ      @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  type      String   // 'INQUIRY_FILE', 'SUPPLIER_QUOTE_PDF', 'MVPO_QUOTATION_PDF'
+  fileUrl   String
+  createdAt DateTime @default(now())
+}

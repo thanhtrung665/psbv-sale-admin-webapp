@@ -9,6 +9,7 @@ export interface RfoEmailParams {
   orderTableHtml: string;     // Pre-built HTML table of order items
   supplierLogoUrl?: string;   // Logo of the supplier/manufacturer (optional)
   catalogUrl?: string;        // Optional link to product catalog / image form
+  senderName?: string;        // Name shown in Best regards closing
 }
 
 const PSBV_LOGO_URL = "https://nvcanmdfdmyllvopxdst.supabase.co/storage/v1/object/public/assets/logo.png";
@@ -18,6 +19,7 @@ export function buildRfoEmailHtml({
   orderTableHtml,
   supplierLogoUrl,
   catalogUrl,
+  senderName = "PSBV Sales Team",
 }: RfoEmailParams): string {
 
   const supplierLogoBlock = supplierLogoUrl
@@ -47,35 +49,13 @@ export function buildRfoEmailHtml({
        </table>`
     : "";
 
-  // PSBV Footer Card — logo + company info, no disclaimer
-  const psbvFooterCard = `
-    <table width="100%" cellpadding="0" cellspacing="0"
-           style="margin-top:40px; border:1px solid #cbd5e1; border-radius:8px;
-                  border-top:3px solid #00529c; overflow:hidden; font-family:Arial,sans-serif;">
-      <tr>
-        <td style="padding:16px 20px; vertical-align:middle; width:110px;
-                   border-right:1px solid #e2e8f0; background:#f8fafc; text-align:center;">
-          <img src="${PSBV_LOGO_URL}" alt="PSBV Logo"
-               style="height:48px; max-width:100px; object-fit:contain; display:block; margin:0 auto;" />
-        </td>
-        <td style="padding:14px 20px; vertical-align:middle; background:#fff;">
-          <p style="margin:0 0 3px 0; font-size:14px; font-weight:700; color:#00529c; line-height:1.3;">
-            PSBV Trading &amp; Service Co., Ltd.
-          </p>
-          <p style="margin:0 0 2px 0; font-size:12px; color:#475569;">
-            5th Floor, Dat Gia Building, 98 Nguyen Thi Minh Khai St., Ben Thanh Ward, District 1, Ho Chi Minh City
-          </p>
-          <p style="margin:0 0 2px 0; font-size:12px; color:#475569;">
-            Tel: (+84) 28 3823 xxxx &nbsp;|&nbsp; Mobile: (+84) 90x xxx xxxx
-          </p>
-          <p style="margin:0; font-size:12px; color:#475569;">
-            <a href="mailto:sales@psbv.vn" style="color:#0ea5e9; text-decoration:none;">sales@psbv.vn</a>
-            &nbsp;|&nbsp;
-            <a href="https://www.psbv.vn" target="_blank" style="color:#0ea5e9; text-decoration:none;">www.psbv.vn</a>
-          </p>
-        </td>
-      </tr>
-    </table>`;
+  // Closing block — Thank you + Best regards + PSBV logo only
+  const closingBlock = `
+    <p style="margin:24px 0 4px 0; font-size:14px; color:#1e293b;">Thank you for your attention. We look forward to your quotation.</p>
+    <p style="margin:0 0 2px 0; font-size:14px; color:#1e293b;">Best regards,</p>
+    <p style="margin:0 0 20px 0; font-size:14px; font-weight:600; color:#0f172a;">${senderName}</p>
+    <img src="${PSBV_LOGO_URL}" alt="PSBV Logo"
+         style="height:44px; max-width:160px; object-fit:contain; display:block;" />`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -114,8 +94,8 @@ export function buildRfoEmailHtml({
               <!-- Catalog Link Block -->
               ${catalogBlock}
 
-              <!-- PSBV Footer Card -->
-              ${psbvFooterCard}
+              <!-- Closing: Thank you + Best regards + PSBV Logo -->
+              ${closingBlock}
 
             </td>
           </tr>

@@ -146,8 +146,9 @@ export default function RFOReviewPage() {
       orderTableHtml,
       supplierLogoUrl: supplierLogo || undefined,
       catalogUrl: catalogUrl || undefined,
+      senderName: supplierName ? `PSBV Sales Team` : "PSBV Sales Team",
     }),
-    [greetingBody, orderTableHtml, supplierLogo, catalogUrl]
+    [greetingBody, orderTableHtml, supplierLogo, catalogUrl, supplierName]
   );
 
   const handleSendRFO = async () => {

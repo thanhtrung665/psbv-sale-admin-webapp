@@ -5,7 +5,6 @@ import { useState } from "react";
 export default function CBUForm() {
   const [exchangeRate, setExchangeRate] = useState(25500);
   const [materialCost, setMaterialCost] = useState(0);
-  const [logistics, setLogistics] = useState(0);
   // Add other necessary states...
 
   return (

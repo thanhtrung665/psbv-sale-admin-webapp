@@ -4,15 +4,19 @@ import { NextResponse } from "next/server";
 export default withAuth(
   function middleware(req) {
     const { pathname } = req.nextUrl;
-    // Assuming the JWT token contains the user's role
-    const role = req.nextauth.token?.role;
+    const role = req.nextauth.token?.role as string | undefined;
 
-    // 1. ADMIN exclusive routes
-    if (pathname.startsWith("/system-users") || pathname.startsWith("/settings")) {
-      if (role !== "ADMIN") {
-        // Redirect SALE_ADMIN (or unauthorized) to overview instead of letting them see the page
-        return NextResponse.redirect(new URL("/overview", req.url));
-      }
+    // ADMIN-only routes — redirect SALE_ADMIN to /overview
+    const adminOnlyRoutes = ["/system-users", "/settings"];
+    const isAdminOnly = adminOnlyRoutes.some((route) =>
+      pathname.startsWith(route)
+    );
+
+    if (isAdminOnly && role !== "ADMIN") {
+      const url = req.nextUrl.clone();
+      url.pathname = "/overview";
+      url.searchParams.set("warn", "no_permission");
+      return NextResponse.redirect(url);
     }
 
     return NextResponse.next();
@@ -30,6 +34,6 @@ export const config = {
     "/rfq/:path*",
     "/clients/:path*",
     "/system-users/:path*",
-    "/settings/:path*"
+    "/settings/:path*",
   ],
 };

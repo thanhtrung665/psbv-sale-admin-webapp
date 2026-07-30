@@ -31,6 +31,9 @@ model User {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  
+  tasksAssigned Task[] @relation("TaskAssignee")
+  tasksCreated  Task[] @relation("TaskCreator")
 }
 
 model Client {
@@ -85,11 +88,12 @@ model RFQItem {
   rawDescription    String?
   standardPartNo    String?  
   qty               Float    @default(1)
+  uom               String   @default("PCS")
+  supplier          String?
   
   netWeightLbs      Float?
   supplierUnitPrice Float?   
   supplierExtPrice  Float?
-  leadTime          String?
   
   logisticsFee      Float?   @default(0)
   bankFee           Float?   @default(0)
@@ -114,4 +118,61 @@ model Document {
   type      String   // 'INQUIRY_FILE', 'SUPPLIER_QUOTE_PDF', 'MVPO_QUOTATION_PDF'
   fileUrl   String
   createdAt DateTime @default(now())
+}
+
+enum TaskStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus @default(PENDING)
+  dueDate     DateTime?
+  
+  assigneeId  String
+  assignee    User       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  
+  creatorId   String
+  creator     User       @relation("TaskCreator", fields: [creatorId], references: [id])
+  
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model AiConfig {
+  id             String   @id @default(uuid()) // Only one record usually
+  name           String   @default("core")
+  apiKey         String
+  modelName      String   @default("gemini-1.5-pro")
+  inquiryPrompt  String?  @db.Text
+  quotePrompt    String?  @db.Text
+  toolsConfig    String?  @db.Text
+  resendApiKey   String?
+  
+  updatedAt      DateTime @updatedAt
+}
+
+model MasterPart {
+  id          String   @id @default(uuid())
+  partNumber  String   @unique
+  description String
+  uom         String   @default("PCS")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Supplier {
+  id            String   @id @default(uuid())
+  name          String
+  companyName   String
+  email         String   @unique
+  recipientName String?
+  ccEmails      String?  
+  logoUrl       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

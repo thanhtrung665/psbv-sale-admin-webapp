@@ -79,6 +79,7 @@ export async function POST(
     });
 
     return NextResponse.json({
+      success: true,
       message: "Bóc tách báo giá Hãng thành công!",
       supplierQuoteCode: parsed.supplierQuoteCode,
       supplierName: parsed.supplierName,

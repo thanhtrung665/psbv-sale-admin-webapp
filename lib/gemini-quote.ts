@@ -48,8 +48,12 @@ CRITICAL RULES:
 // ─── Utilities ──────────────────────────────────────────────────────────────────
 
 export function extractQuoteCodeFromFilename(fileName: string): string | null {
-  const match1 = fileName.match(/(?:Quote|QT|QUOTATION|KET|NOV)[_\s-]?([A-Z0-9_-]+)/i);
-  if (match1 && match1[1]) return match1[1];
+  const match1 = fileName.match(/(Quote|QT|QUOTATION|KET|NOV)[_\s-]*([A-Z0-9]+)/i);
+  if (match1 && match1[1] && match1[2]) {
+    const prefix = match1[1].toUpperCase();
+    const finalPrefix = prefix === "QUOTE" ? "Quote" : prefix === "QUOTATION" ? "Quotation" : prefix;
+    return `${finalPrefix} ${match1[2]}`;
+  }
 
   const match2 = fileName.match(/([A-Z0-9]{4,12})/i);
   if (match2 && match2[1]) return match2[1];

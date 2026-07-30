@@ -45,21 +45,38 @@ CRITICAL RULES:
 6. Extract ALL line items — do not skip any.
 7. Do NOT convert currencies — use the price as printed.`;
 
+// ─── Utilities ──────────────────────────────────────────────────────────────────
+
+export function extractQuoteCodeFromFilename(fileName: string): string | null {
+  const match1 = fileName.match(/(?:Quote|QT|QUOTATION|KET|NOV)[_\s-]?([A-Z0-9_-]+)/i);
+  if (match1 && match1[1]) return match1[1];
+
+  const match2 = fileName.match(/([A-Z0-9]{4,12})/i);
+  if (match2 && match2[1]) return match2[1];
+
+  return null;
+}
+
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
 export async function parseSupplierQuoteWithGemini(
   fileBuffer: Buffer,
-  mimeType: string
+  mimeType: string,
+  fileName?: string
 ): Promise<ParsedSupplierQuote> {
   const config = await prisma.aiConfig.findFirst({ where: { name: "core" } });
   const apiKey = config?.apiKey || DEFAULT_API_KEY;
   const modelName = config?.modelName || DEFAULT_MODEL;
-  const prompt = config?.quotePrompt || SYSTEM_PROMPT;
+  let currentPrompt = config?.quotePrompt || SYSTEM_PROMPT;
+
+  if (fileName) {
+    currentPrompt += `\n\nFile PDF này có tên là '${fileName}'. Hãy kết hợp trích xuất mã Quote Hãng (supplierQuoteCode) từ cả tên file VÀ Header/Tiêu đề của file PDF. Nếu tên file chứa chuỗi như 'KET_67373' hoặc 'Quote_67373', hãy ưu tiên sử dụng mã này làm 'supplierQuoteCode'.`;
+  }
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
     model: modelName,
-    systemInstruction: prompt,
+    systemInstruction: currentPrompt,
   });
 
   const result = await model.generateContent({
@@ -92,8 +109,12 @@ export async function parseSupplierQuoteWithGemini(
     throw new Error(`Gemini trả về JSON không hợp lệ: ${rawText.substring(0, 200)}`);
   }
 
+  const filenameCode = fileName ? extractQuoteCodeFromFilename(fileName) : null;
+  const geminiCode = parsed.supplierQuoteCode || "";
+  const finalQuoteCode = geminiCode || filenameCode || "";
+
   return {
-    supplierQuoteCode: parsed.supplierQuoteCode || "",
+    supplierQuoteCode: finalQuoteCode,
     supplierName: parsed.supplierName || "",
     items: (parsed.items || []).map((item: any) => ({
       partNumber: item.partNumber || "",

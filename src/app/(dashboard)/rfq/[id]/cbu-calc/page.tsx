@@ -139,6 +139,9 @@ export default function CBUCalcPage() {
   const [finalizing, setFinalizing] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
+  const [editingQuoteCode, setEditingQuoteCode] = useState(false);
+  const [quoteCodeInput, setQuoteCodeInput] = useState("");
+
   // Global fee inputs
   const [exchangeRate, setExchangeRate] = useState(25500);
   const [globalLogistics, setGlobalLogistics] = useState(0);
@@ -159,6 +162,7 @@ export default function CBUCalcPage() {
       const data: RFQDetail = await res.json();
       setRfq(data);
       setExchangeRate(data.exchangeRate || 25500);
+      setQuoteCodeInput(data.supplierQuoteCode || "");
 
       // Initialize row inputs from existing DB values or defaults
       const initInputs: Record<string, RowInputs> = {};
@@ -276,6 +280,26 @@ export default function CBUCalcPage() {
     else showToast("Lưu thất bại.", "err");
   };
 
+  const handleSaveQuoteCode = async () => {
+    if (!rfq) return;
+    try {
+      const res = await fetch(`/api/rfq/${rfqId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ supplierQuoteCode: quoteCodeInput }),
+      });
+      if (res.ok) {
+        setRfq({ ...rfq, supplierQuoteCode: quoteCodeInput });
+        setEditingQuoteCode(false);
+        showToast("Đã cập nhật mã Quote Hãng", "ok");
+      } else {
+        showToast("Lỗi khi cập nhật mã Quote", "err");
+      }
+    } catch (e) {
+      showToast("Lỗi khi cập nhật mã Quote", "err");
+    }
+  };
+
   const handleFinalize = async () => {
     setFinalizing(true);
     const res = await fetch(`/api/rfq/${rfqId}/calculate-cbu`, {
@@ -336,9 +360,39 @@ export default function CBUCalcPage() {
             <span className="text-xs px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
               Tính CBU — Báo giá
             </span>
-            {rfq.supplierQuoteCode && (
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono">
+            {editingQuoteCode ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={quoteCodeInput}
+                  onChange={(e) => setQuoteCodeInput(e.target.value)}
+                  className="text-xs px-2 py-1 rounded-md border border-indigo-300 bg-white text-indigo-900 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32"
+                  autoFocus
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveQuoteCode()}
+                />
+                <button onClick={handleSaveQuoteCode} className="text-indigo-600 hover:text-indigo-700 p-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                </button>
+                <button onClick={() => { setEditingQuoteCode(false); setQuoteCodeInput(rfq.supplierQuoteCode || ""); }} className="text-gray-400 hover:text-gray-600 p-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            ) : rfq.supplierQuoteCode ? (
+              <span 
+                onClick={() => setEditingQuoteCode(true)}
+                className="text-xs px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 font-mono cursor-pointer hover:bg-indigo-100 transition-colors flex items-center gap-1 group"
+                title="Nhấn để sửa mã Quote"
+              >
                 Quote Hãng: {rfq.supplierQuoteCode}
+                <svg className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+              </span>
+            ) : (
+              <span 
+                onClick={() => setEditingQuoteCode(true)}
+                className="text-xs px-2.5 py-1 rounded-lg bg-gray-50 text-gray-500 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors flex items-center gap-1 border-dashed"
+                title="Nhấn để thêm mã Quote"
+              >
+                + Thêm mã Quote
               </span>
             )}
           </div>

@@ -32,7 +32,7 @@ export async function POST(
 
     // ── Run Gemini parser ──────────────────────────────────────────────────
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parseSupplierQuoteWithGemini(fileBuffer, file.type);
+    const parsed = await parseSupplierQuoteWithGemini(fileBuffer, file.type, file.name);
 
     // ── Match part numbers and update RFQItems ─────────────────────────────
     const matchResults: { lineNo: number; matched: boolean }[] = [];

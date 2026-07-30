@@ -85,6 +85,7 @@ export async function POST(
       supplierName: parsed.supplierName,
       itemsMatched: matchResults.filter((r) => r.matched).length,
       itemsTotal: parsed.items.length,
+      parsedData: parsed.items,
     });
   } catch (err: any) {
     console.error("[parse-supplier-quote]", err);

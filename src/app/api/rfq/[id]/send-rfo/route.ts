@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 
+export const dynamic = "force-dynamic";
+
 export async function POST(
   req: NextRequest,
   { params }: { params: { id: string } }
@@ -15,16 +17,28 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { supplierEmail, supplierName, ccEmails, emailSubject, emailBody } = body;
+    const {
+      supplierEmail,
+      supplierName,
+      ccEmails,
+      emailSubject,
+      emailBody,
+      // catalogUrl is already baked into emailBody by the builder — accepted but not re-used here
+    } = body;
 
     if (!supplierEmail || !emailSubject || !emailBody) {
-      return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
+      return NextResponse.json({ error: "Thiếu thông tin bắt buộc (email, tiêu đề, nội dung)" }, { status: 400 });
     }
 
-    const ccArray = ccEmails
-      ? ccEmails.split(",").map((e: string) => e.trim()).filter((e: string) => e)
+    // Verify no client info leaks — body is pre-sanitized by email-builder.ts on the client side.
+    // The emailBody passed here must be built by buildRfoEmailHtml (UI responsibility).
+
+    // Parse CC emails from comma-separated string
+    const ccArray: string[] = ccEmails
+      ? (ccEmails as string).split(",").map((e: string) => e.trim()).filter(Boolean)
       : [];
 
+    // Send the email
     await sendEmail({
       to: supplierEmail,
       cc: ccArray,
@@ -32,7 +46,7 @@ export async function POST(
       html: emailBody,
     });
 
-    // Cập nhật thông tin Supplier vào RFQ và đổi status
+    // Update RFQ — store supplier name and advance status to RFO_SENT_TO_SUPPLIER
     const updatedRfq = await prisma.rFQ.update({
       where: { id: params.id },
       data: {
@@ -42,7 +56,9 @@ export async function POST(
     });
 
     return NextResponse.json({ success: true, rfq: updatedRfq });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[send-rfo] Error:", message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

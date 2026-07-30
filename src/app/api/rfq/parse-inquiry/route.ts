@@ -51,77 +51,80 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ── 3. Run Gemini Parser async (fire and update DB when done) ──────────
-    (async () => {
-      try {
-        let parsed;
+    // ── 3. Run Gemini Parser synchronously ──────────
+    try {
+      let parsed;
 
-        if (file) {
-          const buffer = Buffer.from(await file.arrayBuffer());
-          parsed = await parseInquiryWithGemini(buffer, file.type);
-        } else {
-          parsed = await parseInquiryWithGemini(undefined, undefined, emailText!);
-        }
+      if (file) {
+        const buffer = Buffer.from(await file.arrayBuffer());
+        parsed = await parseInquiryWithGemini(buffer, file.type);
+      } else {
+        parsed = await parseInquiryWithGemini(undefined, undefined, emailText!);
+      }
 
-        // Upsert the real client
-        const client = await prisma.client.upsert({
-          where: { email: parsed.clientEmail || `pending_${rfqCode}@placeholder.com` },
-          update: {
-            name: parsed.clientName,
-            companyName: parsed.companyName,
-            phone: parsed.clientPhone,
-          },
-          create: {
-            name: parsed.clientName || "Unknown",
-            companyName: parsed.companyName || "Unknown",
-            email: parsed.clientEmail || `${rfqCode}@unknown.com`,
-            phone: parsed.clientPhone,
-          },
-        });
+      // Upsert the real client
+      const client = await prisma.client.upsert({
+        where: { email: parsed.clientEmail || `pending_${rfqCode}@placeholder.com` },
+        update: {
+          name: parsed.clientName,
+          companyName: parsed.companyName,
+          phone: parsed.clientPhone,
+        },
+        create: {
+          name: parsed.clientName || "Unknown",
+          companyName: parsed.companyName || "Unknown",
+          email: parsed.clientEmail || `${rfqCode}@unknown.com`,
+          phone: parsed.clientPhone,
+        },
+      });
 
-        // Update RFQ with real client and items
-        await prisma.rFQ.update({
-          where: { id: rfq.id },
-          data: {
-            clientId: client.id,
-            status: "RFO_PENDING_ADMIN",
-            isProcessing: false,
-            extractionError: null,
-            items: {
-              create: parsed.items.map((item) => ({
-                lineNo: item.lineNo,
-                rawPartNumber: item.rawPartNumber,
-                rawDescription: item.rawDescription,
-                standardPartNo: item.standardPartNo,
-                qty: item.qty,
-                uom: item.uom,
-                supplier: item.supplier,
-              })),
-            },
+      // Update RFQ with real client and items
+      await prisma.rFQ.update({
+        where: { id: rfq.id },
+        data: {
+          clientId: client.id,
+          status: "RFO_PENDING_ADMIN",
+          isProcessing: false,
+          extractionError: null,
+          items: {
+            create: parsed.items.map((item) => ({
+              lineNo: item.lineNo,
+              rawPartNumber: item.rawPartNumber,
+              rawDescription: item.rawDescription,
+              standardPartNo: item.standardPartNo,
+              qty: item.qty,
+              uom: item.uom,
+              supplier: item.supplier,
+            })),
           },
-        });
+        },
+      });
 
-        // Remove placeholder client if different
-        if (client.email !== `pending_${rfqCode}@placeholder.com`) {
-          await prisma.client.deleteMany({
-            where: { email: `pending_${rfqCode}@placeholder.com` },
-          });
-        }
-      } catch (err: any) {
-        await prisma.rFQ.update({
-          where: { id: rfq.id },
-          data: {
-            isProcessing: false,
-            extractionError: err.message || "AI parsing failed",
-          },
+      // Remove placeholder client if different
+      if (client.email !== `pending_${rfqCode}@placeholder.com`) {
+        await prisma.client.deleteMany({
+          where: { email: `pending_${rfqCode}@placeholder.com` },
         });
       }
-    })();
 
-    return NextResponse.json(
-      { rfqId: rfq.id, rfqCode, message: "Đang xử lý bằng AI..." },
-      { status: 202 }
-    );
+      return NextResponse.json(
+        { rfqId: rfq.id, rfqCode, message: "Bóc tách AI thành công." },
+        { status: 200 }
+      );
+    } catch (err: any) {
+      await prisma.rFQ.update({
+        where: { id: rfq.id },
+        data: {
+          isProcessing: false,
+          extractionError: err.message || "AI parsing failed",
+        },
+      });
+
+      return NextResponse.json(
+        { rfqId: rfq.id, rfqCode, error: err.message || "AI parsing failed, but RFQ created." },
+        { status: 500 }
+      );
+    }
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Có lỗi xảy ra." },

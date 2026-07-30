@@ -7,34 +7,38 @@ export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const rfq = await prisma.rFQ.findUnique({
-    where: { id: params.id },
-    include: {
-      client: true,
-      items: { orderBy: { lineNo: "asc" } },
-      documents: true,
-    },
-  });
-
-  if (!rfq) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  let supplierLogo = null;
-  if (rfq.supplierName) {
-    const supplier = await prisma.supplier.findFirst({
-      where: {
-        OR: [
-          { name: { equals: rfq.supplierName, mode: "insensitive" } },
-          { companyName: { equals: rfq.supplierName, mode: "insensitive" } },
-        ],
+    const rfq = await prisma.rFQ.findUnique({
+      where: { id: params.id },
+      include: {
+        client: true,
+        items: { orderBy: { lineNo: "asc" } },
+        documents: true,
       },
     });
-    if (supplier) supplierLogo = supplier.logoUrl;
-  }
 
-  return NextResponse.json({ ...rfq, supplierLogo });
+    if (!rfq) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    let supplierLogo = null;
+    if (rfq.supplierName) {
+      const supplier = await prisma.supplier.findFirst({
+        where: {
+          OR: [
+            { name: { equals: rfq.supplierName, mode: "insensitive" } },
+            { companyName: { equals: rfq.supplierName, mode: "insensitive" } },
+          ],
+        },
+      });
+      if (supplier) supplierLogo = supplier.logoUrl;
+    }
+
+    return NextResponse.json({ ...rfq, supplierLogo });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message || "Lỗi máy chủ" }, { status: 500 });
+  }
 }
 
 export async function DELETE(

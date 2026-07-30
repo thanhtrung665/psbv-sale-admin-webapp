@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { Resend } from "resend";
 
+const resend = new Resend(process.env.RESEND_API_KEY);
 export const dynamic = "force-dynamic";
 
 export async function POST(
@@ -38,13 +39,19 @@ export async function POST(
       ? (ccEmails as string).split(",").map((e: string) => e.trim()).filter(Boolean)
       : [];
 
-    // Send the email
-    await sendEmail({
+    // Send the email via Resend
+    const { data, error } = await resend.emails.send({
+      from: "PSBV Sales Agent <onboarding@resend.dev>",
       to: supplierEmail,
-      cc: ccArray,
+      cc: ccArray.length > 0 ? ccArray : undefined,
       subject: emailSubject,
       html: emailBody,
     });
+
+    if (error) {
+      console.error("Resend Error:", error);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
 
     // Update RFQ — store supplier name and advance status to RFO_SENT_TO_SUPPLIER
     const updatedRfq = await prisma.rFQ.update({
@@ -55,10 +62,9 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, rfq: updatedRfq });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[send-rfo] Error:", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ success: true, data, rfq: updatedRfq });
+  } catch (error: any) {
+    console.error("[send-rfo] Error:", error);
+    return NextResponse.json({ success: false, error: error.message || "Unknown error" }, { status: 500 });
   }
 }

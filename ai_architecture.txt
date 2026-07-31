@@ -1,0 +1,55 @@
+HỆ THỐNG LÕI AI, EMAIL VÀ CƠ SỞ DỮ LIỆU - PSBV SALES AGENT SAAS
+======================================================================
+Dưới đây là cấu trúc chi tiết các thư mục và file liên quan đến tính năng trí tuệ nhân tạo (Gemini), Gửi Email tự động, và Cơ sở dữ liệu (Prisma) bên trong hệ thống.
+
+----------------------------------------------------------------------
+1. TẦNG THƯ VIỆN LÕI AI (AI CORE LIBRARIES)
+Vị trí: /lib/
+Chức năng: Chứa các script giao tiếp trực tiếp với SDK của Google Generative AI (@google/generative-ai) và các thuật toán xử lý dữ liệu chuẩn hóa.
+----------------------------------------------------------------------
+- lib/gemini.ts: Bộ máy AI (Engine) dùng để bóc tách YÊU CẦU BÁO GIÁ CỦA KHÁCH HÀNG (Inquiry) dựa trên Prompt chuyên sâu và trả về JSON chuẩn hóa. Gọi `catalog-matcher.ts` sau khi bóc tách.
+- lib/gemini-quote.ts: Bộ máy AI bóc tách BÁO GIÁ TỪ HÃNG (Supplier Quote) từ PDF. Trích xuất Mã báo giá, Part Number, Giá nhập, Trọng lượng.
+- lib/catalog-matcher.ts: Thuật toán chuẩn hóa mã vật tư (Fuzzy match), so sánh mã thô khách gửi với Master Database để chuẩn hóa Part Number và UOM.
+
+
+----------------------------------------------------------------------
+2. TẦNG API ROUTER LIÊN QUAN ĐẾN AI
+Vị trí: /src/app/api/
+Chức năng: Nơi tiếp nhận Request, gọi AI và lưu xuống DB.
+----------------------------------------------------------------------
+- src/app/api/rfq/parse-inquiry/route.ts: API POST nhận file Inquiry của khách, gọi Gemini bóc tách, khởi tạo đơn hàng mới với trạng thái INQUIRY_RECEIVED.
+- src/app/api/rfq/[id]/parse-supplier-quote/route.ts: API bóc tách báo giá Hãng bên trong trang CBU, tự động khớp (match) Part Number từ AI trả về với Part Number hiện tại của đơn hàng để điền Giá nhập.
+- src/app/api/rfq/quick-parse-quote/route.ts: API "Xử lý Quote" siêu tốc từ trang chủ, tự động nhảy trạng thái đơn hàng sang CBU_PENDING_ADMIN.
+- src/app/api/ai-config/route.ts: API GET/POST để lưu hoặc lấy cấu hình AI động (API Key, Model name, Prompts, Resend Key) từ Database thay vì hardcode.
+
+
+----------------------------------------------------------------------
+3. TẦNG QUẢN LÝ EMAIL & TEMPLATE (MAIL ENGINE)
+Vị trí: /lib/
+Chức năng: Quản lý việc gửi Email tự động và render giao diện (HTML) của Email.
+----------------------------------------------------------------------
+- lib/email.ts: Wrapper xử lý gửi Email sử dụng thư viện `nodemailer`. 
+  * Cơ chế: Tự động móc `resendApiKey` từ bảng `AiConfig` dưới Database (không cần sửa file .env), và gọi qua cổng SMTP của Resend.com.
+- lib/email-builder.ts: Service chuyên xây dựng giao diện Email (HTML).
+  * Chứa template HTML tĩnh với bảng màu chuyên nghiệp (Blue/Slate) của PSBV.
+  * Có các hàm `buildRfoEmailHtml` (Render thư gửi Hãng) và `buildOrderTableHtml` (Render bảng sản phẩm dạng HTML không màu mè, chuyên nghiệp để Hãng dễ đọc).
+  * Template được thiết kế để không chứa thông tin khách hàng cuối (End-client) nhằm bảo mật thông tin phân phối.
+
+
+----------------------------------------------------------------------
+4. KIẾN TRÚC CƠ SỞ DỮ LIỆU (DATABASE SCHEMA)
+Vị trí: prisma/schema.prisma
+Chức năng: Quản lý cấu trúc dữ liệu PostgreSQL.
+----------------------------------------------------------------------
+Các bảng (Models) quan trọng nhất liên quan đến luồng AI và CBU:
+- Enum OrderStatus: Quản lý vòng đời đơn hàng siêu chặt chẽ qua 7 bước: INQUIRY_RECEIVED -> RFO_PENDING_ADMIN -> RFO_SENT_TO_SUPPLIER -> SUPPLIER_QUOTED -> CBU_PENDING_ADMIN -> QUOTATION_DRAFTED -> QUOTED_TO_CLIENT.
+- Model RFQ: Lưu thông tin Header của đơn hàng, kết nối với bảng `Client`. Lưu trữ trạng thái, Tỷ giá (exchangeRate), Tổng giá vốn (totalCostUsd), Tổng lợi nhuận (totalMarginUsd).
+- Model RFQItem: Lưu thông tin chi tiết từng dòng sản phẩm. AI sẽ ghi đè dữ liệu vào đây. Lưu trữ mã thô (`rawPartNumber`), mã chuẩn (`standardPartNo`). Chứa toàn bộ các trường tài chính CBU (dutyPercent, marginPercent, ddpPriceUsd, ddpPriceVnd...).
+- Model AiConfig: Lưu trữ độc quyền các thiết lập về AI (inquiryPrompt, quotePrompt, resendApiKey) để admin có thể sửa cấu hình trực tiếp từ giao diện Web mà không cần khởi động lại Server.
+
+----------------------------------------------------------------------
+GỢI Ý CÁCH CẢI TIẾN DÀNH CHO BẠN:
+----------------------------------------------------------------------
+1. Thay đổi Template Email: Bạn chỉ cần sửa HTML/CSS inline trong `lib/email-builder.ts`.
+2. Nâng cấp Data Model: Nếu muốn AI bóc thêm thông tin (VD: Delivery Terms, Warranty), bạn cần thêm trường vào `RFQItem` trong `schema.prisma`, chạy `npx prisma db push`, và thêm trường đó vào system prompt trong Lõi AI.
+3. Thay đổi nhà cung cấp Email: Hiện tại `lib/email.ts` đang dùng SMTP của Resend. Bạn có thể đổi sang SendGrid hoặc AWS SES chỉ bằng cách sửa tham số `host` và `port` trong cấu hình nodemailer.

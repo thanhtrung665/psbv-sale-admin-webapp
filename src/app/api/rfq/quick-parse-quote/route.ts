@@ -57,9 +57,11 @@ export async function POST(req: NextRequest) {
           prisma.rFQItem.update({
             where: { id: match.id },
             data: {
+              supplierDescription: quoteItem.description,
               supplierUnitPrice: quoteItem.supplierUnitPrice,
               supplierExtPrice: quoteItem.supplierUnitPrice * match.qty,
               netWeightLbs: quoteItem.netWeightLbs,
+              extWeightLbs: quoteItem.extWeightLbs,
             },
           })
         );

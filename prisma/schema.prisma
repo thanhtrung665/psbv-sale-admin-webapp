@@ -87,11 +87,13 @@ model RFQItem {
   rawPartNumber     String
   rawDescription    String?
   standardPartNo    String?  
+  supplierDescription String?
   qty               Float    @default(1)
   uom               String   @default("PCS")
   supplier          String?
   
   netWeightLbs      Float?
+  extWeightLbs      Float?
   supplierUnitPrice Float?   
   supplierExtPrice  Float?
   

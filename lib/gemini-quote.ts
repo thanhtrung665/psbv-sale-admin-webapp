@@ -33,6 +33,7 @@ CRITICAL RULES:
   "items": [
     {
       "partNumber": "Exact part number as printed",
+      "Description": "Description of the part",
       "supplierUnitPrice": 0.00,
       "netWeightLbs": 0.00,
       "leadTime": "Lead time string e.g. '2-3 weeks' or '10 days'"

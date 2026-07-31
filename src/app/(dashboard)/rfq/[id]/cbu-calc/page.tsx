@@ -14,10 +14,14 @@ type RFQItemRaw = {
   qty: number;
   uom: string | null;
   netWeightLbs: number | null;
+  extWeightLbs: number | null;
   supplierUnitPrice: number | null;
   dutyPercent: number | null;
   commissionPercent: number | null;
   marginPercent: number | null;
+  logisticsFee: number | null;
+  bankFee: number | null;
+  citPercent: number | null;
 };
 
 type RFQDetail = {
@@ -37,43 +41,70 @@ type RowInputs = {
   dutyPercent: string;
   commissionPercent: string;
   marginPercent: string;
+  logisticsFee: string;
+  bankFee: string;
+  citPercent: string;
 };
 
 type RowCalc = {
+  supplierExtPrice: number;
+  dutyAmount: number;
   baseCost: number;
-  ddpUsd: number;
-  ddpVnd: number;
+  commissionAmount: number;
+  citAmount: number;
+  totalCostExt: number;
   unitCostUsd: number;
+  ddpUsdUnit: number;
+  ddpUsdExt: number;
+  ddpVndExt: number;
   marginPerUnit: number;
+  marginTotalUsd: number;
 };
 
 function calcItemCBU(
   supplierUnitPrice: number,
   qty: number,
-  inputs: { duty: number; comm: number; margin: number },
+  inputs: { duty: number; comm: number; margin: number; logistics: number; bank: number; cit: number; },
   exchangeRate: number
 ): RowCalc {
-  const materialCost = supplierUnitPrice * qty;
+  const supplierExtPrice = supplierUnitPrice * qty;
   const dutyRate = inputs.duty / 100;
   const commRate = inputs.comm / 100;
   const marginRate = inputs.margin / 100;
+  const citRate = inputs.cit / 100;
 
-  const duty = materialCost * dutyRate;
-  const baseCost = materialCost + duty;
+  const dutyAmount = (supplierExtPrice + inputs.logistics) * dutyRate;
+  const baseCost = supplierExtPrice + inputs.logistics + dutyAmount + inputs.bank;
 
-  // DDP USD = BaseCost / (1 - MarginRate - CommRate)
-  const divisor = 1 - marginRate - commRate;
-  const ddpUsd = divisor > 0.001 ? baseCost / divisor : baseCost;
+  const divisor = 1 - marginRate - commRate - (commRate * citRate);
+  const ddpUsdExt = divisor > 0 ? baseCost / divisor : baseCost;
 
-  // DDP VND = ROUNDUP -4
-  const ddpVnd = Math.ceil((ddpUsd * exchangeRate) / 10000) * 10000;
+  const ddpVndExt = Math.ceil((ddpUsdExt * exchangeRate) / 10000) * 10000;
 
-  const commissionUsd = ddpUsd * commRate;
-  const totalCostLine = materialCost + duty + commissionUsd;
-  const unitCostUsd = qty > 0 ? totalCostLine / qty : 0;
-  const marginPerUnit = qty > 0 ? (ddpUsd - totalCostLine) / qty : 0;
+  const commissionAmount = ddpUsdExt * commRate;
+  const citAmount = commissionAmount * citRate;
+  
+  const totalCostExt = supplierExtPrice + inputs.logistics + dutyAmount + inputs.bank + commissionAmount + citAmount;
+  
+  const unitCostUsd = qty > 0 ? totalCostExt / qty : 0;
+  const marginTotalUsd = ddpUsdExt - totalCostExt;
+  const marginPerUnit = qty > 0 ? marginTotalUsd / qty : 0;
+  const ddpUsdUnit = qty > 0 ? ddpUsdExt / qty : 0;
 
-  return { baseCost, ddpUsd, ddpVnd, unitCostUsd, marginPerUnit };
+  return { 
+    supplierExtPrice, 
+    dutyAmount, 
+    baseCost, 
+    commissionAmount,
+    citAmount,
+    totalCostExt,
+    unitCostUsd,
+    ddpUsdUnit,
+    ddpUsdExt, 
+    ddpVndExt, 
+    marginPerUnit,
+    marginTotalUsd
+  };
 }
 
 const fmtUSD = (v: number) =>
@@ -116,6 +147,9 @@ export default function CBUCalcPage() {
           dutyPercent: item.dutyPercent?.toString() || "0",
           commissionPercent: item.commissionPercent?.toString() || "0",
           marginPercent: item.marginPercent?.toString() || "20",
+          logisticsFee: item.logisticsFee?.toString() || "0",
+          bankFee: item.bankFee?.toString() || "0",
+          citPercent: item.citPercent?.toString() || "0",
         };
       }
       setRowInputs(initInputs);
@@ -131,11 +165,14 @@ export default function CBUCalcPage() {
     if (!rfq) return {};
     const result: Record<string, RowCalc> = {};
     for (const item of rfq.items) {
-      const raw = rowInputs[item.id] || { dutyPercent: "0", commissionPercent: "0", marginPercent: "20" };
+      const raw = rowInputs[item.id] || { dutyPercent: "0", commissionPercent: "0", marginPercent: "20", logisticsFee: "0", bankFee: "0", citPercent: "0" };
       const parsed = {
         duty: parseFloat(raw.dutyPercent) || 0,
         comm: parseFloat(raw.commissionPercent) || 0,
         margin: parseFloat(raw.marginPercent) || 0,
+        logistics: parseFloat(raw.logisticsFee) || 0,
+        bank: parseFloat(raw.bankFee) || 0,
+        cit: parseFloat(raw.citPercent) || 0,
       };
       result[item.id] = calcItemCBU(item.supplierUnitPrice ?? 0, item.qty, parsed, exchangeRate);
     }
@@ -154,21 +191,24 @@ export default function CBUCalcPage() {
       const duty = parseFloat(inputs?.dutyPercent) || 0;
       const comm = parseFloat(inputs?.commissionPercent) || 0;
       const margin = parseFloat(inputs?.marginPercent) || 0;
+      const log = parseFloat(inputs?.logisticsFee) || 0;
+      const bank = parseFloat(inputs?.bankFee) || 0;
+      const cit = parseFloat(inputs?.citPercent) || 0;
 
       return {
         id: item.id,
-        logisticsFee: 0,
-        bankFee: 0,
+        logisticsFee: log,
+        bankFee: bank,
         dutyPercent: duty,
-        dutyAmount: (item.supplierUnitPrice || 0) * item.qty * (duty / 100),
+        dutyAmount: calc?.dutyAmount ?? 0,
         commissionPercent: comm,
-        commissionAmount: calc?.ddpUsd ? calc.ddpUsd * (comm / 100) : 0,
-        citPercent: 0,
-        citAmount: 0,
+        commissionAmount: calc?.commissionAmount ?? 0,
+        citPercent: cit,
+        citAmount: calc?.citAmount ?? 0,
         marginPercent: margin,
         unitCostUsd: calc?.unitCostUsd ?? 0,
-        ddpPriceUsd: calc?.ddpUsd ?? 0,
-        ddpPriceVnd: calc?.ddpVnd ?? 0,
+        ddpPriceUsd: calc?.ddpUsdExt ?? 0,
+        ddpPriceVnd: calc?.ddpVndExt ?? 0,
         marginPerUnitUsd: calc?.marginPerUnit ?? 0,
       };
     });
@@ -179,8 +219,8 @@ export default function CBUCalcPage() {
 
     for (const calc of Object.values(rowCalcs)) {
       totalCostUsd += calc.unitCostUsd * (rfq?.items.find(i => i.id === Object.keys(rowCalcs).find(k => rowCalcs[k] === calc))?.qty || 1);
-      totalRevenueUsd += calc.ddpUsd;
-      totalRevenueVnd += calc.ddpVnd;
+      totalRevenueUsd += calc.ddpUsdExt;
+      totalRevenueVnd += calc.ddpVndExt;
     }
 
     const totalMarginUsd = totalRevenueUsd - totalCostUsd;
@@ -377,25 +417,37 @@ export default function CBUCalcPage() {
       {/* ── SECTION 4: INTERACTIVE CBU CALCULATION TABLE ───────────────────── */}
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="bg-slate-50 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="px-3 py-3 w-8">#</th>
                 <th className="px-3 py-3 min-w-32">Part Number</th>
                 <th className="px-3 py-3 text-center">Qty</th>
                 <th className="px-3 py-3 text-center">UOM</th>
-                <th className="px-3 py-3 text-right">Supplier Price ($)</th>
-                <th className="px-3 py-3 text-center w-24 border-l border-slate-200 bg-amber-50/50">Duty (%)</th>
-                <th className="px-3 py-3 text-center w-24 bg-amber-50/50">Commission (%)</th>
-                <th className="px-3 py-3 text-center w-24 bg-amber-50/50 border-r border-slate-200">Margin (%)</th>
-                <th className="px-3 py-3 text-right">DDP USD ($)</th>
-                <th className="px-3 py-3 text-right">DDP VND (VND)</th>
+                <th className="px-3 py-3 text-right">Net Wght</th>
+                <th className="px-3 py-3 text-right border-r border-slate-200">Ext Wght</th>
+                <th className="px-3 py-3 text-right">Sup. Unit ($)</th>
+                <th className="px-3 py-3 text-right">Sup. Ext ($)</th>
+                <th className="px-3 py-3 text-center w-20 border-l border-slate-200 bg-slate-100">Logistics ($)</th>
+                <th className="px-3 py-3 text-center w-20 border-r border-slate-200 bg-slate-100">Bank Fee ($)</th>
+                <th className="px-3 py-3 text-center w-16 bg-amber-50/50">Duty (%)</th>
+                <th className="px-3 py-3 text-right bg-amber-50/50">Duty ($)</th>
+                <th className="px-3 py-3 text-center w-16 border-l border-slate-200 bg-blue-50/50">Comm (%)</th>
+                <th className="px-3 py-3 text-right bg-blue-50/50">Comm ($)</th>
+                <th className="px-3 py-3 text-center w-16 border-l border-slate-200 bg-indigo-50/50">CIT (%)</th>
+                <th className="px-3 py-3 text-right bg-indigo-50/50">CIT ($)</th>
+                <th className="px-3 py-3 text-center w-16 border-l border-slate-200 bg-emerald-50/50">Margin (%)</th>
+                <th className="px-3 py-3 text-right bg-emerald-50/50">Margin ($)</th>
+                <th className="px-3 py-3 text-right border-l border-slate-200">Unit Cost ($)</th>
+                <th className="px-3 py-3 text-right">DDP Unit ($)</th>
+                <th className="px-3 py-3 text-right">DDP Ext ($)</th>
+                <th className="px-3 py-3 text-right">DDP Ext (VND)</th>
                 <th className="px-3 py-3 text-right">Margin/Unit ($)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rfq.items.map((item) => {
-                const inputs = rowInputs[item.id] || { dutyPercent: "0", commissionPercent: "0", marginPercent: "20" };
+                const inputs = rowInputs[item.id] || { dutyPercent: "0", commissionPercent: "0", marginPercent: "20", logisticsFee: "0", bankFee: "0", citPercent: "0" };
                 const calc = rowCalcs[item.id];
                 
                 return (
@@ -407,25 +459,46 @@ export default function CBUCalcPage() {
                     </td>
                     <td className="px-3 py-3 text-center font-medium text-slate-700">{item.qty}</td>
                     <td className="px-3 py-3 text-center text-slate-500 text-xs uppercase">{item.uom || "EA"}</td>
+                    <td className="px-3 py-3 text-right font-mono text-slate-500">{item.netWeightLbs ?? "—"}</td>
+                    <td className="px-3 py-3 text-right font-mono text-slate-500 border-r border-slate-200">{item.extWeightLbs ?? "—"}</td>
                     <td className="px-3 py-3 text-right font-mono font-medium text-slate-700">
                       {item.supplierUnitPrice != null ? fmtUSD(item.supplierUnitPrice) : "—"}
                     </td>
+                    <td className="px-3 py-3 text-right font-mono font-medium text-slate-700">
+                      {calc ? fmtUSD(calc.supplierExtPrice) : "—"}
+                    </td>
+                    
+                    <td className="px-2 py-2 border-l border-slate-200 bg-slate-50">
+                      <input type="text" inputMode="decimal" value={inputs.logisticsFee} onChange={(e) => updateRowInput(item.id, "logisticsFee", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
+                    <td className="px-2 py-2 border-r border-slate-200 bg-slate-50">
+                      <input type="text" inputMode="decimal" value={inputs.bankFee} onChange={(e) => updateRowInput(item.id, "bankFee", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
 
-                    {/* Inputs with Clean Number Formatting */}
-                    {(["dutyPercent", "commissionPercent", "marginPercent"] as const).map((field, idx) => (
-                      <td key={field} className={`px-2 py-2 ${idx === 0 ? "border-l border-slate-200" : ""} ${idx === 2 ? "border-r border-slate-200" : ""}`}>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={inputs[field]}
-                          onChange={(e) => updateRowInput(item.id, field, e.target.value)}
-                          className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors"
-                        />
-                      </td>
-                    ))}
+                    <td className="px-2 py-2 bg-amber-50/30">
+                      <input type="text" inputMode="decimal" value={inputs.dutyPercent} onChange={(e) => updateRowInput(item.id, "dutyPercent", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono font-medium text-amber-700 bg-amber-50/30">{calc ? fmtUSD(calc.dutyAmount) : "—"}</td>
 
-                    <td className="px-3 py-3 text-right font-mono font-bold text-slate-900">{calc ? fmtUSD(calc.ddpUsd) : "—"}</td>
-                    <td className="px-3 py-3 text-right font-mono font-bold text-emerald-600">{calc ? fmtVND(calc.ddpVnd) : "—"}</td>
+                    <td className="px-2 py-2 border-l border-slate-200 bg-blue-50/30">
+                      <input type="text" inputMode="decimal" value={inputs.commissionPercent} onChange={(e) => updateRowInput(item.id, "commissionPercent", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono font-medium text-blue-700 bg-blue-50/30">{calc ? fmtUSD(calc.commissionAmount) : "—"}</td>
+                    
+                    <td className="px-2 py-2 border-l border-slate-200 bg-indigo-50/30">
+                      <input type="text" inputMode="decimal" value={inputs.citPercent} onChange={(e) => updateRowInput(item.id, "citPercent", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono font-medium text-indigo-700 bg-indigo-50/30">{calc ? fmtUSD(calc.citAmount) : "—"}</td>
+
+                    <td className="px-2 py-2 border-l border-slate-200 bg-emerald-50/30">
+                      <input type="text" inputMode="decimal" value={inputs.marginPercent} onChange={(e) => updateRowInput(item.id, "marginPercent", e.target.value)} className="w-full text-center py-1.5 px-1 bg-white border border-slate-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-colors" />
+                    </td>
+                    <td className="px-3 py-3 text-right font-mono font-medium text-emerald-700 bg-emerald-50/30">{calc ? fmtUSD(calc.marginTotalUsd) : "—"}</td>
+
+                    <td className="px-3 py-3 text-right font-mono font-medium text-slate-700 border-l border-slate-200">{calc ? fmtUSD(calc.unitCostUsd) : "—"}</td>
+                    <td className="px-3 py-3 text-right font-mono font-bold text-slate-800">{calc ? fmtUSD(calc.ddpUsdUnit) : "—"}</td>
+                    <td className="px-3 py-3 text-right font-mono font-bold text-slate-900">{calc ? fmtUSD(calc.ddpUsdExt) : "—"}</td>
+                    <td className="px-3 py-3 text-right font-mono font-bold text-emerald-600">{calc ? fmtVND(calc.ddpVndExt) : "—"}</td>
                     <td className={`px-3 py-3 text-right font-mono font-medium ${calc && calc.marginPerUnit >= 0 ? "text-emerald-600" : "text-red-500"}`}>
                       {calc ? fmtUSD(calc.marginPerUnit) : "—"}
                     </td>

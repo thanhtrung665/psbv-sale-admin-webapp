@@ -50,9 +50,11 @@ export async function POST(
         await prisma.rFQItem.update({
           where: { id: match.id },
           data: {
+            supplierDescription: quoteItem.description,
             supplierUnitPrice: quoteItem.supplierUnitPrice,
             supplierExtPrice: quoteItem.supplierUnitPrice * match.qty,
             netWeightLbs: quoteItem.netWeightLbs,
+            extWeightLbs: quoteItem.extWeightLbs,
           },
         });
         matchResults.push({ lineNo: match.lineNo, matched: true });

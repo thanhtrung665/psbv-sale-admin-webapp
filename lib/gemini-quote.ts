@@ -8,8 +8,10 @@ const DEFAULT_MODEL = "gemini-2.5-pro";
 
 export interface ParsedQuoteItem {
   partNumber: string;
+  description: string;
   supplierUnitPrice: number;
   netWeightLbs: number;
+  extWeightLbs: number;
   leadTime: string;
 }
 
@@ -33,9 +35,10 @@ CRITICAL RULES:
   "items": [
     {
       "partNumber": "Exact part number as printed",
-      "Description": "Description of the part",
+      "description": "Description of the part",
       "supplierUnitPrice": 0.00,
       "netWeightLbs": 0.00,
+      "extWeightLbs": 0.00,
       "leadTime": "Lead time string e.g. '2-3 weeks' or '10 days'"
     }
   ]
@@ -123,8 +126,10 @@ export async function parseSupplierQuoteWithGemini(
     supplierName: parsed.supplierName || "",
     items: (parsed.items || []).map((item: any) => ({
       partNumber: item.partNumber || "",
+      description: item.description || item.Description || "",
       supplierUnitPrice: Number(item.supplierUnitPrice) || 0,
       netWeightLbs: Number(item.netWeightLbs) || 0,
+      extWeightLbs: Number(item.extWeightLbs) || 0,
       leadTime: item.leadTime || "",
     })),
   };

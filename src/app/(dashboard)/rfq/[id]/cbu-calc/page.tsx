@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { calculateCBU, CBUItemEngineData, CBUResult, CustomColumnDef } from "@/lib/cbu-engine";
 
-export default function CBUCalcPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id: rfqId } = use(params);
+export default function CBUCalcPage({ params }: { params: { id: string } }) {
+  const { id: rfqId } = params;
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);

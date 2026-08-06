@@ -61,16 +61,16 @@ export default function RFQListPage() {
 
         {/* ===== 4-BUTTON ACTION BAR ===== */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* 1. Tiếp nhận Inquiry — Primary */}
+          {/* Tiếp nhận Inquiry — Primary */}
           <Link
             href="/rfq/new"
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
           >
             <span className="text-base">📥</span>
-            1. Tiếp nhận Inquiry
+            Tiếp nhận Inquiry
           </Link>
 
-          {/* 2. Xử lý Quote — Secondary (redirect to workspace) */}
+          {/* Xử lý Quote — Secondary (redirect to workspace) */}
           <Link
             href="/rfq/process-quote"
             className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all"
@@ -78,13 +78,13 @@ export default function RFQListPage() {
             <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            2. Xử lý Quote
+            Xử lý Quote
           </Link>
 
-          {/* 3. Tạo file — Secondary with Dropdown Modal */}
+          {/* Tạo file — Secondary with Dropdown Modal */}
           <GenerateFileModal />
 
-          {/* 4. Gửi mail — Secondary with Email Dispatch Modal */}
+          {/* Gửi mail — Secondary with Email Dispatch Modal */}
           <QuickEmailModal />
         </div>
       </div>

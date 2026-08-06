@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FileText, Database, Settings2 } from "lucide-react";
 
 interface ExtractedItem {
   id: string;
@@ -175,9 +176,9 @@ export default function ProcessQuotePage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <h1 className="text-2xl font-bold text-gray-900">⚡ Xử Lý Quote Hãng</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Xử Lý Báo Giá Hãng</h1>
           </div>
-          <p className="text-gray-500 text-sm">Upload file báo giá hãng, AI bóc tách, review & chỉnh sửa trước khi lưu Database.</p>
+          <p className="text-gray-500 text-sm">Tải lên file báo giá hãng, hệ thống sẽ tự động bóc tách dữ liệu để bạn đối chiếu và chỉnh sửa trước khi lưu.</p>
         </div>
       </div>
 
@@ -327,7 +328,7 @@ export default function ProcessQuotePage() {
           <button
             onClick={handleExtract}
             disabled={isExtracting || !rfqCode || !file}
-            className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-lg shadow-amber-500/20"
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
           >
             {isExtracting ? (
               <>
@@ -335,14 +336,12 @@ export default function ProcessQuotePage() {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Gemini đang đọc file {file?.name}...
+                Đang xử lý dữ liệu từ file {file?.name}...
               </>
             ) : (
               <>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-                ⚡ BÓC TÁCH DỮ LIỆU BẰNG AI
+                <FileText className="w-5 h-5" />
+                Bóc tách dữ liệu từ file
               </>
             )}
           </button>
@@ -489,7 +488,7 @@ export default function ProcessQuotePage() {
                 </>
               ) : (
                 <>
-                  💾 Save to Database & Proceed to CBU Calc
+                  Lưu vào Hệ thống & Tiếp tục tính CBU
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>

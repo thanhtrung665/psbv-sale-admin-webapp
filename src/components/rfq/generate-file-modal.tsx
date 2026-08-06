@@ -137,7 +137,7 @@ export function GenerateFileModal() {
     >
       <DialogTrigger className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all">
         <span className="text-base">📄</span>
-        3. Tạo file
+        Tạo file
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[520px]">

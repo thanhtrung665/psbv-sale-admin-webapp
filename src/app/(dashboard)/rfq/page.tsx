@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ProcessQuoteModal } from "@/components/rfq/process-quote-modal";
+
+import { GenerateFileModal } from "@/components/rfq/generate-file-modal";
+import { QuickEmailModal } from "@/components/rfq/quick-email-modal";
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   INQUIRY_RECEIVED:     { label: "Đang xử lý AI",         color: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -51,24 +53,42 @@ export default function RFQListPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Quản lý Đơn hàng RFQ</h1>
           <p className="text-gray-500 text-sm mt-0.5">{rfqs.length} đơn hàng{activeStatus ? ` — ${STATUS_LABELS[activeStatus]?.label}` : " (tất cả)"}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <ProcessQuoteModal />
+
+        {/* ===== 4-BUTTON ACTION BAR ===== */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* 1. Tiếp nhận Inquiry — Primary */}
           <Link
             href="/rfq/new"
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Tiếp nhận Inquiry
+            <span className="text-base">📥</span>
+            1. Tiếp nhận Inquiry
           </Link>
+
+          {/* 2. Xử lý Quote — Secondary (redirect to workspace) */}
+          <Link
+            href="/rfq/process-quote"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all"
+          >
+            <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            2. Xử lý Quote
+          </Link>
+
+          {/* 3. Tạo file — Secondary with Dropdown Modal */}
+          <GenerateFileModal />
+
+          {/* 4. Gửi mail — Secondary with Email Dispatch Modal */}
+          <QuickEmailModal />
         </div>
       </div>
+
 
       {/* Status Filter Tabs */}
       <div className="flex flex-wrap gap-2">

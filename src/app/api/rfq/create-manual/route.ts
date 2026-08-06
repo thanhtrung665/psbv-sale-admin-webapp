@@ -12,7 +12,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { clientName, clientEmail, companyName, clientPhone, items } = body;
+    const {
+      clientName, clientEmail, companyName, clientPhone,
+      opportunityName, supplierName, incoTerm, paymentTerm,
+      items,
+    } = body;
     const createdById = (session.user as any).id as string;
 
     if (!clientName || !clientEmail || !items || items.length === 0) {
@@ -39,12 +43,17 @@ export async function POST(req: NextRequest) {
         status: "RFO_PENDING_ADMIN",
         isProcessing: false,
         createdById,
+        opportunityName: opportunityName || null,
+        supplierName: supplierName || null,
+        incoTerm: incoTerm || null,
+        paymentTerm: paymentTerm || null,
         items: {
           create: items.map((item: any, idx: number) => ({
             lineNo: item.lineNo || idx + 1,
             rawPartNumber: item.rawPartNumber || "",
             rawDescription: item.rawDescription || "",
             qty: Number(item.qty) || 1,
+            uom: item.uom || "PCS",
           })),
         },
       },

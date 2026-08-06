@@ -17,6 +17,12 @@ export async function POST(
     const {
       items, // Array of calculated item data
       exchangeRate,
+      freightCost,
+      clearanceCost,
+      inlandCost,
+      bankFeePercent,
+      insurancePercent,
+      customColumns, // Dynamic custom columns config
       totalCostUsd,
       totalRevenueUsd,
       totalRevenueVnd,
@@ -25,14 +31,15 @@ export async function POST(
       finalize = false, // true = QUOTATION_DRAFTED, false = CBU_PENDING_ADMIN
     } = body;
 
-    // Update all RFQItem records with CBU results
+    // Update all RFQItem records with CBU results and custom values
     await Promise.all(
       items.map((item: any) =>
         prisma.rFQItem.update({
           where: { id: item.id },
           data: {
-            logisticsFee: item.logisticsFee ?? 0,
-            bankFee: item.bankFee ?? 0,
+            apportionedLogistics: item.apportionedLogistics ?? 0,
+            apportionedBank: item.apportionedBank ?? 0,
+            apportionedInsurance: item.apportionedInsurance ?? 0,
             dutyPercent: item.dutyPercent ?? 0,
             dutyAmount: item.dutyAmount ?? 0,
             commissionPercent: item.commissionPercent ?? 0,
@@ -44,16 +51,23 @@ export async function POST(
             ddpPriceUsd: item.ddpPriceUsd ?? 0,
             ddpPriceVnd: item.ddpPriceVnd ? BigInt(Math.round(item.ddpPriceVnd)) : null,
             marginPerUnitUsd: item.marginPerUnitUsd ?? 0,
+            customValues: item.customValues ?? {},
           },
         })
       )
     );
 
-    // Update RFQ summary financials
+    // Update RFQ summary financials and global configs
     await prisma.rFQ.update({
       where: { id: params.id },
       data: {
         exchangeRate: exchangeRate ?? 25500,
+        freightCost: freightCost ?? 0,
+        clearanceCost: clearanceCost ?? 0,
+        inlandCost: inlandCost ?? 0,
+        bankFeePercent: bankFeePercent ?? 0,
+        insurancePercent: insurancePercent ?? 0,
+        customColumns: customColumns ?? [],
         totalCostUsd: totalCostUsd ?? 0,
         totalRevenueUsd: totalRevenueUsd ?? 0,
         totalRevenueVnd: totalRevenueVnd ? BigInt(Math.round(totalRevenueVnd)) : null,

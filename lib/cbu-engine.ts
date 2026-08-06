@@ -1,104 +1,185 @@
-import { RFQItem, RFQ } from "@prisma/client";
+// lib/cbu-engine.ts
 
-/**
- * CBU (Cost Build-Up) Engine
- * 
- * Performs Cost Build-Up calculation for an RFQ line item based on:
- * - Duty = (MaterialCost + Logistics) * DutyRate
- * - BaseCost = MaterialCost + Logistics + Duty + BankFee
- * - DDP Price USD = BaseCost / (1 - MarginRate - CommRate - (CommRate * CITRate))
- */
-
-export function calculateRFQItemCBU(
-  item: Partial<RFQItem>, 
-  exchangeRate: number = 25500
-): Partial<RFQItem> {
-  const qty = item.qty || 1;
-  const supplierUnitPrice = item.supplierUnitPrice || 0;
-  
-  // Material Cost (Ext Price)
-  const materialCost = supplierUnitPrice * qty;
-  
-  const logistics = item.logisticsFee || 0;
-  const bankFee = item.bankFee || 0;
-  
-  const dutyRate = (item.dutyPercent || 0) / 100;
-  const commRate = (item.commissionPercent || 0) / 100;
-  const citRate = (item.citPercent || 0) / 100;
-  const marginRate = (item.marginPercent || 0) / 100;
-  
-  // 1. Thuế NK: duty = (materialCost + logistics) * dutyRate
-  const duty = (materialCost + logistics) * dutyRate;
-  
-  // 2. BaseCost = materialCost + logistics + duty + bankFee
-  const baseCost = materialCost + logistics + duty + bankFee;
-  
-  // 3. ĐẠI SỐ ĐẢO NGƯỢC: ddpUsd = BaseCost / (1 - marginRate - commRate - (commRate * citRate))
-  let ddpUsd = item.ddpPriceUsd; 
-  if (!ddpUsd) {
-    const divisor = 1 - marginRate - commRate - (commRate * citRate);
-    ddpUsd = divisor > 0 ? baseCost / divisor : baseCost;
-  }
-  
-  // 4. LÀM TRÒN TIỀN VND (ROUNDUP -4 Excel): ddpVnd = Math.ceil((ddpUsd * exchangeRate) / 10000) * 10000
-  const ddpVnd = Math.ceil((ddpUsd * exchangeRate) / 10000) * 10000;
-  
-  // 5. commissionUsd = ddpUsd * commRate
-  const commissionUsd = ddpUsd * commRate;
-  
-  // 6. citUsd = commissionUsd * citRate
-  const citUsd = commissionUsd * citRate;
-  
-  // 7. unitCostUsd = materialCost + commissionUsd + citUsd + bankFee + logistics + duty
-  const totalCostUsd = materialCost + commissionUsd + citUsd + bankFee + logistics + duty;
-  const unitCostUsd = qty > 0 ? totalCostUsd / qty : 0;
-  
-  // 8. marginPerUnit = ddpUsd - totalCostUsd 
-  const marginPerUnitUsd = qty > 0 ? (ddpUsd - totalCostUsd) / qty : 0;
-
-  return {
-    ...item,
-    supplierExtPrice: materialCost,
-    dutyAmount: duty,
-    commissionAmount: commissionUsd,
-    citAmount: citUsd,
-    unitCostUsd: qty > 0 ? totalCostUsd / qty : 0, 
-    ddpPriceUsd: ddpUsd,
-    ddpPriceVnd: BigInt(ddpVnd),
-    marginPerUnitUsd: marginPerUnitUsd
-  };
+export interface CustomColumnDef {
+  id: string;
+  name: string;
+  type: "AMOUNT" | "PERCENT";
 }
 
-export function calculateRFQCBU(
-  rfq: Partial<RFQ>, 
-  items: Partial<RFQItem>[]
-): { rfq: Partial<RFQ>, items: Partial<RFQItem>[] } {
-  const exchangeRate = rfq.exchangeRate || 25500;
-  const calculatedItems = items.map(item => calculateRFQItemCBU(item, exchangeRate));
+export interface CustomColumnValues {
+  [colId: string]: number;
+}
+
+export interface CBUItemEngineData {
+  id: string;
+  lineNo: number;
+  rawPartNumber: string;
+  uom: string;
+  qty: number;
+  supplierUnitPrice: number;
+  netWeightLbs: number;
   
+  dutyPercent: number;
+  commissionPercent: number;
+  citPercent: number;
+  marginPercent: number;
+  
+  customValues: CustomColumnValues;
+
+  // These will be calculated
+  supplierExtPrice?: number;
+  extWeightLbs?: number;
+  
+  apportionedLogistics?: number;
+  apportionedBank?: number;
+  apportionedInsurance?: number;
+  
+  dutyAmount?: number;
+  commissionAmount?: number;
+  citAmount?: number;
+  
+  unitCostUsd?: number;
+  ddpPriceUsd?: number;
+  ddpPriceVnd?: number;
+  marginPerUnitUsd?: number;
+}
+
+export interface CBUGlobals {
+  exchangeRate: number;
+  freightCost: number;
+  clearanceCost: number;
+  inlandCost: number;
+  bankFeePercent: number;
+  insurancePercent: number;
+  customColumns: CustomColumnDef[];
+}
+
+export interface CBUResult {
+  items: CBUItemEngineData[];
+  totalWeight: number;
+  totalLogisticsUsd: number;
+  totalBankFeeUsd: number;
+  totalInsuranceUsd: number;
+  totalCostUsd: number;
+  totalRevenueUsd: number;
+  totalRevenueVnd: number;
+  totalMarginUsd: number;
+  actualMarginPct: number;
+}
+
+/**
+ * CBU Engine: Phân bổ phí phụ trợ & Tính giá DDP, Margin
+ */
+export function calculateCBU(items: CBUItemEngineData[], globals: CBUGlobals): CBUResult {
+  const { exchangeRate, freightCost, clearanceCost, inlandCost, bankFeePercent, insurancePercent, customColumns } = globals;
+  
+  // 1. Tiền xử lý: Tính tổng Ext Weight
+  let totalWeight = 0;
+  const processedItems = items.map((item) => {
+    const extWeightLbs = item.netWeightLbs * item.qty;
+    const supplierExtPrice = item.supplierUnitPrice * item.qty;
+    totalWeight += extWeightLbs;
+    return { ...item, extWeightLbs, supplierExtPrice };
+  });
+
+  // 2. Tính Tổng Logistics
+  const totalLogisticsUsd = freightCost + clearanceCost + inlandCost;
+  
+  let totalBankFeeUsd = 0;
+  let totalInsuranceUsd = 0;
   let totalCostUsd = 0;
   let totalRevenueUsd = 0;
-  let totalRevenueVnd = 0n;
-  
-  calculatedItems.forEach(item => {
-    // Calculated item ddpPriceUsd is total line DDP
-    totalCostUsd += (item.unitCostUsd || 0) * (item.qty || 1);
-    totalRevenueUsd += (item.ddpPriceUsd || 0);
-    totalRevenueVnd += (item.ddpPriceVnd || 0n);
+  let totalMarginUsd = 0;
+
+  // 3. Phân bổ & Tính toán từng dòng
+  const finalItems = processedItems.map((item) => {
+    // Phân bổ Logistics: (Total Logistics + 15) * (Item Weight / Total Weight)
+    let apportionedLogistics = 0;
+    if (totalWeight > 0) {
+      apportionedLogistics = (totalLogisticsUsd + 15) * (item.extWeightLbs / totalWeight);
+    }
+
+    // Phân bổ Bank Fee & Insurance
+    const apportionedBank = item.supplierExtPrice * (bankFeePercent / 100);
+    const apportionedInsurance = item.supplierExtPrice * (insurancePercent / 100);
+
+    totalBankFeeUsd += apportionedBank;
+    totalInsuranceUsd += apportionedInsurance;
+
+    // Tính các phí tỷ lệ cố định
+    const dutyAmount = item.supplierExtPrice * (item.dutyPercent / 100);
+    const commissionAmount = item.supplierExtPrice * (item.commissionPercent / 100);
+    const citAmount = item.supplierExtPrice * (item.citPercent / 100);
+
+    // Tính phí Custom Columns
+    let totalCustomCost = 0;
+    if (customColumns && customColumns.length > 0) {
+      for (const col of customColumns) {
+        const val = item.customValues[col.id] || 0;
+        if (col.type === "AMOUNT") {
+          totalCustomCost += (val * item.qty);
+        } else if (col.type === "PERCENT") {
+          totalCustomCost += (item.supplierExtPrice * val / 100);
+        }
+      }
+    }
+
+    // Tính Base Cost (Tổng chi phí)
+    const totalItemCost =
+      item.supplierExtPrice +
+      apportionedLogistics +
+      apportionedBank +
+      apportionedInsurance +
+      dutyAmount +
+      commissionAmount +
+      citAmount +
+      totalCustomCost;
+
+    const unitCostUsd = item.qty > 0 ? totalItemCost / item.qty : 0;
+    
+    // Tính Giá DDP & Margin
+    const marginMultiplier = 1 + item.marginPercent / 100;
+    const ddpPriceUsd = unitCostUsd * marginMultiplier;
+    
+    // Tính VND & Roundup -4 (làm tròn lên hàng chục nghìn)
+    const ddpPriceVndRaw = ddpPriceUsd * exchangeRate;
+    const ddpPriceVnd = Math.ceil(ddpPriceVndRaw / 10000) * 10000;
+    
+    const marginPerUnitUsd = ddpPriceUsd - unitCostUsd;
+
+    // Cộng dồn Total
+    totalCostUsd += totalItemCost;
+    totalRevenueUsd += (ddpPriceUsd * item.qty);
+
+    return {
+      ...item,
+      apportionedLogistics,
+      apportionedBank,
+      apportionedInsurance,
+      dutyAmount,
+      commissionAmount,
+      citAmount,
+      unitCostUsd,
+      ddpPriceUsd,
+      ddpPriceVnd,
+      marginPerUnitUsd,
+    };
   });
-  
-  const totalMarginUsd = totalRevenueUsd - totalCostUsd;
+
+  const totalRevenueVnd = totalRevenueUsd * exchangeRate;
+  totalMarginUsd = totalRevenueUsd - totalCostUsd;
   const actualMarginPct = totalRevenueUsd > 0 ? (totalMarginUsd / totalRevenueUsd) * 100 : 0;
-  
+
   return {
-    rfq: {
-      ...rfq,
-      totalCostUsd,
-      totalRevenueUsd,
-      totalRevenueVnd,
-      totalMarginUsd,
-      actualMarginPct
-    },
-    items: calculatedItems
+    items: finalItems,
+    totalWeight,
+    totalLogisticsUsd,
+    totalBankFeeUsd,
+    totalInsuranceUsd,
+    totalCostUsd,
+    totalRevenueUsd,
+    totalRevenueVnd,
+    totalMarginUsd,
+    actualMarginPct,
   };
 }

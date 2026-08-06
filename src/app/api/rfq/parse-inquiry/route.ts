@@ -20,6 +20,16 @@ export async function POST(req: NextRequest) {
     const emailText = formData.get("emailText") as string | null;
     const createdById = (session.user as any).id as string;
 
+    // ── Read header fields from FormData ──────────────────────────────────
+    const opportunityName = (formData.get("opportunityName") as string) || null;
+    const supplierName = (formData.get("supplierName") as string) || null;
+    const clientNameInput = (formData.get("clientName") as string) || "";
+    const clientEmailInput = (formData.get("clientEmail") as string) || "";
+    const clientPhoneInput = (formData.get("clientPhone") as string) || "";
+    const companyNameInput = (formData.get("companyName") as string) || "";
+    const incoTerm = (formData.get("incoTerm") as string) || null;
+    const paymentTerm = (formData.get("paymentTerm") as string) || null;
+
     if (!file && !emailText) {
       return NextResponse.json(
         { error: "Vui lòng cung cấp file hoặc nội dung email." },
@@ -37,14 +47,19 @@ export async function POST(req: NextRequest) {
         status: "INQUIRY_RECEIVED",
         isProcessing: true,
         createdById,
+        opportunityName,
+        supplierName,
+        incoTerm,
+        paymentTerm,
         // Temporary placeholder client — will be updated after AI parse
         client: {
           connectOrCreate: {
-            where: { email: `pending_${rfqCode}@placeholder.com` },
+            where: { email: clientEmailInput || `pending_${rfqCode}@placeholder.com` },
             create: {
-              name: "Đang xử lý...",
-              companyName: "Đang xử lý...",
-              email: `pending_${rfqCode}@placeholder.com`,
+              name: clientNameInput || "Đang xử lý...",
+              companyName: companyNameInput || "Đang xử lý...",
+              email: clientEmailInput || `pending_${rfqCode}@placeholder.com`,
+              phone: clientPhoneInput || null,
             },
           },
         },
@@ -62,19 +77,25 @@ export async function POST(req: NextRequest) {
         parsed = await parseInquiryWithGemini(undefined, undefined, emailText!);
       }
 
+      // Determine final client values: user-provided takes priority over AI-extracted
+      const finalClientName = clientNameInput || parsed.clientName || "Unknown";
+      const finalClientEmail = clientEmailInput || parsed.clientEmail || `${rfqCode}@unknown.com`;
+      const finalCompanyName = companyNameInput || parsed.companyName || "Unknown";
+      const finalClientPhone = clientPhoneInput || parsed.clientPhone || null;
+
       // Upsert the real client
       const client = await prisma.client.upsert({
-        where: { email: parsed.clientEmail || `pending_${rfqCode}@placeholder.com` },
+        where: { email: finalClientEmail },
         update: {
-          name: parsed.clientName,
-          companyName: parsed.companyName,
-          phone: parsed.clientPhone,
+          name: finalClientName,
+          companyName: finalCompanyName,
+          phone: finalClientPhone,
         },
         create: {
-          name: parsed.clientName || "Unknown",
-          companyName: parsed.companyName || "Unknown",
-          email: parsed.clientEmail || `${rfqCode}@unknown.com`,
-          phone: parsed.clientPhone,
+          name: finalClientName,
+          companyName: finalCompanyName,
+          email: finalClientEmail,
+          phone: finalClientPhone,
         },
       });
 
@@ -101,9 +122,10 @@ export async function POST(req: NextRequest) {
       });
 
       // Remove placeholder client if different
-      if (client.email !== `pending_${rfqCode}@placeholder.com`) {
+      const placeholderEmail = `pending_${rfqCode}@placeholder.com`;
+      if (client.email !== placeholderEmail) {
         await prisma.client.deleteMany({
-          where: { email: `pending_${rfqCode}@placeholder.com` },
+          where: { email: placeholderEmail },
         });
       }
 

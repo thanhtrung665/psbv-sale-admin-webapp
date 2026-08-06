@@ -60,6 +60,18 @@ model RFQ {
   supplierQuoteCode String?      
   supplierName      String?
   
+  // Thông tin Cơ hội & Điều khoản
+  opportunityName   String?      // Tên cơ hội kinh doanh (vd: "Gói thầu van VSP")
+  paymentTerm       String?      // Điều khoản thanh toán (vd: "30 Days Net")
+  incoTerm          String?      // Điều kiện giao hàng (vd: "DDP", "EXW")
+  
+  // Sub-ledger (Global Costs)
+  freightCost       Float?       @default(0)
+  clearanceCost     Float?       @default(0)
+  inlandCost        Float?       @default(0)
+  bankFeePercent    Float?       @default(0)
+  insurancePercent  Float?       @default(0)
+  
   // Tài chính CBU
   exchangeRate      Float        @default(25500)
   totalCostUsd      Float?
@@ -67,6 +79,9 @@ model RFQ {
   totalRevenueVnd   BigInt?
   totalMarginUsd    Float?
   actualMarginPct   Float?
+  
+  // Custom Columns Config: Array of { id, name, type }
+  customColumns     Json?
   
   // Người xử lý/Duyệt
   createdById       String?
@@ -97,8 +112,9 @@ model RFQItem {
   supplierUnitPrice Float?   
   supplierExtPrice  Float?
   
-  logisticsFee      Float?   @default(0)
-  bankFee           Float?   @default(0)
+  apportionedLogistics Float? @default(0)
+  apportionedBank      Float? @default(0)
+  apportionedInsurance Float? @default(0)
   dutyPercent       Float?   @default(0)
   dutyAmount        Float?   @default(0)
   commissionPercent Float?   @default(0)
@@ -111,6 +127,9 @@ model RFQItem {
   ddpPriceUsd       Float?
   ddpPriceVnd       BigInt?  
   marginPerUnitUsd  Float?
+  
+  // Values for custom columns: Record<string, number>
+  customValues      Json?
 }
 
 model Document {

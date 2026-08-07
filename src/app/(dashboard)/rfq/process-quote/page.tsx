@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Database, Settings2 } from "lucide-react";
 
 interface ExtractedItem {
   id: string;
@@ -328,7 +327,7 @@ export default function ProcessQuotePage() {
           <button
             onClick={handleExtract}
             disabled={isExtracting || !rfqCode || !file}
-            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all duration-200 shadow-sm"
+            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all duration-200"
           >
             {isExtracting ? (
               <>
@@ -340,7 +339,9 @@ export default function ProcessQuotePage() {
               </>
             ) : (
               <>
-                <FileText className="w-5 h-5" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
                 Bóc tách dữ liệu từ file
               </>
             )}
@@ -421,7 +422,7 @@ export default function ProcessQuotePage() {
                         step="0.01"
                         value={item.supplierUnitPrice}
                         onChange={(e) => updateItem(item.id, "supplierUnitPrice", Number(e.target.value))}
-                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm"
+                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -430,7 +431,7 @@ export default function ProcessQuotePage() {
                         step="0.01"
                         value={item.netWeightLbs}
                         onChange={(e) => updateItem(item.id, "netWeightLbs", Number(e.target.value))}
-                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm"
+                        className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
                     </td>
                     <td className="px-3 py-2.5">
@@ -476,7 +477,7 @@ export default function ProcessQuotePage() {
             <button
               onClick={handleSaveAndProceed}
               disabled={isSaving || items.length === 0}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/20"
+              className="flex items-center gap-2 px-6 py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-all duration-200"
             >
               {isSaving ? (
                 <>

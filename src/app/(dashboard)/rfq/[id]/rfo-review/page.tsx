@@ -76,9 +76,9 @@ export default function RFOReviewPage() {
       if (data.supplierLogo) setSupplierLogo(data.supplierLogo);
       // Default greeting body
       if (!greetingBody) {
+        const firstSupplier = (data.items || [])[0]?.supplier || "Partner";
         setGreetingBody(
-          `<p>Dear ${data.items[0]?.supplier || "Partner"},</p>
-<p>We are requesting a quotation for the following parts. Please provide your best pricing and lead time at your earliest convenience.</p>`
+          `<p>Dear ${firstSupplier},</p>\n<p>We are requesting a quotation for the following parts. Please provide your best pricing and lead time at your earliest convenience.</p>`
         );
       }
     }
@@ -172,7 +172,7 @@ export default function RFOReviewPage() {
     });
     setSending(false);
     if (res.ok) {
-      showToast("✅ Đã phê duyệt & gửi RFO tới Hãng! Chuyển sang bước nhập báo giá...", "ok");
+      showToast("Đã phê duyệt & gửi RFO tới Hãng thành công.", "ok");
       setTimeout(() => router.push(`/rfq/${rfqId}/cbu-calc`), 1800);
     } else {
       const data = await res.json();
@@ -279,13 +279,13 @@ export default function RFOReviewPage() {
           <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="text-gray-900 font-semibold">
-                {editMode ? "✏️ Chỉnh sửa Email" : "👁 Preview Draft Email Gửi Hãng"}
+                {editMode ? "Chỉnh sửa Email" : "Preview Draft Email Gửi Hãng"}
               </h2>
               <button
                 onClick={() => setEditMode(!editMode)}
                 className={`text-xs px-3 py-1.5 rounded-lg font-medium border transition-all ${editMode ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"}`}
               >
-                {editMode ? "Xem Preview →" : "✏️ Chỉnh sửa Email"}
+                {editMode ? "Xem Preview →" : "Chỉnh sửa Email"}
               </button>
             </div>
 
@@ -295,7 +295,7 @@ export default function RFOReviewPage() {
                 {/* Catalog URL */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    🔗 Link Catalog / Hình ảnh sản phẩm <span className="font-normal text-gray-400">(tùy chọn — sẽ hiển thị dưới dạng nút bấm trong email)</span>
+                    Link Catalog / Hình ảnh sản phẩm <span className="font-normal text-gray-400">(tùy chọn — sẽ hiển thị dưới dạng nút bấm trong email)</span>
                   </label>
                   <input
                     type="url"
@@ -309,7 +309,7 @@ export default function RFOReviewPage() {
                 {/* Greeting Body */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                    📝 Nội dung lời chào & thân email <span className="font-normal text-gray-400">(hỗ trợ HTML)</span>
+                    Nội dung lời chào & thân email <span className="font-normal text-gray-400">(hỗ trợ HTML)</span>
                   </label>
                   <textarea
                     value={greetingBody}
@@ -320,7 +320,7 @@ export default function RFOReviewPage() {
                   />
                 </div>
 
-                <p className="text-xs text-gray-400 italic">💡 Bảng sản phẩm và PSBV Footer Card sẽ tự động được lắp ghép bên dưới khi gửi.</p>
+                <p className="text-xs text-gray-400 italic">Bảng sản phẩm và PSBV Footer Card sẽ tự động được lắp ghép bên dưới khi gửi.</p>
 
                 <button
                   onClick={() => setEditMode(false)}
@@ -410,7 +410,7 @@ export default function RFOReviewPage() {
 
             {/* Catalog URL (also in right panel for quick access) */}
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">🔗 Catalog / Ảnh sản phẩm URL</label>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Catalog / Ảnh sản phẩm URL</label>
               <input type="url" value={catalogUrl} onChange={(e) => setCatalogUrl(e.target.value)} placeholder="https://..."
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono focus:bg-white focus:ring-2 focus:ring-blue-500" />
             </div>
@@ -423,7 +423,7 @@ export default function RFOReviewPage() {
                 disabled={saving}
                 className="w-full py-2.5 rounded-xl border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-all"
               >
-                {saving ? "Đang lưu..." : "💾 Lưu Nháp"}
+                {saving ? "Đang lưu..." : "Lưu Nháp"}
               </button>
 
               {/* Send Button */}
@@ -466,10 +466,10 @@ export default function RFOReviewPage() {
               </button>
 
               {alreadySent && (
-                <p className="text-xs text-center text-emerald-600 font-medium">✅ RFO đã được gửi tới Hãng thành công.</p>
+                <p className="text-xs text-center text-emerald-600 font-medium">RFO đã được gửi tới Hãng thành công.</p>
               )}
               {!canSend && !alreadySent && (
-                <p className="text-xs text-center text-amber-600">⚠ Đơn hàng chưa sẵn sàng để gửi RFO.</p>
+                <p className="text-xs text-center text-amber-600">Đơn hàng chưa sẵn sàng để gửi RFO.</p>
               )}
             </div>
           </div>

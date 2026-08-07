@@ -64,9 +64,8 @@ export default function RFQListPage() {
           {/* Tiếp nhận Inquiry — Primary */}
           <Link
             href="/rfq/new"
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold rounded-xl shadow-lg shadow-blue-500/20 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-all"
           >
-            <span className="text-base">📥</span>
             Tiếp nhận Inquiry
           </Link>
 
@@ -172,7 +171,7 @@ export default function RFQListPage() {
                       </span>
                       {rfq.extractionError && (
                         <p className="text-xs text-red-500 mt-1 truncate max-w-[160px]" title={rfq.extractionError}>
-                          ⚠ {rfq.extractionError.substring(0, 40)}...
+                          {rfq.extractionError.substring(0, 40)}...
                         </p>
                       )}
                     </td>

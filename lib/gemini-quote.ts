@@ -124,13 +124,16 @@ export async function parseSupplierQuoteWithGemini(
   return {
     supplierQuoteCode: finalQuoteCode,
     supplierName: parsed.supplierName || "",
-    items: (parsed.items || []).map((item: any) => ({
-      partNumber: item.partNumber || "",
-      description: item.description || item.Description || "",
-      supplierUnitPrice: Number(item.supplierUnitPrice) || 0,
-      netWeightLbs: Number(item.netWeightLbs) || 0,
-      extWeightLbs: Number(item.extWeightLbs) || 0,
-      leadTime: item.leadTime || "",
-    })),
+    // Filter null/undefined elements Gemini sometimes emits in the items array
+    items: (Array.isArray(parsed.items) ? parsed.items : [])
+      .filter((item: any) => item !== null && item !== undefined && typeof item === "object")
+      .map((item: any) => ({
+        partNumber: String(item.partNumber || item.PartNumber || ""),
+        description: String(item.description || item.Description || ""),
+        supplierUnitPrice: Number(item.supplierUnitPrice ?? item.UnitPrice ?? 0) || 0,
+        netWeightLbs: Number(item.netWeightLbs ?? item.NetWeight ?? 0) || 0,
+        extWeightLbs: Number(item.extWeightLbs ?? item.ExtWeight ?? 0) || 0,
+        leadTime: String(item.leadTime || item.LeadTime || ""),
+      })),
   };
 }

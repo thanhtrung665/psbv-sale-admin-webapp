@@ -107,9 +107,12 @@ export default function ProcessQuotePage() {
       setRfqId(data.rfqId);
       setSupplierQuoteCode(data.supplierQuoteCode || "");
       setSupplierName(data.supplierName || "");
-      setItems(data.items || []);
+      // Filter out any null/undefined elements Gemini may inject
+      const safeItems = (Array.isArray(data.items) ? data.items : [])
+        .filter((item: any) => item !== null && item !== undefined && typeof item === "object");
+      setItems(safeItems);
       setExtractionDone(true);
-      setSuccess(`Bóc tách thành công ${data.items?.length || 0} dòng sản phẩm.`);
+      setSuccess(`Bóc tách thành công ${safeItems.length} dòng sản phẩm.`);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -395,15 +398,17 @@ export default function ProcessQuotePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {items.map((item) => (
+                {items
+                  .filter((item): item is ExtractedItem => item !== null && item !== undefined)
+                  .map((item) => (
                   <tr key={item.id} className={`transition-colors ${item.matched ? "hover:bg-gray-50" : "bg-yellow-50/50 hover:bg-yellow-50"}`}>
                     <td className="px-3 py-2.5">
-                      <span className="text-gray-400 text-xs font-mono">{item.lineNo}</span>
+                      <span className="text-gray-400 text-xs font-mono">{item?.lineNo ?? ''}</span>
                     </td>
                     <td className="px-3 py-2.5">
                       <input
                         type="text"
-                        value={item.rawPartNumber}
+                        value={item?.rawPartNumber ?? ''}
                         onChange={(e) => updateItem(item.id, "rawPartNumber", e.target.value)}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm"
                       />
@@ -411,7 +416,7 @@ export default function ProcessQuotePage() {
                     <td className="px-3 py-2.5">
                       <input
                         type="text"
-                        value={item.rawDescription}
+                        value={item?.rawDescription ?? ''}
                         onChange={(e) => updateItem(item.id, "rawDescription", e.target.value)}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm"
                       />
@@ -420,7 +425,7 @@ export default function ProcessQuotePage() {
                       <input
                         type="number"
                         step="0.01"
-                        value={item.supplierUnitPrice}
+                        value={item?.supplierUnitPrice ?? 0}
                         onChange={(e) => updateItem(item.id, "supplierUnitPrice", Number(e.target.value))}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
@@ -429,7 +434,7 @@ export default function ProcessQuotePage() {
                       <input
                         type="number"
                         step="0.01"
-                        value={item.netWeightLbs}
+                        value={item?.netWeightLbs ?? 0}
                         onChange={(e) => updateItem(item.id, "netWeightLbs", Number(e.target.value))}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-right font-mono focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       />
@@ -437,7 +442,7 @@ export default function ProcessQuotePage() {
                     <td className="px-3 py-2.5">
                       <input
                         type="text"
-                        value={item.uom}
+                        value={item?.uom ?? 'PCS'}
                         onChange={(e) => updateItem(item.id, "uom", e.target.value)}
                         className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs text-gray-900 text-center focus:outline-none focus:ring-1 focus:ring-violet-500/50 shadow-sm"
                       />
@@ -465,7 +470,7 @@ export default function ProcessQuotePage() {
           {/* Summary */}
           <div className="flex items-center justify-between text-xs text-gray-500 px-1">
             <span>
-              {items.filter((i) => i.matched).length} / {items.length} dòng matched với DB
+              {items.filter((i): i is ExtractedItem => i !== null && i !== undefined && !!i.matched).length} / {items.filter((i) => i !== null && i !== undefined).length} dòng matched với DB
               {supplierName && <> · Hãng: <span className="font-semibold text-gray-700">{supplierName}</span></>}
             </span>
           </div>

@@ -71,7 +71,10 @@ export default function RFOReviewPage() {
     if (res.ok) {
       const data: RFQDetail = await res.json();
       setRfq(data);
-      setItems(data.items);
+      // Filter out any null/undefined elements that may arrive from the API
+      const safeItems: RFQItem[] = (Array.isArray(data.items) ? data.items : [])
+        .filter((item: any): item is RFQItem => item !== null && item !== undefined && typeof item === "object");
+      setItems(safeItems);
       setEmailSubject(`Quotation Request for ${data.rfqCode}`);
       if (data.supplierLogo) setSupplierLogo(data.supplierLogo);
       // Default greeting body
@@ -250,22 +253,22 @@ export default function RFOReviewPage() {
                 <tbody className="divide-y divide-gray-100">
                   {items.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{item.lineNo}</td>
+                      <td className="px-4 py-3 text-gray-500 text-xs font-mono">{item?.lineNo ?? ''}</td>
                       <td className="px-4 py-3">
-                        <input type="text" value={item.standardPartNo || ""} onChange={(e) => updateItem(item.id, "standardPartNo", e.target.value)} placeholder={item.rawPartNumber}
+                        <input type="text" value={item?.standardPartNo || ""} onChange={(e) => updateItem(item.id, "standardPartNo", e.target.value)} placeholder={item?.rawPartNumber || ''}
                           className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs focus:ring-1 focus:ring-blue-500/50" />
-                        <div className="text-[10px] text-gray-400 mt-1 truncate" title={item.rawPartNumber}>Raw: {item.rawPartNumber}</div>
+                        <div className="text-[10px] text-gray-400 mt-1 truncate" title={item?.rawPartNumber || ''}>Raw: {item?.rawPartNumber || ''}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <input type="text" value={item.rawDescription || ""} onChange={(e) => updateItem(item.id, "rawDescription", e.target.value)}
+                        <input type="text" value={item?.rawDescription || ""} onChange={(e) => updateItem(item.id, "rawDescription", e.target.value)}
                           className="w-full px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs focus:ring-1 focus:ring-blue-500/50" />
                       </td>
                       <td className="px-4 py-3">
-                        <input type="number" value={item.qty} onChange={(e) => updateItem(item.id, "qty", Number(e.target.value))}
+                        <input type="number" value={item?.qty ?? 0} onChange={(e) => updateItem(item.id, "qty", Number(e.target.value))}
                           className="w-16 mx-auto block px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs text-center focus:ring-1 focus:ring-blue-500/50" />
                       </td>
                       <td className="px-4 py-3">
-                        <input type="text" value={item.uom || ""} onChange={(e) => updateItem(item.id, "uom", e.target.value)}
+                        <input type="text" value={item?.uom || "PCS"} onChange={(e) => updateItem(item.id, "uom", e.target.value)}
                           className="w-16 mx-auto block px-2 py-1.5 bg-white border border-gray-200 rounded-md text-xs text-center focus:ring-1 focus:ring-blue-500/50 uppercase" />
                       </td>
                     </tr>

@@ -31,7 +31,7 @@ export default function RFQListPage() {
     const url = activeStatus ? `/api/rfq?status=${activeStatus}` : "/api/rfq";
     const res = await fetch(url);
     const data = await res.json();
-    setRfqs(data);
+    setRfqs(Array.isArray(data) ? data : []);
     setLoading(false);
   }, [activeStatus]);
 
@@ -131,7 +131,7 @@ export default function RFQListPage() {
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr><td colSpan={6} className="text-center py-16">Đang tải...</td></tr>
-            ) : rfqs.length === 0 ? (
+            ) : (!Array.isArray(rfqs) || rfqs.length === 0) ? (
               <tr>
                 <td colSpan={6} className="text-center py-16 text-gray-500">
                   <div className="flex flex-col items-center gap-3">
@@ -146,13 +146,14 @@ export default function RFQListPage() {
                 </td>
               </tr>
             ) : (
-              rfqs.map((rfq) => {
-                const statusInfo = STATUS_LABELS[rfq.status] || { label: rfq.status, color: "bg-gray-100 text-gray-500 border-gray-200" };
+              (Array.isArray(rfqs) ? rfqs : []).map((rfq) => {
+                if (!rfq) return null;
+                const statusInfo = STATUS_LABELS[rfq?.status] || { label: rfq?.status || "Unknown", color: "bg-gray-100 text-gray-500 border-gray-200" };
                 return (
-                  <tr key={rfq.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={rfq?.id || Math.random()} className="hover:bg-gray-50 transition-colors">
                     <td className="px-5 py-4">
-                      <span className="font-mono text-xs text-blue-600 font-semibold">{rfq.rfqCode}</span>
-                      {rfq.isProcessing && (
+                      <span className="font-mono text-xs text-blue-600 font-semibold">{rfq?.rfqCode || "—"}</span>
+                      {rfq?.isProcessing && (
                         <span className="ml-2 inline-flex items-center gap-1 text-xs text-gray-500">
                           <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -162,24 +163,24 @@ export default function RFQListPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-gray-900 text-sm font-medium">{rfq.client?.name || "—"}</td>
-                    <td className="px-5 py-4 text-gray-500 text-sm">{rfq.client?.companyName || "—"}</td>
+                    <td className="px-5 py-4 text-gray-900 text-sm font-medium">{rfq?.client?.name || "—"}</td>
+                    <td className="px-5 py-4 text-gray-500 text-sm">{rfq?.client?.companyName || "—"}</td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-semibold border ${statusInfo.color}`}>
                         <span className="w-1.5 h-1.5 rounded-full bg-current" />
                         {statusInfo.label}
                       </span>
-                      {rfq.extractionError && (
+                      {rfq?.extractionError && (
                         <p className="text-xs text-red-500 mt-1 truncate max-w-[160px]" title={rfq.extractionError}>
                           {rfq.extractionError.substring(0, 40)}...
                         </p>
                       )}
                     </td>
                     <td className="px-5 py-4 text-gray-500 text-sm">
-                      {new Date(rfq.createdAt).toLocaleDateString("vi-VN")}
+                      {rfq?.createdAt ? new Date(rfq.createdAt).toLocaleDateString("vi-VN") : "N/A"}
                     </td>
                     <td className="px-5 py-4">
-                      {rfq.extractionError ? (
+                      {rfq?.extractionError ? (
                         <button
                           onClick={() => handleRetry(rfq.id)}
                           className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all font-medium"
@@ -191,7 +192,7 @@ export default function RFQListPage() {
                         </button>
                       ) : (
                         <Link
-                          href={`/rfq/${rfq.id}/rfo-review`}
+                          href={`/rfq/${rfq?.id}/rfo-review`}
                           className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 transition-all font-medium"
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

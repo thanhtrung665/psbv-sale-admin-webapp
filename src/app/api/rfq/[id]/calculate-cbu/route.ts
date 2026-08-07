@@ -20,6 +20,7 @@ export async function POST(
       freightCost,
       clearanceCost,
       inlandCost,
+      docFee,
       bankFeePercent,
       insurancePercent,
       customColumns, // Dynamic custom columns config
@@ -65,6 +66,7 @@ export async function POST(
         freightCost: freightCost ?? 0,
         clearanceCost: clearanceCost ?? 0,
         inlandCost: inlandCost ?? 0,
+        docFee: docFee ?? 15,
         bankFeePercent: bankFeePercent ?? 0,
         insurancePercent: insurancePercent ?? 0,
         customColumns: customColumns ?? [],

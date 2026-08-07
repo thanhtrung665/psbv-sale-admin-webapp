@@ -69,6 +69,7 @@ model RFQ {
   freightCost       Float?       @default(0)
   clearanceCost     Float?       @default(0)
   inlandCost        Float?       @default(0)
+  docFee            Float?       @default(15)
   bankFeePercent    Float?       @default(0)
   insurancePercent  Float?       @default(0)
   

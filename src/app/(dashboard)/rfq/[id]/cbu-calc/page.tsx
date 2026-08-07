@@ -67,6 +67,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           freightCost: String(safeNum(rawData.freightCost)),
           clearanceCost: String(safeNum(rawData.clearanceCost)),
           inlandCost: String(safeNum(rawData.inlandCost)),
+          docFee: String(safeNum(rawData.docFee, 15)),
           bankFeePercent: String(safeNum(rawData.bankFeePercent)),
           insurancePercent: String(safeNum(rawData.insurancePercent)),
         };
@@ -128,6 +129,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           freightCost: parseNumInput(inputs.freightCost),
           clearanceCost: parseNumInput(inputs.clearanceCost),
           inlandCost: parseNumInput(inputs.inlandCost),
+          docFee: parseNumInput(inputs.docFee),
           bankFeePercent: parseNumInput(inputs.bankFeePercent),
           insurancePercent: parseNumInput(inputs.insurancePercent),
           customColumns: [], // Stripped per requirements
@@ -162,6 +164,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           freightCost: parseNumInput(inputs.freightCost),
           clearanceCost: parseNumInput(inputs.clearanceCost),
           inlandCost: parseNumInput(inputs.inlandCost),
+          docFee: parseNumInput(inputs.docFee),
           bankFeePercent: parseNumInput(inputs.bankFeePercent),
           insurancePercent: parseNumInput(inputs.insurancePercent),
           customColumns: [],
@@ -288,45 +291,44 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
       {/* ── 3 Sub-Ledger Cards ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* CARD 1: LOGISTICS COST */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Logistics Cost</h3>
-            <div className="space-y-2.5">
+        <div className="bg-white rounded-lg overflow-hidden flex flex-col h-full shadow-sm">
+          <table className="w-full border-collapse border border-slate-300 text-sm h-full">
+            <tbody>
               {[
-                { label: "Freight ($)", key: "freightCost" },
-                { label: "Clearance ($)", key: "clearanceCost" },
-                { label: "Inland ($)", key: "inlandCost" },
-              ].map(({ label, key }) => (
-                <div key={key} className="flex items-center justify-between gap-3">
-                  <label className="text-xs text-slate-500 whitespace-nowrap">{label}</label>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={inputs[key] ?? "0"}
-                    onChange={(e) => handleInput(key, e.target.value)}
-                    className="w-24 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-right text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                </div>
+                { label: "FREIGHT", key: "freightCost" },
+                { label: "CUSTOM CLEARANCE", key: "clearanceCost" },
+                { label: "INLAND", key: "inlandCost" },
+                { label: "DOC FEE", key: "docFee", fallback: "15" },
+              ].map(({ label, key, fallback = "0" }) => (
+                <tr key={key}>
+                  <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300 w-1/2">{label}</td>
+                  <td className="px-0 py-0 border border-slate-300 bg-white">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={inputs[key] ?? fallback}
+                      onChange={(e) => handleInput(key, e.target.value)}
+                      className="w-full bg-transparent text-right outline-none px-3 py-2 font-mono text-slate-800 focus:ring-1 focus:ring-slate-400 focus:bg-slate-50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </td>
+                </tr>
               ))}
-            </div>
-          </div>
-          <div className="mt-4 pt-3 border-t border-slate-100 space-y-1">
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Total Weight</span>
-              <span className="font-mono font-medium text-slate-700">{fmt(cbuResult.totalWeight)} lbs</span>
-            </div>
-            <div className="flex justify-between text-xs text-slate-500">
-              <span>Total Logistics</span>
-              <span className="font-mono font-medium text-slate-700">${fmt(cbuResult.totalLogisticsUsd)}</span>
-            </div>
-            <div className="flex justify-between text-xs font-medium text-blue-600">
-              <span>Rate ($/lb)</span>
-              <span className="font-mono">
-                ${cbuResult.totalWeight > 0 ? fmt((cbuResult.totalLogisticsUsd + 15) / cbuResult.totalWeight) : "0.00"}
-              </span>
-            </div>
-            <p className="text-[10px] text-slate-400 text-right italic">+$15 Docs Fee included</p>
-          </div>
+              <tr>
+                <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TOTAL WEIGHT (KGS/LBS)</td>
+                <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-medium text-slate-700">{fmt(cbuResult.totalWeight)}</td>
+              </tr>
+              <tr>
+                <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TOTAL AMOUNT ($)</td>
+                <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-bold text-slate-900">${fmt(cbuResult.totalLogisticsUsd)}</td>
+              </tr>
+              <tr>
+                <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TRANSIT TIME</td>
+                <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-semibold text-blue-600">
+                  {cbuResult.totalWeight > 0 ? fmt(cbuResult.totalLogisticsUsd / cbuResult.totalWeight, 2) : "0.00"}/lb
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
         {/* CARD 2: BANK FEE */}

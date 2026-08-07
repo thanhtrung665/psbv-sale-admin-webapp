@@ -57,6 +57,7 @@ export interface CBUGlobals {
   freightCost: number;
   clearanceCost: number;
   inlandCost: number;
+  docFee: number;
   bankFeePercent: number;
   insurancePercent: number;
   customColumns: CustomColumnDef[];
@@ -109,6 +110,7 @@ export function calculateCBU(
   const freightCost = n(rawGlobals.freightCost);
   const clearanceCost = n(rawGlobals.clearanceCost);
   const inlandCost = n(rawGlobals.inlandCost);
+  const docFee = n(rawGlobals.docFee, 15);
   const bankFeePercent = n(rawGlobals.bankFeePercent);
   const insurancePercent = n(rawGlobals.insurancePercent);
 
@@ -155,7 +157,7 @@ export function calculateCBU(
   });
 
   // ── 2. Global totals ────────────────────────────────────────────────────────
-  const totalLogisticsUsd = freightCost + clearanceCost + inlandCost;
+  const totalLogisticsUsd = freightCost + clearanceCost + inlandCost + docFee;
 
   let totalBankFeeUsd = 0;
   let totalInsuranceUsd = 0;
@@ -164,10 +166,10 @@ export function calculateCBU(
 
   // ── 3. Per-item allocation & pricing ───────────────────────────────────────
   const finalItems = processedItems.map((item) => {
-    // Logistics apportioned by weight ratio (+ $15 docs fee)
+    // Logistics apportioned by weight ratio
     let apportionedLogistics = 0;
     if (totalWeight > 0) {
-      apportionedLogistics = (totalLogisticsUsd + 15) * (item.extWeightLbs / totalWeight);
+      apportionedLogistics = totalLogisticsUsd * (item.extWeightLbs / totalWeight);
     }
 
     // Bank fee & insurance apportioned by ext price

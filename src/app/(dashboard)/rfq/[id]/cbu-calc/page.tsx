@@ -3,49 +3,27 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { calculateCBU, CBUItemEngineData, CBUResult, CustomColumnDef, parseJsonField } from "@/lib/cbu-engine";
+import { calculateCBU, CBUItemEngineData, CBUResult, parseJsonField } from "@/lib/cbu-engine";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Guarantee a finite number; never NaN or Infinity. */
 function safeNum(v: unknown, fallback = 0): number {
   const n = Number(v);
   return isFinite(n) ? n : fallback;
 }
 
-/** Parse a Prisma Json field that might come back as string or null. */
 function parsePrismaJson<T>(raw: unknown, fallback: T): T {
   return parseJsonField<T>(raw, fallback);
 }
 
+const parseNumInput = (val: any) => {
+  if (val === '' || val === null || val === undefined) return 0;
+  const parsed = parseFloat(String(val).replace(',', '.'));
+  return isNaN(parsed) ? 0 : parsed;
+};
 
-// Tailwind class for removing spin buttons on all browsers
-const NUM_INPUT = [
-  "w-full px-2 py-1.5 bg-white border border-slate-200 rounded-md",
-  "text-right text-xs font-mono text-slate-800",
-  "focus:outline-none focus:ring-1 focus:ring-slate-400/60",
-  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-].join(" ");
-
-const NUM_INPUT_AMBER = [
-  "w-full px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md",
-  "text-right text-xs font-mono text-amber-700",
-  "focus:outline-none focus:ring-1 focus:ring-amber-400/60",
-  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-].join(" ");
-
-const NUM_INPUT_BLUE = [
-  "w-full px-2 py-1.5 bg-blue-50 border border-blue-200 rounded-md",
-  "text-right text-xs font-mono text-blue-700",
-  "focus:outline-none focus:ring-1 focus:ring-blue-400/60",
-  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-].join(" ");
-
-const NUM_INPUT_PINK = [
-  "w-full px-1.5 py-1 bg-white border border-pink-100 rounded text-right text-xs font-mono text-slate-800",
-  "focus:outline-none focus:ring-1 focus:ring-pink-400/50 min-w-[60px]",
-  "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-].join(" ");
+// Tailwind class for inputs
+const NUM_INPUT_CLASS = "w-full px-2 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none hover:border-slate-300 focus:border-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
 export default function CBUCalcPage({ params }: { params: { id: string } }) {
   const { id: rfqId } = params;
@@ -61,23 +39,10 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
   const [companyName, setCompanyName] = useState("");
   const [supplierName, setSupplierName] = useState("");
 
-  // Global inputs
-  const [exchangeRate, setExchangeRate] = useState(25500);
-  const [freightCost, setFreightCost] = useState(0);
-  const [clearanceCost, setClearanceCost] = useState(0);
-  const [inlandCost, setInlandCost] = useState(0);
-  const [bankFeePercent, setBankFeePercent] = useState(0);
-  const [insurancePercent, setInsurancePercent] = useState(0);
+  // Input states mapping everything to strings for lag-free typing
+  const [inputs, setInputs] = useState<Record<string, string>>({});
 
-  // Custom Columns Config
-  const [customColumns, setCustomColumns] = useState<CustomColumnDef[]>([]);
-
-  // Add Column Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newColName, setNewColName] = useState("");
-  const [newColType, setNewColType] = useState<"AMOUNT" | "PERCENT">("AMOUNT");
-
-  // Items base state (before calc)
+  // Items base state (static fields, IDs, etc)
   const [items, setItems] = useState<CBUItemEngineData[]>([]);
 
   // Calculated Result State
@@ -96,56 +61,43 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
         setCompanyName(rawData.client?.companyName || "");
         setSupplierName(rawData.supplierName || "");
 
-        // ── Global CBU parameters: always sanitise with safeNum ──────────
-        setExchangeRate(safeNum(rawData.exchangeRate, 25500));
-        setFreightCost(safeNum(rawData.freightCost));
-        setClearanceCost(safeNum(rawData.clearanceCost));
-        setInlandCost(safeNum(rawData.inlandCost));
-        setBankFeePercent(safeNum(rawData.bankFeePercent));
-        setInsurancePercent(safeNum(rawData.insurancePercent));
+        // Initialize string inputs
+        const initInputs: Record<string, string> = {
+          exchangeRate: String(safeNum(rawData.exchangeRate, 25500)),
+          freightCost: String(safeNum(rawData.freightCost)),
+          clearanceCost: String(safeNum(rawData.clearanceCost)),
+          inlandCost: String(safeNum(rawData.inlandCost)),
+          bankFeePercent: String(safeNum(rawData.bankFeePercent)),
+          insurancePercent: String(safeNum(rawData.insurancePercent)),
+        };
 
-        // ── customColumns: Prisma Json may arrive as string or null ──────
-        const rawCols = parsePrismaJson<CustomColumnDef[]>(rawData.customColumns, []);
-        const safeCols: CustomColumnDef[] = Array.isArray(rawCols)
-          ? rawCols.filter(
-              (c): c is CustomColumnDef =>
-                c !== null &&
-                typeof c === "object" &&
-                typeof c.id === "string" &&
-                typeof c.name === "string" &&
-                (c.type === "AMOUNT" || c.type === "PERCENT")
-            )
-          : [];
-        setCustomColumns(safeCols);
-
-        // ── Items: deep sanitise every numeric/Json field ────────────────
         const rawItems: any[] = Array.isArray(rawData.items) ? rawData.items : [];
         const loadedItems: CBUItemEngineData[] = rawItems.map((item: any) => {
-          // customValues: may be null, string, or object
-          const rawCV = parsePrismaJson<Record<string, unknown>>(item.customValues, {});
-          const safeCV: Record<string, number> = {};
-          if (rawCV && typeof rawCV === "object" && !Array.isArray(rawCV)) {
-            for (const [k, v] of Object.entries(rawCV)) {
-              safeCV[k] = safeNum(v);
-            }
-          }
+          const id = String(item.id || "");
+          // Initialize item specific numeric fields to strings
+          initInputs[`${id}_supplierUnitPrice`] = String(safeNum(item.supplierUnitPrice));
+          initInputs[`${id}_dutyPercent`] = String(safeNum(item.dutyPercent));
+          initInputs[`${id}_netWeightLbs`] = String(safeNum(item.netWeightLbs));
+          initInputs[`${id}_marginPercent`] = String(safeNum(item.marginPercent));
 
           return {
-            id: String(item.id || ""),
+            id,
             lineNo: safeNum(item.lineNo, 0),
             rawPartNumber: String(item.rawPartNumber || ""),
+            rawDescription: String(item.rawDescription || ""),
             uom: String(item.uom || "PCS"),
-            qty: safeNum(item.qty, 1) || 1,            // qty must be ≥ 1
-            supplierUnitPrice: safeNum(item.supplierUnitPrice),
-            netWeightLbs: safeNum(item.netWeightLbs),
-            dutyPercent: safeNum(item.dutyPercent),
-            commissionPercent: safeNum(item.commissionPercent),
-            citPercent: safeNum(item.citPercent),
-            marginPercent: safeNum(item.marginPercent),
-            customValues: safeCV,
-          } satisfies CBUItemEngineData;
+            qty: safeNum(item.qty, 1) || 1,
+            supplierUnitPrice: 0, // Computed from inputs
+            netWeightLbs: 0,
+            dutyPercent: 0,
+            commissionPercent: 0,
+            citPercent: 0,
+            marginPercent: 0,
+            customValues: {},
+          };
         });
 
+        setInputs(initInputs);
         setItems(loadedItems);
       } catch (err: any) {
         setError(err.message ?? "Không thể tải dữ liệu đơn hàng.");
@@ -160,75 +112,36 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (!loading && items.length > 0) {
       try {
-        const res = calculateCBU(items, {
-          exchangeRate,
-          freightCost,
-          clearanceCost,
-          inlandCost,
-          bankFeePercent,
-          insurancePercent,
-          customColumns,
+        const engineItems = items.map(item => ({
+          ...item,
+          supplierUnitPrice: parseNumInput(inputs[`${item.id}_supplierUnitPrice`]),
+          netWeightLbs: parseNumInput(inputs[`${item.id}_netWeightLbs`]),
+          dutyPercent: parseNumInput(inputs[`${item.id}_dutyPercent`]),
+          marginPercent: parseNumInput(inputs[`${item.id}_marginPercent`]),
+          commissionPercent: 0, // Ignored in 19-col format
+          citPercent: 0,
+          customValues: {},
+        }));
+
+        const res = calculateCBU(engineItems, {
+          exchangeRate: parseNumInput(inputs.exchangeRate),
+          freightCost: parseNumInput(inputs.freightCost),
+          clearanceCost: parseNumInput(inputs.clearanceCost),
+          inlandCost: parseNumInput(inputs.inlandCost),
+          bankFeePercent: parseNumInput(inputs.bankFeePercent),
+          insurancePercent: parseNumInput(inputs.insurancePercent),
+          customColumns: [], // Stripped per requirements
         });
         setCbuResult(res);
       } catch (e) {
         console.error("CBU calculation error:", e);
       }
     }
-  }, [
-    items,
-    exchangeRate,
-    freightCost,
-    clearanceCost,
-    inlandCost,
-    bankFeePercent,
-    insurancePercent,
-    customColumns,
-    loading,
-  ]);
+  }, [inputs, items, loading]);
 
-  // ── Field Updaters ──────────────────────────────────────────────────
-  const updateItemField = (id: string, field: keyof CBUItemEngineData, value: number) => {
-    // Guard against NaN from user clearing the input
-    const safeValue = isFinite(value) ? value : 0;
-    setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: safeValue } : item))
-    );
-  };
-
-  const updateItemCustomValue = (itemId: string, colId: string, value: number) => {
-    const safeValue = isFinite(value) ? value : 0;
-    setItems((prev) =>
-      prev.map((item) => {
-        if (item.id !== itemId) return item;
-        const prevCV: Record<string, number> =
-          item.customValues && typeof item.customValues === "object" && !Array.isArray(item.customValues)
-            ? (item.customValues as Record<string, number>)
-            : {};
-        return {
-          ...item,
-          customValues: { ...prevCV, [colId]: safeValue },
-        };
-      })
-    );
-  };
-
-  // ── Custom Columns Handlers ───────────────────────────────────────────
-  const handleAddCustomColumn = () => {
-    if (!newColName.trim()) return;
-    const newCol: CustomColumnDef = {
-      id: `col_${Date.now()}`,
-      name: newColName.trim(),
-      type: newColType,
-    };
-    setCustomColumns((prev) => [...prev, newCol]);
-    setShowAddModal(false);
-    setNewColName("");
-    setNewColType("AMOUNT");
-  };
-
-  const handleDeleteCustomColumn = (colId: string) => {
-    if (!confirm("Xóa cột tùy chỉnh này khỏi bảng?")) return;
-    setCustomColumns((prev) => prev.filter((col) => col.id !== colId));
+  // ── Input Handlers ──────────────────────────────────────────────────
+  const handleInput = (key: string, value: string) => {
+    setInputs(prev => ({ ...prev, [key]: value }));
   };
 
   // ── Save handler ─────────────────────────────────────────────────────
@@ -245,13 +158,13 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           finalize,
-          exchangeRate,
-          freightCost,
-          clearanceCost,
-          inlandCost,
-          bankFeePercent,
-          insurancePercent,
-          customColumns,
+          exchangeRate: parseNumInput(inputs.exchangeRate),
+          freightCost: parseNumInput(inputs.freightCost),
+          clearanceCost: parseNumInput(inputs.clearanceCost),
+          inlandCost: parseNumInput(inputs.inlandCost),
+          bankFeePercent: parseNumInput(inputs.bankFeePercent),
+          insurancePercent: parseNumInput(inputs.insurancePercent),
+          customColumns: [],
           totalCostUsd: cbuResult.totalCostUsd,
           totalRevenueUsd: cbuResult.totalRevenueUsd,
           totalRevenueVnd: cbuResult.totalRevenueVnd,
@@ -321,7 +234,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
   if (!cbuResult) return null;
 
   return (
-    <div className="space-y-5 max-w-full mx-auto pb-12">
+    <div className="space-y-5 max-w-[1600px] mx-auto pb-12">
       {/* ── Header ───────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -347,9 +260,9 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           <input
             type="text"
             inputMode="decimal"
-            value={exchangeRate}
-            onChange={(e) => setExchangeRate(parseFloat(e.target.value) || 0)}
-            className={`w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-right font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+            value={inputs.exchangeRate ?? "25500"}
+            onChange={(e) => handleInput("exchangeRate", e.target.value)}
+            className="w-24 px-2 py-1 bg-slate-50 border border-slate-200 rounded-md text-sm text-right font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
         </div>
       </div>
@@ -374,25 +287,24 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
 
       {/* ── 3 Sub-Ledger Cards ────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
         {/* CARD 1: LOGISTICS COST */}
         <div className="bg-white border border-slate-200 rounded-lg p-4 flex flex-col justify-between">
           <div>
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Logistics Cost</h3>
             <div className="space-y-2.5">
               {[
-                { label: "Freight ($)", val: freightCost, set: setFreightCost },
-                { label: "Clearance ($)", val: clearanceCost, set: setClearanceCost },
-                { label: "Inland ($)", val: inlandCost, set: setInlandCost },
-              ].map(({ label, val, set }) => (
-                <div key={label} className="flex items-center justify-between gap-3">
+                { label: "Freight ($)", key: "freightCost" },
+                { label: "Clearance ($)", key: "clearanceCost" },
+                { label: "Inland ($)", key: "inlandCost" },
+              ].map(({ label, key }) => (
+                <div key={key} className="flex items-center justify-between gap-3">
                   <label className="text-xs text-slate-500 whitespace-nowrap">{label}</label>
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={val}
-                    onChange={(e) => set(parseFloat(e.target.value) || 0)}
-                    className={`w-24 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-right text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+                    value={inputs[key] ?? "0"}
+                    onChange={(e) => handleInput(key, e.target.value)}
+                    className="w-24 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-right text-sm font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                 </div>
               ))}
@@ -426,9 +338,9 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               <input
                 type="text"
                 inputMode="decimal"
-                value={bankFeePercent}
-                onChange={(e) => setBankFeePercent(parseFloat(e.target.value) || 0)}
-                className={`w-24 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-right text-sm font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+                value={inputs.bankFeePercent ?? "0"}
+                onChange={(e) => handleInput("bankFeePercent", e.target.value)}
+                className="w-24 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-right text-sm font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
           </div>
@@ -449,9 +361,9 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               <input
                 type="text"
                 inputMode="decimal"
-                value={insurancePercent}
-                onChange={(e) => setInsurancePercent(parseFloat(e.target.value) || 0)}
-                className={`w-24 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-right text-sm font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+                value={inputs.insurancePercent ?? "0"}
+                onChange={(e) => handleInput("insurancePercent", e.target.value)}
+                className="w-24 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-right text-sm font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
           </div>
@@ -464,27 +376,15 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* ── Margin Analysis Table ─────────────────────────────────────── */}
+      {/* ── Margin Analysis Table (19 Excel Columns) ────────────────── */}
       <div className="bg-white border border-slate-200 rounded-lg overflow-hidden">
         {/* Table Toolbar */}
         <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-4">
-            <div>
-              <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Margin Analysis Engine</h2>
-              <p className="text-[11px] text-slate-400 mt-0.5">Chi phí tự động phân bổ theo trọng lượng và giá vật tư.</p>
-            </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-600 text-xs font-medium rounded-md hover:bg-slate-50 hover:text-slate-900 transition-colors"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add Column
-            </button>
+          <div>
+            <h2 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Margin Analysis Engine</h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">Engine tính toán DDP dựa trên phân bổ tỷ trọng.</p>
           </div>
 
-          {/* Summary mini stats */}
           <div className="flex gap-5 items-center">
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Total Cost</p>
@@ -506,100 +406,150 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="overflow-x-auto w-full">
-          <table className="text-xs border-collapse w-full">
+          <table className="text-[11px] border-collapse min-w-max w-full">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-3 py-2.5 text-slate-500 font-semibold uppercase tracking-wider text-[10px] min-w-[28px]">#</th>
-                <th className="text-left px-3 py-2.5 text-slate-500 font-semibold uppercase tracking-wider text-[10px] min-w-[140px]">Part Number</th>
-                <th className="text-center px-3 py-2.5 text-slate-500 font-semibold uppercase tracking-wider text-[10px] min-w-[44px]">Qty</th>
-                <th className="text-right px-3 py-2.5 text-slate-500 font-semibold uppercase tracking-wider text-[10px] min-w-[90px]">Supplier ($)</th>
-
-                {/* Dynamic custom columns */}
-                {(customColumns || []).map((col) => (
-                  <th key={col.id} className="text-right px-2.5 py-2.5 text-pink-600 font-semibold uppercase tracking-wider text-[10px] min-w-[90px] bg-pink-50/40 border-x border-pink-100">
-                    <div className="flex items-center justify-end gap-1.5 group">
-                      <button onClick={() => handleDeleteCustomColumn(col.id)} className="text-pink-300 hover:text-pink-600 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove column">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                      <span>{col.name} <span className="bg-pink-100 text-pink-700 px-1 py-0.5 rounded text-[9px] normal-case">{col.type === "AMOUNT" ? "$" : "%"}</span></span>
-                    </div>
-                  </th>
-                ))}
-
-                <th className="text-right px-3 py-2.5 text-amber-600 font-semibold uppercase tracking-wider text-[10px] min-w-[64px]">Duty %</th>
-                <th className="text-right px-3 py-2.5 text-amber-600 font-semibold uppercase tracking-wider text-[10px] min-w-[64px]">Comm %</th>
-                <th className="text-right px-3 py-2.5 text-amber-600 font-semibold uppercase tracking-wider text-[10px] min-w-[56px]">CIT %</th>
-                <th className="text-right px-3 py-2.5 text-blue-600 font-semibold uppercase tracking-wider text-[10px] min-w-[64px] bg-blue-50/40">Margin %</th>
-                <th className="text-right px-3 py-2.5 text-slate-500 font-semibold uppercase tracking-wider text-[10px] min-w-[90px] border-l border-slate-200">Base Cost ($)</th>
-                <th className="text-right px-3 py-2.5 text-blue-600 font-semibold uppercase tracking-wider text-[10px] min-w-[90px]">DDP USD ($)</th>
-                <th className="text-right px-3 py-2.5 text-violet-600 font-semibold uppercase tracking-wider text-[10px] min-w-[100px]">DDP VND (₫)</th>
-                <th className="text-right px-3 py-2.5 text-emerald-600 font-semibold uppercase tracking-wider text-[10px] min-w-[80px]">Margin/U ($)</th>
+              <tr className="bg-slate-50 border-b border-slate-200 divide-x divide-slate-100">
+                <th className="text-left px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider w-[40px]">NO.</th>
+                <th className="text-left px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[120px]">PART NUMBER</th>
+                <th className="text-left px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[150px]">ITEM DESCRIPTION</th>
+                <th className="text-center px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider w-[50px]">QTY</th>
+                <th className="text-center px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider w-[50px]">UOM</th>
+                <th className="text-right px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[90px]">UNIT PRICE ($)</th>
+                <th className="text-right px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[100px]">TOTAL AMOUNT ($)</th>
+                <th className="text-right px-2 py-2.5 text-amber-600 font-semibold uppercase tracking-wider min-w-[80px]">IMPORT TAX (%)</th>
+                <th className="text-right px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[100px]">IMPORT TAX ($)</th>
+                <th className="text-right px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[90px]">NET WEIGHT (LBS)</th>
+                <th className="text-right px-2 py-2.5 text-slate-500 font-semibold uppercase tracking-wider min-w-[100px]">LOGISTICS COST ($)</th>
+                <th className="text-right px-2 py-2.5 text-slate-900 font-bold uppercase tracking-wider min-w-[100px]">TOTAL COST ($)</th>
+                <th className="text-right px-2 py-2.5 text-slate-900 font-bold uppercase tracking-wider min-w-[100px] border-r-2 border-slate-200">UNIT COST ($)</th>
+                <th className="text-right px-2 py-2.5 text-blue-600 font-semibold uppercase tracking-wider min-w-[80px]">MARGIN (%)</th>
+                <th className="text-right px-2 py-2.5 text-blue-600 font-semibold uppercase tracking-wider min-w-[100px]">UNIT DDP USD ($)</th>
+                <th className="text-right px-2 py-2.5 text-blue-600 font-semibold uppercase tracking-wider min-w-[100px]">TOTAL DDP USD ($)</th>
+                <th className="text-right px-2 py-2.5 text-violet-600 font-semibold uppercase tracking-wider min-w-[100px]">UNIT DDP VND</th>
+                <th className="text-right px-2 py-2.5 text-violet-600 font-semibold uppercase tracking-wider min-w-[100px]">TOTAL DDP VND</th>
+                <th className="text-right px-2 py-2.5 text-emerald-600 font-semibold uppercase tracking-wider min-w-[100px]">PROFIT ($)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {(cbuResult?.items || []).map((item, idx) => (
-                <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-3 py-2 text-slate-400 font-mono">{item.lineNo || idx + 1}</td>
-                  <td className="px-3 py-2 text-slate-800 font-mono font-medium truncate max-w-[200px]" title={(item as any).rawPartNumber}>
-                    {(item as any).rawPartNumber}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-600 font-mono">{item.qty}</td>
-                  <td className="px-3 py-2 text-right text-slate-800 font-mono">{fmt(item.supplierUnitPrice)}</td>
+              {(cbuResult?.items || []).map((item, idx) => {
+                const totalAmount = item.supplierExtPrice || 0;
+                const totalCost = (item.unitCostUsd || 0) * item.qty;
+                const totalDdpUsd = (item.ddpPriceUsd || 0) * item.qty;
+                const totalDdpVnd = (item.ddpPriceVnd || 0) * item.qty;
+                const profit = totalDdpUsd - totalCost;
 
-                  {/* Dynamic custom column inputs */}
-                  {(customColumns || []).map((col) => (
-                    <td key={col.id} className="px-1.5 py-1.5 bg-pink-50/10 border-x border-pink-50">
+                return (
+                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors divide-x divide-slate-50">
+                    <td className="px-2 py-1.5 text-slate-400 font-mono text-center">{item.lineNo || idx + 1}</td>
+                    <td className="px-2 py-1.5 text-slate-800 font-mono font-medium truncate max-w-[150px]" title={item.rawPartNumber}>
+                      {item.rawPartNumber}
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-600 text-[10px] truncate max-w-[200px]" title={item.rawDescription}>
+                      {item.rawDescription}
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-slate-600 font-mono">{item.qty}</td>
+                    <td className="px-2 py-1.5 text-center text-slate-600 font-mono uppercase">{item.uom}</td>
+
+                    {/* UNIT PRICE ($) */}
+                    <td className="px-2 py-1.5">
                       <input
                         type="text"
                         inputMode="decimal"
-                        value={(item.customValues || {})[col.id] ?? ""}
-                        onChange={(e) => updateItemCustomValue(item.id, col.id, parseFloat(e.target.value) || 0)}
                         placeholder="0"
-                        className={NUM_INPUT_PINK}
+                        value={inputs[`${item.id}_supplierUnitPrice`] ?? ""}
+                        onChange={(e) => handleInput(`${item.id}_supplierUnitPrice`, e.target.value)}
+                        className={NUM_INPUT_CLASS}
                       />
                     </td>
-                  ))}
 
-                  {/* Duty % */}
-                  <td className="px-1.5 py-1.5">
-                    <input type="text" inputMode="decimal" value={item.dutyPercent}
-                      onChange={(e) => updateItemField(item.id, "dutyPercent", parseFloat(e.target.value) || 0)}
-                      className={NUM_INPUT_AMBER} />
-                  </td>
+                    {/* TOTAL AMOUNT ($) */}
+                    <td className="px-2 py-1.5 text-right text-slate-600 font-mono bg-slate-50/50">
+                      {fmt(totalAmount)}
+                    </td>
 
-                  {/* Commission % */}
-                  <td className="px-1.5 py-1.5">
-                    <input type="text" inputMode="decimal" value={item.commissionPercent}
-                      onChange={(e) => updateItemField(item.id, "commissionPercent", parseFloat(e.target.value) || 0)}
-                      className={NUM_INPUT_AMBER} />
-                  </td>
+                    {/* IMPORT TAX (%) */}
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={inputs[`${item.id}_dutyPercent`] ?? ""}
+                        onChange={(e) => handleInput(`${item.id}_dutyPercent`, e.target.value)}
+                        className={NUM_INPUT_CLASS}
+                      />
+                    </td>
 
-                  {/* CIT % */}
-                  <td className="px-1.5 py-1.5">
-                    <input type="text" inputMode="decimal" value={item.citPercent}
-                      onChange={(e) => updateItemField(item.id, "citPercent", parseFloat(e.target.value) || 0)}
-                      className={NUM_INPUT_AMBER} />
-                  </td>
+                    {/* IMPORT TAX ($) */}
+                    <td className="px-2 py-1.5 text-right text-slate-600 font-mono bg-slate-50/50">
+                      {fmt(item.dutyAmount)}
+                    </td>
 
-                  {/* Margin % */}
-                  <td className="px-1.5 py-1.5 bg-blue-50/20">
-                    <input type="text" inputMode="decimal" value={item.marginPercent}
-                      onChange={(e) => updateItemField(item.id, "marginPercent", parseFloat(e.target.value) || 0)}
-                      className={NUM_INPUT_BLUE} />
-                  </td>
+                    {/* NET WEIGHT (LBS) */}
+                    <td className="px-2 py-1.5">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={inputs[`${item.id}_netWeightLbs`] ?? ""}
+                        onChange={(e) => handleInput(`${item.id}_netWeightLbs`, e.target.value)}
+                        className={NUM_INPUT_CLASS}
+                      />
+                    </td>
 
-                  {/* Computed columns */}
-                  <td className="px-3 py-2 text-right text-slate-600 font-mono font-medium border-l border-slate-100 bg-slate-50/30 whitespace-nowrap"
-                    title={`Logistics: $${fmt(item.apportionedLogistics)}\nBank: $${fmt(item.apportionedBank)}\nInsurance: $${fmt(item.apportionedInsurance)}\nDuty: $${fmt(item.dutyAmount)}\nComm: $${fmt(item.commissionAmount)}\nCIT: $${fmt(item.citAmount)}`}>
-                    {fmt(item.unitCostUsd)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-blue-700 font-mono font-bold whitespace-nowrap">{fmt(item.ddpPriceUsd)}</td>
-                  <td className="px-3 py-2 text-right text-violet-700 font-mono font-semibold whitespace-nowrap">{fmtVnd(item.ddpPriceVnd)}</td>
-                  <td className={`px-3 py-2 text-right font-mono font-semibold whitespace-nowrap ${(item.marginPerUnitUsd ?? 0) >= 0 ? "text-emerald-700" : "text-red-600"}`}>
-                    {fmt(item.marginPerUnitUsd)}
-                  </td>
-                </tr>
-              ))}
+                    {/* LOGISTICS COST ($) */}
+                    <td className="px-2 py-1.5 text-right text-slate-600 font-mono bg-slate-50/50">
+                      {fmt(item.apportionedLogistics)}
+                    </td>
+
+                    {/* TOTAL COST ($) */}
+                    <td className="px-2 py-1.5 text-right text-slate-800 font-bold font-mono bg-slate-50">
+                      {fmt(totalCost)}
+                    </td>
+
+                    {/* UNIT COST ($) */}
+                    <td className="px-2 py-1.5 text-right text-slate-800 font-bold font-mono bg-slate-50 border-r-2 border-slate-200">
+                      {fmt(item.unitCostUsd)}
+                    </td>
+
+                    {/* MARGIN (%) */}
+                    <td className="px-2 py-1.5 bg-blue-50/20">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={inputs[`${item.id}_marginPercent`] ?? ""}
+                        onChange={(e) => handleInput(`${item.id}_marginPercent`, e.target.value)}
+                        className={NUM_INPUT_CLASS}
+                      />
+                    </td>
+
+                    {/* UNIT DDP USD ($) */}
+                    <td className="px-2 py-1.5 text-right text-blue-700 font-bold font-mono bg-blue-50/20">
+                      {fmt(item.ddpPriceUsd)}
+                    </td>
+
+                    {/* TOTAL DDP USD ($) */}
+                    <td className="px-2 py-1.5 text-right text-blue-700 font-bold font-mono bg-blue-50/20">
+                      {fmt(totalDdpUsd)}
+                    </td>
+
+                    {/* UNIT DDP VND */}
+                    <td className="px-2 py-1.5 text-right text-violet-700 font-bold font-mono bg-violet-50/10">
+                      {fmtVnd(item.ddpPriceVnd)}
+                    </td>
+
+                    {/* TOTAL DDP VND */}
+                    <td className="px-2 py-1.5 text-right text-violet-700 font-bold font-mono bg-violet-50/10">
+                      {fmtVnd(totalDdpVnd)}
+                    </td>
+
+                    {/* PROFIT ($) */}
+                    <td className={`px-2 py-1.5 text-right font-bold font-mono bg-emerald-50/10 ${profit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {fmt(profit)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -638,68 +588,6 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           )}
         </button>
       </div>
-
-      {/* ── Add Custom Column Modal ───────────────────────────────────── */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">Add Custom Column</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Column Name</label>
-                <input
-                  type="text"
-                  value={newColName}
-                  onChange={(e) => setNewColName(e.target.value)}
-                  placeholder="VD: Phí đăng kiểm, Coating Fee..."
-                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-400/30 focus:border-slate-400 transition-all"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Calculation Type</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setNewColType("AMOUNT")}
-                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${newColType === "AMOUNT" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-                  >
-                    <span className="font-bold font-mono">$</span> Amount / Unit
-                  </button>
-                  <button
-                    onClick={() => setNewColType("PERCENT")}
-                    className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${newColType === "PERCENT" ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-                  >
-                    <span className="font-bold font-mono">%</span> of Material Cost
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddCustomColumn}
-                disabled={!newColName.trim()}
-                className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Add Column
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

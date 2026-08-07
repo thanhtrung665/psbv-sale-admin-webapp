@@ -21,6 +21,7 @@ export interface CBUItemEngineData {
   id: string;
   lineNo: number;
   rawPartNumber: string;
+  rawDescription?: string;
   uom: string;
   qty: number;
   supplierUnitPrice: number;
@@ -206,9 +207,10 @@ export function calculateCBU(
 
     const unitCostUsd = item.qty > 0 ? totalItemCost / item.qty : 0;
 
-    // DDP price with margin
-    const marginMultiplier = 1 + n(item.marginPercent) / 100;
-    const ddpPriceUsd = n(unitCostUsd * marginMultiplier);
+    // DDP price with margin (Gross Margin formula: Cost / (1 - Margin %))
+    const marginPct = n(item.marginPercent) / 100;
+    // Prevent divide by zero or negative if margin is 100% or more
+    const ddpPriceUsd = marginPct < 1 ? n(unitCostUsd / (1 - marginPct)) : n(unitCostUsd);
 
     // VND rounded up to nearest 10,000
     const ddpPriceVndRaw = ddpPriceUsd * exchangeRate;

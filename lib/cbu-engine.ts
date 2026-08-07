@@ -1,4 +1,11 @@
 // lib/cbu-engine.ts
+// =============================================================================
+// SAFETY RULES FOR THIS ENGINE:
+// - Every value from DB must be treated as potentially null/undefined/NaN.
+// - All arithmetic uses n() helper to guarantee a finite number.
+// - No division without zero-guard.
+// - .toFixed() is never called here — callers handle formatting.
+// =============================================================================
 
 export interface CustomColumnDef {
   id: string;
@@ -18,26 +25,26 @@ export interface CBUItemEngineData {
   qty: number;
   supplierUnitPrice: number;
   netWeightLbs: number;
-  
+
   dutyPercent: number;
   commissionPercent: number;
   citPercent: number;
   marginPercent: number;
-  
+
   customValues: CustomColumnValues;
 
-  // These will be calculated
+  // Calculated fields (populated by calculateCBU)
   supplierExtPrice?: number;
   extWeightLbs?: number;
-  
+
   apportionedLogistics?: number;
   apportionedBank?: number;
   apportionedInsurance?: number;
-  
+
   dutyAmount?: number;
   commissionAmount?: number;
   citAmount?: number;
-  
+
   unitCostUsd?: number;
   ddpPriceUsd?: number;
   ddpPriceVnd?: number;
@@ -67,119 +74,181 @@ export interface CBUResult {
   actualMarginPct: number;
 }
 
+// ─── Helper: guarantee a finite number, default 0 ────────────────────────────
+function n(v: unknown, fallback = 0): number {
+  const num = Number(v);
+  return isFinite(num) ? num : fallback;
+}
+
+// ─── Helper: safe JSON-parse for Prisma Json fields ──────────────────────────
+export function parseJsonField<T>(raw: unknown, fallback: T): T {
+  if (raw === null || raw === undefined) return fallback;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return raw as T;
+}
+
 /**
- * CBU Engine: Phân bổ phí phụ trợ & Tính giá DDP, Margin
+ * CBU Engine — allocates shared costs and computes DDP pricing & margin per item.
+ *
+ * All inputs are sanitised defensively; NaN / Infinity / null are treated as 0.
  */
-export function calculateCBU(items: CBUItemEngineData[], globals: CBUGlobals): CBUResult {
-  const { exchangeRate, freightCost, clearanceCost, inlandCost, bankFeePercent, insurancePercent, customColumns } = globals;
-  
-  // 1. Tiền xử lý: Tính tổng Ext Weight
+export function calculateCBU(
+  rawItems: CBUItemEngineData[],
+  rawGlobals: CBUGlobals
+): CBUResult {
+  // ── 0. Sanitise globals ─────────────────────────────────────────────────────
+  const exchangeRate = n(rawGlobals.exchangeRate, 25500);
+  const freightCost = n(rawGlobals.freightCost);
+  const clearanceCost = n(rawGlobals.clearanceCost);
+  const inlandCost = n(rawGlobals.inlandCost);
+  const bankFeePercent = n(rawGlobals.bankFeePercent);
+  const insurancePercent = n(rawGlobals.insurancePercent);
+
+  // Safe-parse customColumns (may arrive as serialised JSON string from Prisma)
+  const customColumnsParsed = parseJsonField<CustomColumnDef[]>(
+    rawGlobals.customColumns,
+    []
+  );
+  const customColumns = Array.isArray(customColumnsParsed) ? customColumnsParsed : [];
+
+  // ── 1. Sanitise items & compute ext weight ──────────────────────────────────
   let totalWeight = 0;
-  const processedItems = items.map((item) => {
-    const extWeightLbs = item.netWeightLbs * item.qty;
-    const supplierExtPrice = item.supplierUnitPrice * item.qty;
+
+  const processedItems = (Array.isArray(rawItems) ? rawItems : []).map((item) => {
+    const qty = n(item.qty, 1);
+    const supplierUnitPrice = n(item.supplierUnitPrice);
+    const netWeightLbs = n(item.netWeightLbs);
+
+    const extWeightLbs = netWeightLbs * qty;
+    const supplierExtPrice = supplierUnitPrice * qty;
+
     totalWeight += extWeightLbs;
-    return { ...item, extWeightLbs, supplierExtPrice };
+
+    // Safe-parse customValues (may arrive as serialised JSON string)
+    const rawCustomValues = parseJsonField<CustomColumnValues>(item.customValues, {});
+    const customValues: CustomColumnValues =
+      rawCustomValues && typeof rawCustomValues === "object" && !Array.isArray(rawCustomValues)
+        ? rawCustomValues
+        : {};
+
+    return {
+      ...item,
+      qty,
+      supplierUnitPrice,
+      netWeightLbs,
+      dutyPercent: n(item.dutyPercent),
+      commissionPercent: n(item.commissionPercent),
+      citPercent: n(item.citPercent),
+      marginPercent: n(item.marginPercent),
+      customValues,
+      extWeightLbs,
+      supplierExtPrice,
+    };
   });
 
-  // 2. Tính Tổng Logistics
+  // ── 2. Global totals ────────────────────────────────────────────────────────
   const totalLogisticsUsd = freightCost + clearanceCost + inlandCost;
-  
+
   let totalBankFeeUsd = 0;
   let totalInsuranceUsd = 0;
   let totalCostUsd = 0;
   let totalRevenueUsd = 0;
-  let totalMarginUsd = 0;
 
-  // 3. Phân bổ & Tính toán từng dòng
+  // ── 3. Per-item allocation & pricing ───────────────────────────────────────
   const finalItems = processedItems.map((item) => {
-    // Phân bổ Logistics: (Total Logistics + 15) * (Item Weight / Total Weight)
+    // Logistics apportioned by weight ratio (+ $15 docs fee)
     let apportionedLogistics = 0;
     if (totalWeight > 0) {
       apportionedLogistics = (totalLogisticsUsd + 15) * (item.extWeightLbs / totalWeight);
     }
 
-    // Phân bổ Bank Fee & Insurance
+    // Bank fee & insurance apportioned by ext price
     const apportionedBank = item.supplierExtPrice * (bankFeePercent / 100);
     const apportionedInsurance = item.supplierExtPrice * (insurancePercent / 100);
 
-    totalBankFeeUsd += apportionedBank;
-    totalInsuranceUsd += apportionedInsurance;
+    totalBankFeeUsd += n(apportionedBank);
+    totalInsuranceUsd += n(apportionedInsurance);
 
-    // Tính các phí tỷ lệ cố định
+    // Fixed-rate fees
     const dutyAmount = item.supplierExtPrice * (item.dutyPercent / 100);
     const commissionAmount = item.supplierExtPrice * (item.commissionPercent / 100);
     const citAmount = item.supplierExtPrice * (item.citPercent / 100);
 
-    // Tính phí Custom Columns
+    // Custom column costs
     let totalCustomCost = 0;
-    if (customColumns && customColumns.length > 0) {
-      for (const col of customColumns) {
-        const val = item.customValues[col.id] || 0;
-        if (col.type === "AMOUNT") {
-          totalCustomCost += (val * item.qty);
-        } else if (col.type === "PERCENT") {
-          totalCustomCost += (item.supplierExtPrice * val / 100);
-        }
+    for (const col of customColumns) {
+      const val = n(item.customValues[col.id]);
+      if (col.type === "AMOUNT") {
+        totalCustomCost += val * item.qty;
+      } else if (col.type === "PERCENT") {
+        totalCustomCost += item.supplierExtPrice * (val / 100);
       }
     }
 
-    // Tính Base Cost (Tổng chi phí)
-    const totalItemCost =
+    // Total item cost
+    const totalItemCost = n(
       item.supplierExtPrice +
-      apportionedLogistics +
-      apportionedBank +
-      apportionedInsurance +
-      dutyAmount +
-      commissionAmount +
-      citAmount +
-      totalCustomCost;
+        apportionedLogistics +
+        apportionedBank +
+        apportionedInsurance +
+        dutyAmount +
+        commissionAmount +
+        citAmount +
+        totalCustomCost
+    );
 
     const unitCostUsd = item.qty > 0 ? totalItemCost / item.qty : 0;
-    
-    // Tính Giá DDP & Margin
-    const marginMultiplier = 1 + item.marginPercent / 100;
-    const ddpPriceUsd = unitCostUsd * marginMultiplier;
-    
-    // Tính VND & Roundup -4 (làm tròn lên hàng chục nghìn)
-    const ddpPriceVndRaw = ddpPriceUsd * exchangeRate;
-    const ddpPriceVnd = Math.ceil(ddpPriceVndRaw / 10000) * 10000;
-    
-    const marginPerUnitUsd = ddpPriceUsd - unitCostUsd;
 
-    // Cộng dồn Total
-    totalCostUsd += totalItemCost;
-    totalRevenueUsd += (ddpPriceUsd * item.qty);
+    // DDP price with margin
+    const marginMultiplier = 1 + n(item.marginPercent) / 100;
+    const ddpPriceUsd = n(unitCostUsd * marginMultiplier);
+
+    // VND rounded up to nearest 10,000
+    const ddpPriceVndRaw = ddpPriceUsd * exchangeRate;
+    const ddpPriceVnd = Math.ceil(n(ddpPriceVndRaw) / 10000) * 10000;
+
+    const marginPerUnitUsd = n(ddpPriceUsd - unitCostUsd);
+
+    totalCostUsd += n(totalItemCost);
+    totalRevenueUsd += n(ddpPriceUsd * item.qty);
 
     return {
       ...item,
-      apportionedLogistics,
-      apportionedBank,
-      apportionedInsurance,
-      dutyAmount,
-      commissionAmount,
-      citAmount,
-      unitCostUsd,
-      ddpPriceUsd,
-      ddpPriceVnd,
-      marginPerUnitUsd,
+      apportionedLogistics: n(apportionedLogistics),
+      apportionedBank: n(apportionedBank),
+      apportionedInsurance: n(apportionedInsurance),
+      dutyAmount: n(dutyAmount),
+      commissionAmount: n(commissionAmount),
+      citAmount: n(citAmount),
+      unitCostUsd: n(unitCostUsd),
+      ddpPriceUsd: n(ddpPriceUsd),
+      ddpPriceVnd: n(ddpPriceVnd),
+      marginPerUnitUsd: n(marginPerUnitUsd),
     };
   });
 
-  const totalRevenueVnd = totalRevenueUsd * exchangeRate;
-  totalMarginUsd = totalRevenueUsd - totalCostUsd;
-  const actualMarginPct = totalRevenueUsd > 0 ? (totalMarginUsd / totalRevenueUsd) * 100 : 0;
+  const totalRevenueVnd = n(totalRevenueUsd * exchangeRate);
+  const totalMarginUsd = n(totalRevenueUsd - totalCostUsd);
+  const actualMarginPct =
+    totalRevenueUsd > 0 ? n((totalMarginUsd / totalRevenueUsd) * 100) : 0;
 
   return {
     items: finalItems,
-    totalWeight,
-    totalLogisticsUsd,
-    totalBankFeeUsd,
-    totalInsuranceUsd,
-    totalCostUsd,
-    totalRevenueUsd,
-    totalRevenueVnd,
-    totalMarginUsd,
-    actualMarginPct,
+    totalWeight: n(totalWeight),
+    totalLogisticsUsd: n(totalLogisticsUsd),
+    totalBankFeeUsd: n(totalBankFeeUsd),
+    totalInsuranceUsd: n(totalInsuranceUsd),
+    totalCostUsd: n(totalCostUsd),
+    totalRevenueUsd: n(totalRevenueUsd),
+    totalRevenueVnd: n(totalRevenueVnd),
+    totalMarginUsd: n(totalMarginUsd),
+    actualMarginPct: n(actualMarginPct),
   };
 }

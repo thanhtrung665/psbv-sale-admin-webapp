@@ -3,7 +3,21 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { calculateCBU, CBUItemEngineData, CBUResult, CustomColumnDef } from "@/lib/cbu-engine";
+import { calculateCBU, CBUItemEngineData, CBUResult, CustomColumnDef, parseJsonField } from "@/lib/cbu-engine";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Guarantee a finite number; never NaN or Infinity. */
+function safeNum(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return isFinite(n) ? n : fallback;
+}
+
+/** Parse a Prisma Json field that might come back as string or null. */
+function parsePrismaJson<T>(raw: unknown, fallback: T): T {
+  return parseJsonField<T>(raw, fallback);
+}
+
 
 // Tailwind class for removing spin buttons on all browsers
 const NUM_INPUT = [
@@ -75,50 +89,72 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
       try {
         const res = await fetch(`/api/rfq/${rfqId}`);
         if (!res.ok) throw new Error("Không tìm thấy đơn hàng.");
-        const data = await res.json();
+        const rawData = await res.json();
 
-        setRfqCode(data.rfqCode || "");
-        setClientName(data.client?.name || "");
-        setCompanyName(data.client?.companyName || "");
-        setSupplierName(data.supplierName || "");
+        setRfqCode(rawData.rfqCode || "");
+        setClientName(rawData.client?.name || "");
+        setCompanyName(rawData.client?.companyName || "");
+        setSupplierName(rawData.supplierName || "");
 
-        setExchangeRate(data.exchangeRate || 25500);
-        setFreightCost(data.freightCost || 0);
-        setClearanceCost(data.clearanceCost || 0);
-        setInlandCost(data.inlandCost || 0);
-        setBankFeePercent(data.bankFeePercent || 0);
-        setInsurancePercent(data.insurancePercent || 0);
+        // ── Global CBU parameters: always sanitise with safeNum ──────────
+        setExchangeRate(safeNum(rawData.exchangeRate, 25500));
+        setFreightCost(safeNum(rawData.freightCost));
+        setClearanceCost(safeNum(rawData.clearanceCost));
+        setInlandCost(safeNum(rawData.inlandCost));
+        setBankFeePercent(safeNum(rawData.bankFeePercent));
+        setInsurancePercent(safeNum(rawData.insurancePercent));
 
-        // Defensive: customColumns may be null for older records
-        const cols = Array.isArray(data.customColumns) ? data.customColumns : [];
-        setCustomColumns(cols);
+        // ── customColumns: Prisma Json may arrive as string or null ──────
+        const rawCols = parsePrismaJson<CustomColumnDef[]>(rawData.customColumns, []);
+        const safeCols: CustomColumnDef[] = Array.isArray(rawCols)
+          ? rawCols.filter(
+              (c): c is CustomColumnDef =>
+                c !== null &&
+                typeof c === "object" &&
+                typeof c.id === "string" &&
+                typeof c.name === "string" &&
+                (c.type === "AMOUNT" || c.type === "PERCENT")
+            )
+          : [];
+        setCustomColumns(safeCols);
 
-        const loadedItems: CBUItemEngineData[] = (data.items || []).map((item: any) => ({
-          id: item.id,
-          lineNo: item.lineNo,
-          rawPartNumber: item.rawPartNumber || "",
-          uom: item.uom || "PCS",
-          qty: Number(item.qty) || 1,
-          supplierUnitPrice: Number(item.supplierUnitPrice) || 0,
-          netWeightLbs: Number(item.netWeightLbs) || 0,
+        // ── Items: deep sanitise every numeric/Json field ────────────────
+        const rawItems: any[] = Array.isArray(rawData.items) ? rawData.items : [];
+        const loadedItems: CBUItemEngineData[] = rawItems.map((item: any) => {
+          // customValues: may be null, string, or object
+          const rawCV = parsePrismaJson<Record<string, unknown>>(item.customValues, {});
+          const safeCV: Record<string, number> = {};
+          if (rawCV && typeof rawCV === "object" && !Array.isArray(rawCV)) {
+            for (const [k, v] of Object.entries(rawCV)) {
+              safeCV[k] = safeNum(v);
+            }
+          }
 
-          dutyPercent: Number(item.dutyPercent) || 0,
-          commissionPercent: Number(item.commissionPercent) || 0,
-          citPercent: Number(item.citPercent) || 0,
-          marginPercent: Number(item.marginPercent) || 0,
-
-          // Defensive: customValues may be null
-          customValues: (item.customValues && typeof item.customValues === "object") ? item.customValues : {},
-        }));
+          return {
+            id: String(item.id || ""),
+            lineNo: safeNum(item.lineNo, 0),
+            rawPartNumber: String(item.rawPartNumber || ""),
+            uom: String(item.uom || "PCS"),
+            qty: safeNum(item.qty, 1) || 1,            // qty must be ≥ 1
+            supplierUnitPrice: safeNum(item.supplierUnitPrice),
+            netWeightLbs: safeNum(item.netWeightLbs),
+            dutyPercent: safeNum(item.dutyPercent),
+            commissionPercent: safeNum(item.commissionPercent),
+            citPercent: safeNum(item.citPercent),
+            marginPercent: safeNum(item.marginPercent),
+            customValues: safeCV,
+          } satisfies CBUItemEngineData;
+        });
 
         setItems(loadedItems);
       } catch (err: any) {
-        setError(err.message);
+        setError(err.message ?? "Không thể tải dữ liệu đơn hàng.");
       } finally {
         setLoading(false);
       }
     })();
   }, [rfqId]);
+
 
   // ── Live Recalculate Effect ───────────────────────────────────────────
   useEffect(() => {
@@ -152,21 +188,25 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
 
   // ── Field Updaters ──────────────────────────────────────────────────
   const updateItemField = (id: string, field: keyof CBUItemEngineData, value: number) => {
+    // Guard against NaN from user clearing the input
+    const safeValue = isFinite(value) ? value : 0;
     setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
+      prev.map((item) => (item.id === id ? { ...item, [field]: safeValue } : item))
     );
   };
 
   const updateItemCustomValue = (itemId: string, colId: string, value: number) => {
+    const safeValue = isFinite(value) ? value : 0;
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== itemId) return item;
+        const prevCV: Record<string, number> =
+          item.customValues && typeof item.customValues === "object" && !Array.isArray(item.customValues)
+            ? (item.customValues as Record<string, number>)
+            : {};
         return {
           ...item,
-          customValues: {
-            ...(item.customValues || {}),
-            [colId]: value,
-          },
+          customValues: { ...prevCV, [colId]: safeValue },
         };
       })
     );
@@ -237,11 +277,21 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
     }
   };
 
-  // ── Helper: format number ────────────────────────────────────────────
-  const fmt = (n: number | undefined, dec = 2) =>
-    (n ?? 0).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec });
-  const fmtVnd = (n: number | undefined) =>
-    (n ?? 0).toLocaleString("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  // ── Helper: format number (NaN / Infinity safe) ──────────────────────
+  const fmt = (v: number | undefined, dec = 2): string => {
+    const num = Number(v);
+    return (isFinite(num) ? num : 0).toLocaleString("en-US", {
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec,
+    });
+  };
+  const fmtVnd = (v: number | undefined): string => {
+    const num = Number(v);
+    return (isFinite(num) ? num : 0).toLocaleString("vi-VN", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  };
 
   if (loading) {
     return (

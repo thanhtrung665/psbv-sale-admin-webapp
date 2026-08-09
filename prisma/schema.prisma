@@ -65,16 +65,47 @@ model RFQ {
   paymentTerm       String?      // Điều khoản thanh toán (vd: "30 Days Net")
   incoTerm          String?      // Điều kiện giao hàng (vd: "DDP", "EXW")
   
-  // Sub-ledger (Global Costs)
+  // B. Tỷ giá & làm tròn
+  exchangeRate      Float        @default(26500)
+  bookingExchangeRate Float?
+  vndRoundingStep   Float?       @default(10000)
+  lbToKg            Float?       @default(0.4536)
+  currency          String?      @default("USD")
+
+  // C. Điều kiện
+  goodsOrigin       String?      @default("Oversea")
+  destinationCountry String?     @default("VN")
+
+  // D. Logistics
   freightCost       Float?       @default(0)
-  clearanceCost     Float?       @default(0)
-  inlandCost        Float?       @default(0)
-  docFee            Float?       @default(15)
-  bankFeePercent    Float?       @default(0)
-  insurancePercent  Float?       @default(0)
-  
-  // Tài chính CBU
-  exchangeRate      Float        @default(25500)
+  freightFixed      Float?       @default(0)
+  freightRatePerKg  Float?       @default(0)
+  chargeableWeightKg Float?      @default(0)
+  clearanceCost     Float?       @default(150)
+  inlandCost        Float?       @default(100)
+  docFee            Float?       @default(0)
+
+  // E. Bảo hiểm
+  insuredValuePercent Float?     @default(110)
+  insuranceRatePercent Float?    @default(0.01)
+  minInsuranceUsd   Float?       @default(15)
+
+  // F. Phí ngân hàng
+  remittanceRatePercent Float?   @default(0.2)
+  bankVatFactor     Float?       @default(1.1)
+  minRemittanceFeeUsd Float?     @default(50)
+  receiveRatePercent Float?      @default(0.05)
+  minReceiveFeeUsd  Float?       @default(5)
+  receiveBaseUsd    Float?       @default(0)
+  otherBankFeeUsd   Float?       @default(0)
+
+  // G. Chi phí vốn
+  percentValueFinanced Float?    @default(50)
+  interestRatePercent Float?     @default(15)
+  financingDays     Float?       @default(15)
+  daysPerYear       Float?       @default(360)
+
+  // Tài chính CBU (Calculated Results)
   totalCostUsd      Float?
   totalRevenueUsd   Float?
   totalRevenueVnd   BigInt?
@@ -118,11 +149,11 @@ model RFQItem {
   apportionedInsurance Float? @default(0)
   dutyPercent       Float?   @default(0)
   dutyAmount        Float?   @default(0)
-  commissionPercent Float?   @default(0)
+  commissionPercent Float?   @default(3)
   commissionAmount  Float?   @default(0)
-  citPercent        Float?   @default(0)
+  citPercent        Float?   @default(20)
   citAmount         Float?   @default(0)
-  marginPercent     Float?   @default(0)
+  marginPercent     Float?   @default(25)
   
   unitCostUsd       Float?
   ddpPriceUsd       Float?

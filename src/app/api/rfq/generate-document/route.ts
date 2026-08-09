@@ -90,26 +90,27 @@ export async function POST(req: NextRequest) {
       price_basis_note: "Price quote based on order in full quantity of item quoted"
     };
 
-    const apiKey = process.env.APITEMPLATE_API_KEY;
-    const templateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID;
+    const rawApiKey = process.env.APITEMPLATE_API_KEY || "";
+    const rawTemplateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID || "";
+    
+    const apiKey = rawApiKey.replace(/['"]/g, '').trim();
+    const templateId = rawTemplateId.replace(/['"]/g, '').trim();
 
-    if (!apiKey || !templateId) {
-      throw new Error("Thiếu APITEMPLATE_API_KEY hoặc APITEMPLATE_QUOTATION_TEMPLATE_ID trong .env");
+    if (!apiKey || apiKey === "undefined" || !templateId) {
+      return NextResponse.json({ 
+        success: false, 
+        message: `[VERCEL ENV ERROR] Không tìm thấy API Key hoặc Template ID. Giá trị hiện tại: API_KEY=${apiKey}` 
+      }, { status: 500 });
     }
 
-    const apitemplateRes = await fetch("https://api.apitemplate.io/v1/create", {
-      method: "POST",
+    const apitemplateRes = await fetch(`https://rest.apitemplate.io/v2/create-pdf?template_id=${templateId}`, {
+      method: 'POST',
       headers: {
-        "X-API-KEY": apiKey,
-        "Content-Type": "application/json",
+        'X-API-KEY': apiKey,
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        template_id: templateId,
-        export_type: "json",
-        output_file: `Quotation_${rfq.rfqCode}.pdf`,
-        is_base64: 0,
-        data: payload,
-      }),
+      body: JSON.stringify(payload),
+      cache: 'no-store'
     });
 
     if (!apitemplateRes.ok) {

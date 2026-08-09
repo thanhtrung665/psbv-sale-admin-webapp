@@ -26,29 +26,42 @@ export async function generateQuotationPdf(rfqId: string): Promise<Buffer> {
     totalWeight += (item.netWeightLbs || 0) * item.qty;
 
     return {
-      lineNo: item.lineNo,
-      partNo: item.standardPartNo || item.rawPartNumber,
-      origin: item.supplier || "Keystone/USA",
+      part_no: item.standardPartNo || item.rawPartNumber,
+      brand_origin: item.supplier || "Keystone/USA",
       description: item.rawDescription,
       leadtime: "1-2 days",
-      qty: item.qty,
+      quantity: item.qty.toString(),
       uom: item.uom || "Ea",
-      unitPrice: `$ ${unitPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      amount: `$ ${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      unit_price: unitPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      amount: amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
     };
   });
 
   const payloadData = {
-    client_company: rfq.client.companyName,
+    client_name: rfq.client.companyName,
     client_address: rfq.client.address || "",
-    client_phone: rfq.client.phone || "",
-    client_name: rfq.client.name,
+    client_tel: rfq.client.phone || "",
+    client_attn: rfq.client.name,
     client_email: rfq.client.email,
+    cinq_ref: "Enquiry: BAKER SPD LIST",
     quote_no: rfq.rfqCode,
-    date: today,
+    quote_date: today,
+    job_file: rfq.rfqCode,
+    sales_director: "Vo Huu Trong",
+    sales_pic: "Vu Trong Hung",
+    currency: "$",
+    currency_code: "USD",
+    min_rows: 8,
     items,
     total_weight: `${totalWeight.toFixed(2)} LBS`,
-    total_usd: totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    total_label: "FCA Lousiana, USA Incoterms 2020",
+    total_amount: totalUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    term_document: "Declaration of Compliance/Certificate of Orgin issued by MNF (Copy)",
+    delivery_terms: "FCA Houston, USA Incoterms 2020",
+    payment_terms: "TT% 100 Payment with order",
+    quote_validity: "30 days from quote date",
+    min_order_note: "Orders less than 500 USD is subject to a surcharge of 50 USD small ordering costs",
+    price_basis_note: "Price quote based on order in full quantity of item quoted"
   };
 
   const apiKey = process.env.APITEMPLATE_API_KEY;

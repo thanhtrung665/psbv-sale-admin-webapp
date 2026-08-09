@@ -28,27 +28,29 @@ export async function POST(
     
     if (!rfq) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // 2. Generate PDF Buffer
-    const pdfBuffer = await generateQuotationPdf(rfqId);
-
-    // 3. Save PDF to local public/uploads for preview/download
-    const fileName = `Quotation_${rfq.rfqCode}_${Date.now()}.pdf`;
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-    const filePath = path.join(uploadsDir, fileName);
-    fs.writeFileSync(filePath, pdfBuffer);
-    const fileUrl = `/uploads/${fileName}`;
-
-    // 4. Save to DB Document table
-    await prisma.document.create({
-      data: {
+    // 2. Fetch the latest generated Document
+    const document = await prisma.document.findFirst({
+      where: {
         rfqId,
-        type: "MVPO_QUOTATION_PDF",
-        fileUrl,
+        type: "MVPO_QUOTATION_PDF"
       },
+      orderBy: { createdAt: "desc" }
     });
+
+    if (!document || !document.fileUrl) {
+      return NextResponse.json({ error: "Chưa có file Quotation PDF. Vui lòng tải lại trang để sinh file." }, { status: 400 });
+    }
+
+    // 3. Read PDF from local public directory
+    // fileUrl is something like "/uploads/Quotation_XYZ_123.pdf"
+    const filePath = path.join(process.cwd(), "public", document.fileUrl);
+    
+    if (!fs.existsSync(filePath)) {
+      return NextResponse.json({ error: "File PDF không tồn tại trên hệ thống." }, { status: 404 });
+    }
+    
+    const pdfBuffer = fs.readFileSync(filePath);
+    const fileUrl = document.fileUrl;
 
     // 5. Send Email via Nodemailer
     // Note: We use mock console if env vars are missing

@@ -68,8 +68,8 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           clearanceCost: String(safeNum(rawData.clearanceCost)),
           inlandCost: String(safeNum(rawData.inlandCost)),
           docFee: String(safeNum(rawData.docFee, 15)),
-          bankFeePercent: String(safeNum(rawData.bankFeePercent)),
-          insurancePercent: String(safeNum(rawData.insurancePercent)),
+          remittanceRatePercent: String(safeNum(rawData.remittanceRatePercent, 0.2)),
+          insuranceRatePercent: String(safeNum(rawData.insuranceRatePercent, 0.01)),
         };
 
         const rawItems: any[] = Array.isArray(rawData.items) ? rawData.items : [];
@@ -130,8 +130,8 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           clearanceCost: parseNumInput(inputs.clearanceCost),
           inlandCost: parseNumInput(inputs.inlandCost),
           docFee: parseNumInput(inputs.docFee),
-          bankFeePercent: parseNumInput(inputs.bankFeePercent),
-          insurancePercent: parseNumInput(inputs.insurancePercent),
+          remittanceRatePercent: parseNumInput(inputs.remittanceRatePercent),
+          insuranceRatePercent: parseNumInput(inputs.insuranceRatePercent),
           customColumns: [], // Stripped per requirements
         });
         setCbuResult(res);
@@ -165,14 +165,14 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
           clearanceCost: parseNumInput(inputs.clearanceCost),
           inlandCost: parseNumInput(inputs.inlandCost),
           docFee: parseNumInput(inputs.docFee),
-          bankFeePercent: parseNumInput(inputs.bankFeePercent),
-          insurancePercent: parseNumInput(inputs.insurancePercent),
+          remittanceRatePercent: parseNumInput(inputs.remittanceRatePercent),
+          insuranceRatePercent: parseNumInput(inputs.insuranceRatePercent),
           customColumns: [],
           totalCostUsd: cbuResult.totalCostUsd,
           totalRevenueUsd: cbuResult.totalRevenueUsd,
           totalRevenueVnd: cbuResult.totalRevenueVnd,
           totalMarginUsd: cbuResult.totalMarginUsd,
-          actualMarginPct: cbuResult.actualMarginPct,
+          actualMarginPct: cbuResult.effectiveMarginPct,
           items: cbuResult.items,
         }),
       });
@@ -315,7 +315,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               ))}
               <tr>
                 <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TOTAL WEIGHT (KGS/LBS)</td>
-                <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-medium text-slate-700">{fmt(cbuResult.totalWeight)}</td>
+                <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-medium text-slate-700">{fmt(cbuResult.totalWeightLbs)}</td>
               </tr>
               <tr>
                 <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TOTAL AMOUNT ($)</td>
@@ -324,7 +324,7 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               <tr>
                 <td className="bg-slate-100 text-xs uppercase font-semibold text-slate-700 px-3 py-2 border border-slate-300">TRANSIT TIME</td>
                 <td className="px-3 py-2 border border-slate-300 bg-slate-50 text-right font-mono font-semibold text-blue-600">
-                  {cbuResult.totalWeight > 0 ? fmt(cbuResult.totalLogisticsUsd / cbuResult.totalWeight, 2) : "0.00"}/lb
+                  {cbuResult.totalWeightLbs > 0 ? fmt(cbuResult.totalLogisticsUsd / cbuResult.totalWeightLbs, 2) : "0.00"}/lb
                 </td>
               </tr>
             </tbody>
@@ -340,8 +340,8 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               <input
                 type="text"
                 inputMode="decimal"
-                value={inputs.bankFeePercent ?? "0"}
-                onChange={(e) => handleInput("bankFeePercent", e.target.value)}
+                value={inputs.remittanceRatePercent ?? "0.2"}
+                onChange={(e) => handleInput("remittanceRatePercent", e.target.value)}
                 className="w-24 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-md text-right text-sm font-mono text-amber-700 focus:outline-none focus:ring-1 focus:ring-amber-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
@@ -363,8 +363,8 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
               <input
                 type="text"
                 inputMode="decimal"
-                value={inputs.insurancePercent ?? "0"}
-                onChange={(e) => handleInput("insurancePercent", e.target.value)}
+                value={inputs.insuranceRatePercent ?? "0.01"}
+                onChange={(e) => handleInput("insuranceRatePercent", e.target.value)}
                 className="w-24 px-2 py-1.5 bg-emerald-50 border border-emerald-200 rounded-md text-right text-sm font-mono text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-400/60 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
               />
             </div>
@@ -400,8 +400,8 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
             <div className="w-px h-7 bg-slate-200" />
             <div className="text-right">
               <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Margin</p>
-              <p className={`text-sm font-bold font-mono ${cbuResult.actualMarginPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                ${fmt(cbuResult.totalMarginUsd)} ({fmt(cbuResult.actualMarginPct, 1)}%)
+              <p className={`text-sm font-bold font-mono ${cbuResult.effectiveMarginPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                ${fmt(cbuResult.totalMarginUsd)} ({fmt(cbuResult.effectiveMarginPct, 1)}%)
               </p>
             </div>
           </div>

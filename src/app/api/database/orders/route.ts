@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
           clearanceCost: order.clearanceCost,
           inlandCost: order.inlandCost,
           totalLogistics: (order.freightCost || 0) + (order.clearanceCost || 0) + (order.inlandCost || 0),
-          bankFeePercent: order.bankFeePercent,
-          insurancePercent: order.insurancePercent,
+          remittanceRatePercent: order.remittanceRatePercent,
+          insuranceRatePercent: order.insuranceRatePercent,
           
           // Final Totals
           totalCostUsd: order.totalCostUsd,
@@ -124,8 +124,8 @@ export async function GET(req: NextRequest) {
         clearanceCost: order.clearanceCost,
         inlandCost: order.inlandCost,
         totalLogistics: (order.freightCost || 0) + (order.clearanceCost || 0) + (order.inlandCost || 0),
-        bankFeePercent: order.bankFeePercent,
-        insurancePercent: order.insurancePercent,
+        remittanceRatePercent: order.remittanceRatePercent,
+        insuranceRatePercent: order.insuranceRatePercent,
         
         // Final Totals
         totalCostUsd: order.totalCostUsd,

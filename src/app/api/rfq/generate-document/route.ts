@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generateQuotationPdf } from "@/lib/pdf-renderer";
 
 const VALID_DOC_TYPES = [
   "QUOTATION_CLIENT_PDF",
@@ -23,7 +22,6 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { rfqCode, docType } = body as { rfqCode: string; docType: DocType };
 
-    // Validate inputs
     if (!rfqCode || !rfqCode.trim()) {
       return NextResponse.json(
         { success: false, message: "Thiếu mã đơn hàng (rfqCode)." },
@@ -38,7 +36,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Look up RFQ
     const rfq = await prisma.rFQ.findUnique({
       where: { rfqCode: rfqCode.trim() },
       include: {
@@ -54,42 +51,92 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let pdfBuffer: Buffer;
-    let fileTypeSuffix: string;
+    const totalAmount = (rfq.items || []).reduce((sum, item) => sum + (Number(item.ddpPriceUsd || 0) * Number(item.qty || 0)), 0);
+    const totalWeight = (rfq.items || []).reduce((sum, item) => sum + (Number(item.netWeightLbs || 0)), 0);
 
-    // Route to appropriate generator based on docType
-    // Currently only QUOTATION_CLIENT_PDF has a full renderer.
-    // Others will use the same template until separate renderers are built.
-    switch (docType) {
-      case "QUOTATION_CLIENT_PDF":
-        pdfBuffer = await generateQuotationPdf(rfq.id);
-        fileTypeSuffix = "Quotation";
-        break;
-      case "MVPO_SUPPLIER_PDF":
-        // TODO: Add dedicated MVPO renderer
-        pdfBuffer = await generateQuotationPdf(rfq.id);
-        fileTypeSuffix = "MVPO";
-        break;
-      case "COMMERCIAL_INVOICE_PDF":
-        // TODO: Add dedicated Commercial Invoice renderer
-        pdfBuffer = await generateQuotationPdf(rfq.id);
-        fileTypeSuffix = "CommercialInvoice";
-        break;
-      case "CERTIFICATE_COC_COO_PDF":
-        // TODO: Add dedicated COC/COO renderer
-        pdfBuffer = await generateQuotationPdf(rfq.id);
-        fileTypeSuffix = "COC_COO";
-        break;
-      default:
-        return NextResponse.json(
-          { success: false, message: "Loại tài liệu không được hỗ trợ." },
-          { status: 400 }
-        );
+    const payload = {
+      client_name: rfq?.client?.companyName || rfq?.client?.name || "",
+      client_address: rfq?.client?.address || "",
+      client_tel: rfq?.client?.phone || "",
+      client_attn: rfq?.client?.name || "",
+      client_email: rfq?.client?.email || "",
+      cinq_ref: rfq?.opportunityName ? `Enquiry: ${rfq.opportunityName}` : "",
+      quote_no: rfq?.rfqCode || "",
+      quote_date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
+      job_file: rfq?.rfqCode || "",
+      sales_director: "Vo Huu Trong",
+      sales_pic: "Vu Trong Hung",
+      currency: "$",
+      currency_code: "USD",
+      min_rows: 8,
+      items: (rfq.items || []).map((item: any) => ({
+        part_no: item?.standardPartNo || item?.rawPartNumber || "",
+        brand_origin: rfq?.supplierName ? `${rfq.supplierName}/USA` : item?.supplier || "USA",
+        description: item?.rawDescription || item?.description || "",
+        leadtime: "1-2 days",
+        quantity: String(item?.qty || 0),
+        uom: item?.uom || "Ea",
+        unit_price: Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+        amount: Number(item.ddpPriceUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      })),
+      total_weight: `${totalWeight.toLocaleString('en-US', { minimumFractionDigits: 2 })} LBS`,
+      total_label: `${rfq?.incoTerm || 'FCA'} USA Incoterms 2020`,
+      total_amount: totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+      term_document: "Declaration of Compliance/Certificate of Origin issued by MNF (Copy)",
+      delivery_terms: `${rfq?.incoTerm || 'FCA'} Houston, USA Incoterms 2020`,
+      payment_terms: rfq?.paymentTerm || "TT 100% Payment with order",
+      quote_validity: "30 days from quote date",
+      min_order_note: "Orders less than 500 USD is subject to a surcharge of 50 USD small ordering costs",
+      price_basis_note: "Price quote based on order in full quantity of item quoted"
+    };
+
+    const apiKey = process.env.APITEMPLATE_API_KEY;
+    const templateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID;
+
+    if (!apiKey || !templateId) {
+      throw new Error("Thiếu APITEMPLATE_API_KEY hoặc APITEMPLATE_QUOTATION_TEMPLATE_ID trong .env");
     }
+
+    const apitemplateRes = await fetch("https://api.apitemplate.io/v1/create", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        template_id: templateId,
+        export_type: "json",
+        output_file: `Quotation_${rfq.rfqCode}.pdf`,
+        is_base64: 0,
+        data: payload,
+      }),
+    });
+
+    if (!apitemplateRes.ok) {
+      const errorText = await apitemplateRes.text();
+      console.error("APITemplate error:", errorText);
+      throw new Error(`APITemplate trả về lỗi: ${apitemplateRes.status}`);
+    }
+
+    const apitemplateResult = await apitemplateRes.json();
+    if (apitemplateResult.status !== "success" || !apitemplateResult.download_url) {
+      throw new Error("Lỗi phản hồi từ APITemplate: " + JSON.stringify(apitemplateResult));
+    }
+
+    const pdfResponse = await fetch(apitemplateResult.download_url);
+    if (!pdfResponse.ok) {
+      throw new Error("Không thể tải file PDF từ APITemplate");
+    }
+    const arrayBuffer = await pdfResponse.arrayBuffer();
+    const pdfBuffer = Buffer.from(arrayBuffer);
+
+    let fileTypeSuffix = "Quotation";
+    if (docType === "MVPO_SUPPLIER_PDF") fileTypeSuffix = "MVPO";
+    if (docType === "COMMERCIAL_INVOICE_PDF") fileTypeSuffix = "CommercialInvoice";
+    if (docType === "CERTIFICATE_COC_COO_PDF") fileTypeSuffix = "COC_COO";
 
     const fileName = `${rfqCode}_${fileTypeSuffix}_${Date.now()}.pdf`;
 
-    // Upload to Supabase Storage
     let fileUrl: string;
     try {
       const { createClient } = await import("@supabase/supabase-js");
@@ -114,12 +161,10 @@ export async function POST(req: NextRequest) {
       fileUrl = urlData.publicUrl;
     } catch (uploadErr: any) {
       console.error("[generate-document] Upload error:", uploadErr);
-      // Fallback: return as base64 data URL
       const base64 = pdfBuffer.toString("base64");
       fileUrl = `data:application/pdf;base64,${base64}`;
     }
 
-    // Save Document record to DB
     await prisma.document.create({
       data: {
         rfqId: rfq.id,

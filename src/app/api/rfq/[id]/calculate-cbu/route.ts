@@ -53,7 +53,7 @@ export async function POST(
     } = body;
 
     // Update all RFQItem records with CBU results and custom values
-    await Promise.all(
+    await prisma.$transaction(
       items.map((item: any) =>
         prisma.rFQItem.update({
           where: { id: item.id },

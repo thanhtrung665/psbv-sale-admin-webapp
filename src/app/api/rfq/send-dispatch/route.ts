@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, attachmentUrl: string, accessToken: string) {
+async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, attachmentUrl: string, accessToken: string, customFileName?: string) {
   // 1. Download the PDF from the provided attachmentUrl
   const fileRes = await fetch(attachmentUrl);
   if (!fileRes.ok) {
@@ -11,9 +11,12 @@ async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, 
   const arrayBuffer = await fileRes.arrayBuffer();
   const base64String = Buffer.from(arrayBuffer).toString("base64");
   
-  // Extract filename from URL or use a default
-  const urlParts = attachmentUrl.split('/');
-  const fileName = urlParts[urlParts.length - 1] || "Document.pdf";
+  // Extract filename from URL or use custom filename
+  let fileName = customFileName;
+  if (!fileName) {
+    const urlParts = attachmentUrl.split('/');
+    fileName = urlParts[urlParts.length - 1] || "Document.pdf";
+  }
 
   // 2. Prepare MS Graph API Message Object
   const message = {
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { to, subject, bodyHtml, attachmentUrl } = await req.json();
+    const { to, subject, bodyHtml, attachmentUrl, fileName } = await req.json();
 
     if (!to || !subject || !attachmentUrl) {
       return NextResponse.json({ error: "Missing required fields (to, subject, attachmentUrl)" }, { status: 400 });
@@ -89,7 +92,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Call our Graph API function
-    await sendEmailViaGraph(to, subject, bodyHtml, attachmentUrl, accessToken);
+    await sendEmailViaGraph(to, subject, bodyHtml, attachmentUrl, accessToken, fileName);
 
     return NextResponse.json({
       success: true,

@@ -34,9 +34,10 @@ export async function POST(req: NextRequest) {
               to: { type: "string", description: "Recipient email address" },
               subject: { type: "string", description: "Email subject line" },
               bodyHtml: { type: "string", description: "Email body content in HTML or plain text" },
-              attachmentUrl: { type: "string", description: "Valid URL to the generated PDF document from APITemplate" }
+              attachmentUrl: { type: "string", description: "Valid URL to the generated PDF document from APITemplate" },
+              suggestedFileName: { type: "string", description: "Suggested filename for the PDF attachment, e.g. Quotation_AC0485_Company.pdf" }
             },
-            required: ["to", "subject", "bodyHtml", "attachmentUrl"]
+            required: ["to", "subject", "bodyHtml", "attachmentUrl", "suggestedFileName"]
           }
         },
         {

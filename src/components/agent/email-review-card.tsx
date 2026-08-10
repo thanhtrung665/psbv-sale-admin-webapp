@@ -16,6 +16,7 @@ export function EmailReviewCard({
   initialSubject = "",
   initialBody = "",
   attachmentUrl,
+  suggestedFileName = "Quotation.pdf",
   onDispatchComplete,
 }: EmailReviewCardProps) {
   const [to, setTo] = useState(initialTo);
@@ -24,6 +25,7 @@ export function EmailReviewCard({
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<boolean>(false);
+  const [pdfName, setPdfName] = useState(suggestedFileName);
 
   const handleSendEmail = async () => {
     setIsSending(true);
@@ -39,6 +41,7 @@ export function EmailReviewCard({
           subject,
           bodyHtml: body.replace(/\n/g, "<br/>"),
           attachmentUrl,
+          fileName: pdfName,
         }),
       });
 
@@ -145,14 +148,23 @@ export function EmailReviewCard({
               PDF Live Preview
             </label>
             <a 
-              href={attachmentUrl} 
-              target="_blank" 
-              rel="noreferrer"
+              href={`/api/download-pdf?url=${encodeURIComponent(attachmentUrl)}&filename=${encodeURIComponent(pdfName)}`}
+              download
               className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1.5 rounded transition-colors shadow-sm"
             >
               <Download className="w-3.5 h-3.5" />
-              📥 Tải file kiểm tra
+              📥 Tải PDF xuống
             </a>
+          </div>
+
+          <div className="flex flex-col gap-1.5 mb-2">
+            <label className="text-xs font-semibold text-slate-500 uppercase">📄 Tên file đính kèm:</label>
+            <input
+              type="text"
+              value={pdfName}
+              onChange={(e) => setPdfName(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+            />
           </div>
 
           <div className="flex-1 min-h-[400px] lg:min-h-[500px]">

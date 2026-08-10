@@ -8,6 +8,7 @@ interface EmailReviewCardProps {
   initialSubject?: string;
   initialBody?: string;
   attachmentUrl: string;
+  suggestedFileName?: string;
   onDispatchComplete?: () => void;
 }
 

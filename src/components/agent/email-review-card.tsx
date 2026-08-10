@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Loader2, Download, Send } from "lucide-react";
 
 interface EmailReviewCardProps {
+  rfqCode?: string;
   initialTo?: string;
   initialSubject?: string;
   initialBody?: string;
@@ -13,6 +14,7 @@ interface EmailReviewCardProps {
 }
 
 export function EmailReviewCard({
+  rfqCode,
   initialTo = "",
   initialSubject = "",
   initialBody = "",
@@ -41,6 +43,7 @@ export function EmailReviewCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          rfqCode,
           to,
           cc,
           bcc,
@@ -157,7 +160,7 @@ export function EmailReviewCard({
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Email dispatched successfully via MS Graph.
+              ✅ Đã gửi email và lưu vào Sent Items thành công!
             </div>
           )}
 
@@ -167,15 +170,23 @@ export function EmailReviewCard({
             className="mt-2 w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors"
           >
             {isSending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                ⏳ Đang mã hóa file & bắn mail qua MS Graph...
+              </>
             ) : success ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                ĐÃ DUYỆT & GỬI
+              </>
             ) : (
-              <Send className="w-4 h-4" />
+              <>
+                <Send className="w-4 h-4" />
+                🚀 DUYỆT & BẮN MAIL MS GRAPH
+              </>
             )}
-            {success ? "ĐÃ DUYỆT & GỬI" : "🚀 DUYỆT & BẮN MAIL NGAY"}
           </button>
         </div>
 

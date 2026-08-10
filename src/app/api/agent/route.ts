@@ -12,10 +12,12 @@ export async function POST(req: NextRequest) {
     const mockToolCall = {
       tool: "prepare_email_dispatch",
       parameters: {
+        rfqCode: "AC0485", // Mock RFQ code
         to: "client@example.com",
         subject: "Your Requested Quotation",
         bodyHtml: "<p>Dear Client,</p><p>Please find the quotation attached.</p><br/><p>Best regards,</p><p><strong>PSBV Sales Team</strong></p>",
         attachmentUrl: "https://example.com/mock-pdf-url.pdf",
+        suggestedFileName: "Quotation_AC0485.pdf"
       }
     };
 
@@ -31,6 +33,7 @@ export async function POST(req: NextRequest) {
           parameters: {
             type: "object",
             properties: {
+              rfqCode: { type: "string", description: "The unique RFQ Code" },
               to: { type: "string", description: "Recipient email address" },
               subject: { type: "string", description: "Email subject line" },
               bodyHtml: { type: "string", description: "Email body content in HTML or plain text" },

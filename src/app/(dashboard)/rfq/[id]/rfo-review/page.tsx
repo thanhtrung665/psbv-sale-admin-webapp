@@ -49,6 +49,8 @@ export default function RFOReviewPage() {
   const [supplierName, setSupplierName] = useState("");
   const [recipientName, setRecipientName] = useState("");
   const [ccEmails, setCcEmails] = useState("");
+  const [bccEmails, setBccEmails] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [supplierLogo, setSupplierLogo] = useState("");
   const [catalogUrl, setCatalogUrl] = useState("");
@@ -149,9 +151,9 @@ export default function RFOReviewPage() {
       orderTableHtml,
       supplierLogoUrl: supplierLogo || undefined,
       catalogUrl: catalogUrl || undefined,
-      senderName: supplierName ? `PSBV Sales Team` : "PSBV Sales Team",
+      senderName: senderName || "PSBV Sales Team",
     }),
-    [greetingBody, orderTableHtml, supplierLogo, catalogUrl, supplierName]
+    [greetingBody, orderTableHtml, supplierLogo, catalogUrl, senderName]
   );
 
   const handleSendRFO = async () => {
@@ -168,6 +170,7 @@ export default function RFOReviewPage() {
         supplierName,
         recipientName,
         ccEmails,
+        bccEmails,
         emailSubject,
         emailBody: emailBodyHtml,
         catalogUrl,
@@ -376,32 +379,46 @@ export default function RFOReviewPage() {
               )}
             </div>
 
-            {/* Email Hãng */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Email Hãng *</label>
-              <input type="email" value={supplierEmail} onChange={(e) => setSupplierEmail(e.target.value)} required
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            {/* Email Hãng & Người gửi */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email Hãng *</label>
+                <input type="email" value={supplierEmail} onChange={(e) => setSupplierEmail(e.target.value)} required
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Người gửi (Sender Name)</label>
+                <input type="text" value={senderName} onChange={(e) => setSenderName(e.target.value)} placeholder="PSBV Sales Team"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
 
-            {/* Tên Công ty */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Tên Công ty Hãng</label>
-              <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            {/* Tên Công ty & Người Nhận */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tên Công ty Hãng</label>
+                <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tên Người Nhận (Dear ...)</label>
+                <input type="text" value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
 
-            {/* Tên Người Nhận */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Tên Người Nhận (Dear ...)</label>
-              <input type="text" value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-
-            {/* Email CC */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Email CC (cách nhau bởi dấu phẩy)</label>
-              <input type="text" value={ccEmails} onChange={(e) => setCcEmails(e.target.value)} placeholder="boss@psbv.vn, sale@psbv.vn"
-                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+            {/* Email CC & BCC */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email CC</label>
+                <input type="text" value={ccEmails} onChange={(e) => setCcEmails(e.target.value)} placeholder="boss@psbv.vn"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email BCC</label>
+                <input type="text" value={bccEmails} onChange={(e) => setBccEmails(e.target.value)} placeholder="hidden@psbv.vn"
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+              </div>
             </div>
 
             {/* Tiêu đề Mail */}

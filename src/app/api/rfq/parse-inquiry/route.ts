@@ -38,7 +38,16 @@ export async function POST(req: NextRequest) {
     }
 
     // ── 1. Generate RFQ Code ────────────────────────────────────────────────
-    const rfqCode = await generateRfoId();
+    let rfqCode = formData.get("rfqCode") as string | null;
+    if (rfqCode) {
+      rfqCode = rfqCode.trim();
+      const existing = await prisma.rFQ.findUnique({ where: { rfqCode } });
+      if (existing) {
+        return NextResponse.json({ error: `Mã Inquiry ${rfqCode} đã tồn tại.` }, { status: 400 });
+      }
+    } else {
+      rfqCode = await generateRfoId();
+    }
 
     // ── 2. Create a placeholder RFQ immediately (isProcessing = true) ────────
     const rfq = await prisma.rFQ.create({

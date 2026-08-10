@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 
-async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, attachmentUrl: string, accessToken: string, customFileName?: string) {
+async function sendEmailViaGraph(to: string, cc: string, bcc: string, subject: string, bodyHtml: string, attachmentUrl: string, accessToken: string, customFileName?: string) {
   // 1. Download the PDF from the provided attachmentUrl
   const fileRes = await fetch(attachmentUrl);
   if (!fileRes.ok) {
@@ -17,6 +17,8 @@ async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, 
     const urlParts = attachmentUrl.split('/');
     fileName = urlParts[urlParts.length - 1] || "Document.pdf";
   }
+
+  const parseEmails = (str: string) => str ? str.split(",").map(e => ({ emailAddress: { address: e.trim() } })).filter(e => e.emailAddress.address) : [];
 
   // 2. Prepare MS Graph API Message Object
   const message = {
@@ -33,6 +35,8 @@ async function sendEmailViaGraph(to: string, subject: string, bodyHtml: string, 
           },
         },
       ],
+      ccRecipients: parseEmails(cc),
+      bccRecipients: parseEmails(bcc),
       attachments: [
         {
           "@odata.type": "#microsoft.graph.fileAttachment",
@@ -71,7 +75,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { to, subject, bodyHtml, attachmentUrl, fileName } = await req.json();
+    const { to, cc, bcc, subject, bodyHtml, attachmentUrl, fileName } = await req.json();
 
     if (!to || !subject || !attachmentUrl) {
       return NextResponse.json({ error: "Missing required fields (to, subject, attachmentUrl)" }, { status: 400 });
@@ -92,7 +96,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Call our Graph API function
-    await sendEmailViaGraph(to, subject, bodyHtml, attachmentUrl, accessToken, fileName);
+    await sendEmailViaGraph(to, cc || "", bcc || "", subject, bodyHtml, attachmentUrl, accessToken, fileName);
 
     return NextResponse.json({
       success: true,

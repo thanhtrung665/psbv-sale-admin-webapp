@@ -20,6 +20,8 @@ export function EmailReviewCard({
   onDispatchComplete,
 }: EmailReviewCardProps) {
   const [to, setTo] = useState(initialTo);
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [isSending, setIsSending] = useState(false);
@@ -38,8 +40,10 @@ export function EmailReviewCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to,
+          cc,
+          bcc,
           subject,
-          bodyHtml: body.replace(/\n/g, "<br/>"),
+          bodyHtml: body, // Assume body is already HTML as requested
           attachmentUrl,
           fileName: pdfName,
         }),
@@ -84,6 +88,29 @@ export function EmailReviewCard({
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase">CC</label>
+              <input
+                type="text"
+                value={cc}
+                onChange={(e) => setCc(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                placeholder="cc@company.com"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-slate-500 uppercase">BCC</label>
+              <input
+                type="text"
+                value={bcc}
+                onChange={(e) => setBcc(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                placeholder="bcc@company.com"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-500 uppercase">Subject</label>
             <input
@@ -96,12 +123,12 @@ export function EmailReviewCard({
           </div>
 
           <div className="flex flex-col gap-1.5 flex-1">
-            <label className="text-xs font-semibold text-slate-500 uppercase">Body</label>
+            <label className="text-xs font-semibold text-slate-500 uppercase">Body HTML</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="w-full h-full min-h-[200px] p-3 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
-              placeholder="Type your email content here..."
+              className="w-full h-full min-h-[200px] p-3 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"
+              placeholder="<p>Dear Client...</p>"
             />
           </div>
 

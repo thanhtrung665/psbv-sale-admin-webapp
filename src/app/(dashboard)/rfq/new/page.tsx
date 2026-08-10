@@ -136,6 +136,7 @@ export default function NewRFQPage() {
 
   // Build common header fields for FormData
   const appendHeaderToFormData = (form: FormData) => {
+    form.append("rfqCode", rfqCode);
     form.append("opportunityName", opportunityName);
     form.append("supplierName", supplierName);
     form.append("clientName", clientName);
@@ -149,6 +150,7 @@ export default function NewRFQPage() {
   // ─── Submit handlers ──────────────────────────────────────────────────────
 
   const handleFileUpload = async () => {
+    if (!rfqCode.trim()) return showError("Vui lòng nhập Mã Inquiry (RFO).");
     if (!selectedFile) return showError("Vui lòng chọn file trước.");
     setLoading(true); setError(""); setSuccess("");
     const form = new FormData();
@@ -167,6 +169,7 @@ export default function NewRFQPage() {
   };
 
   const handleEmailParse = async () => {
+    if (!rfqCode.trim()) return showError("Vui lòng nhập Mã Inquiry (RFO).");
     if (!emailText.trim()) return showError("Vui lòng dán nội dung email.");
     setLoading(true); setError(""); setSuccess("");
     const form = new FormData();
@@ -185,6 +188,7 @@ export default function NewRFQPage() {
   };
 
   const handleManualCreate = async () => {
+    if (!rfqCode.trim()) return showError("Vui lòng nhập Mã Inquiry (RFO).");
     if (!clientName || !clientEmail) return showError("Vui lòng điền Tên khách và Email.");
     if (manualItems.some((i) => !i.rawPartNumber)) return showError("Vui lòng điền Part Number cho tất cả dòng sản phẩm.");
     setLoading(true); setError(""); setSuccess("");
@@ -192,7 +196,7 @@ export default function NewRFQPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        clientName, clientEmail, companyName, clientPhone,
+        rfqCode, clientName, clientEmail, companyName, clientPhone,
         opportunityName, supplierName, incoTerm, paymentTerm,
         items: manualItems,
       }),
@@ -299,12 +303,13 @@ export default function NewRFQPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 gap-y-4">
           {/* 1. Mã Inquiry */}
           <div>
-            <label className={labelClass}>Mã Inquiry (RFO)</label>
+            <label className={labelClass}>Mã Inquiry (RFO) *</label>
             <input
               type="text"
               value={rfqCode}
-              readOnly
-              className={`${inputClass} bg-gray-100 text-gray-500 cursor-not-allowed font-mono font-bold`}
+              onChange={(e) => setRfqCode(e.target.value)}
+              placeholder="Nhập mã Inquiry (vd: AC0485)..."
+              className={`${inputClass} font-mono font-bold`}
             />
           </div>
 

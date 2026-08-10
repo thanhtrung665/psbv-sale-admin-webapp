@@ -54,8 +54,8 @@ export function buildRfoEmailHtml({
     <p style="margin:24px 0 4px 0; font-size:14px; color:#1e293b;">Thank you for your attention. We look forward to your quotation.</p>
     <p style="margin:0 0 2px 0; font-size:14px; color:#1e293b;">Best regards,</p>
     <p style="margin:0 0 20px 0; font-size:14px; font-weight:600; color:#0f172a;">${senderName}</p>
-    <img src="${PSBV_LOGO_URL}" alt="PSBV Logo"
-         style="height:44px; max-width:160px; object-fit:contain; display:block;" />`;
+    <img src="${PSBV_LOGO_URL}" alt="PSBV Logo" width="220"
+         style="max-width:250px; height:auto; object-fit:contain; display:block;" />`;
 
   return `<!DOCTYPE html>
 <html lang="en">

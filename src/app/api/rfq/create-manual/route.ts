@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const {
       clientName, clientEmail, companyName, clientPhone,
       opportunityName, supplierName, incoTerm, paymentTerm,
-      items,
+      items, rfqCode: providedRfqCode,
     } = body;
     const createdById = (session.user as any).id as string;
 
@@ -26,7 +26,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const rfqCode = await generateRfoId();
+    let rfqCode = providedRfqCode?.trim();
+    if (rfqCode) {
+      const existing = await prisma.rFQ.findUnique({ where: { rfqCode } });
+      if (existing) {
+        return NextResponse.json({ error: `Mã Inquiry ${rfqCode} đã tồn tại.` }, { status: 400 });
+      }
+    } else {
+      rfqCode = await generateRfoId();
+    }
 
     // Upsert client
     const client = await prisma.client.upsert({

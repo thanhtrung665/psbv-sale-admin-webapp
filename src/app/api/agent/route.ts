@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
       parameters: {
         to: "client@example.com",
         subject: "Your Requested Quotation",
-        bodyHtml: "Dear Client,\n\nPlease find the quotation attached.\n\nBest regards,\nAgent",
+        bodyHtml: "<p>Dear Client,</p><p>Please find the quotation attached.</p><br/><p>Best regards,</p><p><strong>PSBV Sales Team</strong></p>",
         attachmentUrl: "https://example.com/mock-pdf-url.pdf",
       }
     };

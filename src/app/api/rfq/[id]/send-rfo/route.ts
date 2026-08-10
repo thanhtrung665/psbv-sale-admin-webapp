@@ -22,6 +22,7 @@ export async function POST(
       supplierEmail,
       supplierName,
       ccEmails,
+      bccEmails,
       emailSubject,
       emailBody,
       // catalogUrl is already baked into emailBody by the builder — accepted but not re-used here
@@ -38,12 +39,18 @@ export async function POST(
     const ccArray: string[] = ccEmails
       ? (ccEmails as string).split(",").map((e: string) => e.trim()).filter(Boolean)
       : [];
+      
+    // Parse BCC emails from comma-separated string
+    const bccArray: string[] = bccEmails
+      ? (bccEmails as string).split(",").map((e: string) => e.trim()).filter(Boolean)
+      : [];
 
     // Send the email via Resend
     const { data, error } = await resend.emails.send({
       from: "PSBV Sales Agent <onboarding@resend.dev>",
       to: supplierEmail,
       cc: ccArray.length > 0 ? ccArray : undefined,
+      bcc: bccArray.length > 0 ? bccArray : undefined,
       subject: emailSubject,
       html: emailBody,
     });

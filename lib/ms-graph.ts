@@ -3,6 +3,26 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import "isomorphic-fetch";
 
+// 1. Khởi tạo Credential từ Azure Identity
+const credential = new ClientSecretCredential(
+  process.env.AZURE_TENANT_ID as string,
+  process.env.AZURE_CLIENT_ID as string,
+  process.env.AZURE_CLIENT_SECRET as string
+);
+
+// 2. BẮT BUỘC: Khởi tạo Auth Provider với scope .default
+const authProvider = new TokenCredentialAuthenticationProvider(credential, {
+  scopes: ["https://graph.microsoft.com/.default"],
+});
+
+// 3. Khởi tạo Graph Client với middleware authProvider
+export const getGraphClient = () => {
+  return Client.initWithMiddleware({
+    debugLogging: true,
+    authProvider: authProvider,
+  });
+};
+
 export interface GraphEmailPayload {
   to: string;
   cc?: string;
@@ -24,27 +44,13 @@ export async function sendEmailViaGraph({
   fileName,
   senderName,
 }: GraphEmailPayload) {
-  const tenantId = process.env.AZURE_TENANT_ID;
-  const clientId = process.env.AZURE_CLIENT_ID;
-  const clientSecret = process.env.AZURE_CLIENT_SECRET;
   const mailbox = process.env.MS_GRAPH_MAILBOX;
 
-  if (!tenantId || !clientId || !clientSecret || !mailbox) {
-    throw new Error(
-      "Missing Microsoft Graph configuration (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, MS_GRAPH_MAILBOX)"
-    );
+  if (!mailbox) {
+    throw new Error("Missing Microsoft Graph configuration (MS_GRAPH_MAILBOX)");
   }
 
-  // 1. Initialize MS Graph Client with Application Credentials
-  const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-  
-  const authProvider = new TokenCredentialAuthenticationProvider(credential, {
-    scopes: ["https://graph.microsoft.com/.default"],
-  });
-
-  const graphClient = Client.initWithMiddleware({
-    authProvider: authProvider,
-  });
+  const graphClient = getGraphClient();
 
   // 2. Fetch and encode the PDF Attachment
   // Ensure the URL is fully qualified before fetching

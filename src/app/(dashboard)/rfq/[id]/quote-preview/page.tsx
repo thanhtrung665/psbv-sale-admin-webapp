@@ -30,17 +30,24 @@ export default function QuotePreviewPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   
+  const [to, setTo] = useState("");
+  const [cc, setCc] = useState("");
+  const [bcc, setBcc] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [subject, setSubject] = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [fileName, setFileName] = useState("");
 
   const fetchRFQ = useCallback(async () => {
     const res = await fetch(`/api/rfq/${rfqId}`);
     if (res.ok) {
       const data: RFQDetail = await res.json();
       setRfq(data);
+      setTo(data.client.email);
       setSubject(`[Quotation] ${data.rfqCode} - PSBV Trading & Service Co., Ltd`);
-      setBodyHtml(`Dear ${data.client.name},\n\nThank you for your inquiry.\nPlease find our official quotation attached below.\n\nBest regards,\nPSBV Sales Team`);
+      setFileName(`Quotation_${data.rfqCode}_${data.client.companyName.replace(/\s+/g, '_')}.pdf`);
+      setBodyHtml(`<p>Dear ${data.client.name},</p><p>Thank you for your inquiry.</p><p>Please find our official quotation attached below.</p>`);
     }
   }, [rfqId]);
 
@@ -64,7 +71,16 @@ export default function QuotePreviewPage() {
     const res = await fetch(`/api/rfq/${rfqId}/send-quote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ subject, bodyHtml: bodyHtml.replace(/\n/g, "<br/>") }),
+      body: JSON.stringify({ 
+        to, 
+        cc, 
+        bcc, 
+        senderName, 
+        subject, 
+        bodyHtml,
+        attachmentUrl: pdfUrl,
+        fileName 
+      }),
     });
     
     const data = await res.json();
@@ -120,52 +136,58 @@ export default function QuotePreviewPage() {
         {/* LEFT COL: Financials & Email Form */}
         <div className="w-[45%] flex flex-col gap-6 overflow-y-auto pr-2 pb-6 custom-scrollbar">
           
-          {/* Executive Summary Cards */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
-              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-              Executive Summary
-            </h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <p className="text-gray-500 text-xs mb-1">Tổng Doanh Thu USD</p>
-                <p className="text-xl font-bold text-blue-600">{fmtUSD(rfq.totalRevenueUsd)}</p>
-                <p className="text-gray-500 text-xs mt-1">{fmtVND(rfq.totalRevenueVnd)}</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-                <p className="text-gray-500 text-xs mb-1">Tổng Giá Vốn USD</p>
-                <p className="text-xl font-bold text-gray-700">{fmtUSD(rfq.totalCostUsd)}</p>
-              </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 col-span-2 flex items-center justify-between">
-                <div>
-                  <p className="text-gray-500 text-xs mb-1">Tổng Lợi Nhuận Margin</p>
-                  <p className={`text-2xl font-bold ${rfq.totalMarginUsd >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                    {fmtUSD(rfq.totalMarginUsd)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-gray-500 text-xs mb-1">Tỷ Lệ Margin %</p>
-                  <p className={`text-xl font-bold ${rfq.actualMarginPct >= 15 ? "text-emerald-600" : rfq.actualMarginPct >= 5 ? "text-amber-500" : "text-red-500"}`}>
-                    {fmtPct(rfq.actualMarginPct)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Email Draft Form */}
           <div className="bg-white border border-gray-200 rounded-2xl p-5 flex-1 flex flex-col shadow-sm">
             <h2 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
-              <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
               Email Dispatch Draft
             </h2>
             <div className="flex flex-col gap-4 flex-1">
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5 font-medium">Người nhận (To)</label>
-                <div className="w-full px-3 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-500 text-sm cursor-not-allowed">
-                  {rfq.client.email}
+                <input 
+                  type="text" 
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 shadow-sm"
+                  placeholder="client@example.com"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">CC</label>
+                  <input
+                    type="text"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 shadow-sm"
+                    placeholder="cc@company.com"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="block text-xs text-gray-500 mb-1.5 font-medium">BCC</label>
+                  <input
+                    type="text"
+                    value={bcc}
+                    onChange={(e) => setBcc(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 shadow-sm"
+                    placeholder="bcc@company.com"
+                  />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-xs text-gray-500 mb-1.5 font-medium">Người gửi (Sender Name)</label>
+                <input 
+                  type="text" 
+                  value={senderName}
+                  onChange={(e) => setSenderName(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 shadow-sm"
+                  placeholder="Vũ Trọng Hùng - Sales Dept"
+                />
+              </div>
+
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5 font-medium">Tiêu đề (Subject)</label>
                 <input 
@@ -175,12 +197,14 @@ export default function QuotePreviewPage() {
                   className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 shadow-sm"
                 />
               </div>
+
               <div className="flex-1 flex flex-col">
                 <label className="block text-xs text-gray-500 mb-1.5 font-medium">Nội dung (Body HTML)</label>
                 <textarea 
                   value={bodyHtml}
                   onChange={(e) => setBodyHtml(e.target.value)}
-                  className="w-full flex-1 min-h-[150px] p-3 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 resize-none shadow-sm"
+                  className="w-full flex-1 min-h-[250px] p-3 bg-white border border-gray-200 rounded-lg text-gray-900 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 resize-none shadow-sm"
+                  placeholder="<p>Dear Client...</p>"
                 />
               </div>
             </div>
@@ -194,7 +218,7 @@ export default function QuotePreviewPage() {
                 {sending ? (
                   <>
                     <svg className="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                    Đang tạo PDF & Gửi Email...
+                    Đang tạo PDF & Gửi Email MS Graph...
                   </>
                 ) : rfq.status === 'QUOTED_TO_CLIENT' ? (
                   <>
@@ -204,7 +228,7 @@ export default function QuotePreviewPage() {
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                    PHÊ DUYỆT & GỬI BÁO GIÁ CHO KHÁCH HÀNG
+                    🚀 DUYỆT & BẮN MAIL MS GRAPH
                   </>
                 )}
               </button>
@@ -219,10 +243,30 @@ export default function QuotePreviewPage() {
               <svg className="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
               PDF Live Preview
             </h2>
-            <span className="text-xs text-gray-500">
-              {pdfUrl ? "Generated Official Quotation" : "Đang tạo PDF..."}
-            </span>
+            {pdfUrl && (
+              <a 
+                href={`/api/download-pdf?url=${encodeURIComponent(pdfUrl)}&filename=${encodeURIComponent(fileName)}`}
+                download
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1.5 rounded transition-colors shadow-sm"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                📥 Tải PDF xuống
+              </a>
+            )}
           </div>
+          
+          {pdfUrl && (
+            <div className="px-4 py-3 border-b border-gray-200 bg-white">
+              <label className="block text-xs font-semibold text-slate-500 uppercase mb-1.5">📄 Tên file PDF đính kèm:</label>
+              <input
+                type="text"
+                value={fileName}
+                onChange={(e) => setFileName(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+              />
+            </div>
+          )}
+
           <div className="flex-1 bg-gray-100 flex items-center justify-center p-4">
             {pdfUrl ? (
               <iframe 

@@ -23,6 +23,7 @@ export function EmailReviewCard({
   const [to, setTo] = useState(initialTo);
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
+  const [senderName, setSenderName] = useState("");
   const [subject, setSubject] = useState(initialSubject);
   const [body, setBody] = useState(initialBody);
   const [isSending, setIsSending] = useState(false);
@@ -43,6 +44,7 @@ export function EmailReviewCard({
           to,
           cc,
           bcc,
+          senderName,
           subject,
           bodyHtml: body, // Assume body is already HTML as requested
           attachmentUrl,
@@ -110,6 +112,17 @@ export function EmailReviewCard({
                 placeholder="bcc@company.com"
               />
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-500 uppercase">Người gửi (Sender Name)</label>
+            <input
+              type="text"
+              value={senderName}
+              onChange={(e) => setSenderName(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              placeholder="Vũ Trọng Hùng - Sales Dept"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">

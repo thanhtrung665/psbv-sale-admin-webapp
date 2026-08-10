@@ -2,11 +2,46 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import fs from "fs";
-import path from "path";
-import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";
+
+async function sendEmailViaGraph(to: string, cc: string, bcc: string, subject: string, bodyHtml: string, pdfUrl: string, accessToken: string, customFileName: string) {
+  const fileRes = await fetch(pdfUrl);
+  if (!fileRes.ok) throw new Error(`Failed to download attachment from ${pdfUrl}`);
+  const arrayBuffer = await fileRes.arrayBuffer();
+  const base64String = Buffer.from(arrayBuffer).toString("base64");
+  
+  const parseEmails = (str: string) => str ? str.split(",").map(e => ({ emailAddress: { address: e.trim() } })).filter(e => e.emailAddress.address) : [];
+
+  const message = {
+    message: {
+      subject: subject,
+      body: { contentType: "HTML", content: bodyHtml },
+      toRecipients: [{ emailAddress: { address: to } }],
+      ccRecipients: parseEmails(cc),
+      bccRecipients: parseEmails(bcc),
+      attachments: [{
+        "@odata.type": "#microsoft.graph.fileAttachment",
+        name: customFileName,
+        contentType: "application/pdf",
+        contentBytes: base64String,
+      }],
+    },
+    saveToSentItems: "true",
+  };
+
+  const graphRes = await fetch("https://graph.microsoft.com/v1.0/me/sendMail", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(message),
+  });
+
+  if (!graphRes.ok) {
+    const errorData = await graphRes.text();
+    console.error("MS Graph API Error:", errorData);
+    throw new Error(`MS Graph API failed: ${graphRes.statusText}`);
+  }
+}
 
 export async function POST(
   req: NextRequest,
@@ -16,7 +51,7 @@ export async function POST(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
-    const { subject, bodyHtml } = await req.json();
+    const { to, cc, bcc, senderName, subject, bodyHtml, attachmentUrl, fileName } = await req.json();
     const rfqId = params.id;
 
     // 1. Fetch RFQ & verify status
@@ -27,63 +62,34 @@ export async function POST(
     
     if (!rfq) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // 2. Fetch the latest generated Document
-    const document = await prisma.document.findFirst({
-      where: {
-        rfqId,
-        type: "MVPO_QUOTATION_PDF"
-      },
-      orderBy: { createdAt: "desc" }
-    });
-
-    if (!document || !document.fileUrl) {
+    if (!attachmentUrl) {
       return NextResponse.json({ error: "Chưa có file Quotation PDF. Vui lòng tải lại trang để sinh file." }, { status: 400 });
     }
 
-    // 3. Read PDF from local public directory
-    // fileUrl is something like "/uploads/Quotation_XYZ_123.pdf"
-    const filePath = path.join(process.cwd(), "public", document.fileUrl);
-    
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json({ error: "File PDF không tồn tại trên hệ thống." }, { status: 404 });
+    const accessToken = process.env.MS_GRAPH_ACCESS_TOKEN || (session as any).accessToken;
+    if (!accessToken) {
+      console.warn("No MS Graph Access Token found.");
+      return NextResponse.json({ error: "Microsoft Graph Access Token is missing." }, { status: 403 });
     }
-    
-    const pdfBuffer = fs.readFileSync(filePath);
-    const fileUrl = document.fileUrl;
 
-    // 5. Send Email via Nodemailer
-    // Note: We use mock console if env vars are missing
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (smtpHost && smtpUser && smtpPass) {
-      const transporter = nodemailer.createTransport({
-        host: smtpHost,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-
-      await transporter.sendMail({
-        from: `"PSBV Sales" <${smtpUser}>`,
-        to: rfq.client.email,
-        subject: subject || `Quotation for ${rfq.rfqCode}`,
-        html: bodyHtml || `<p>Please find the attached quotation.</p>`,
-        attachments: [
-          {
-            filename: `Quotation_${rfq.rfqCode}.pdf`,
-            content: pdfBuffer,
-          },
-        ],
-      });
-      console.log(`[Email Sent] Successfully sent to ${rfq.client.email}`);
-    } else {
-      console.log(`[Email MOCK] Would send email to ${rfq.client.email} with subject: ${subject}`);
+    let finalBodyHtml = bodyHtml;
+    if (senderName) {
+      const PSBV_LOGO_URL = "https://nvcanmdfdmyllvopxdst.supabase.co/storage/v1/object/public/assets/logo.png";
+      finalBodyHtml = `
+        <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+          ${bodyHtml}
+          <br/><br/>
+          <p style="margin:0 0 20px 0; font-size:14px; font-weight:600; color:#0f172a;">${senderName}</p>
+          <img src="${PSBV_LOGO_URL}" alt="PSBV Logo" width="220" style="max-width:250px; height:auto; object-fit:contain; display:block;" />
+        </div>
+      `;
     }
+
+    // Since proxy download uses the base URL in our setup, we can fetch the original attachmentUrl directly.
+    // ensure attachmentUrl is fully qualified if it's relative
+    const fetchUrl = attachmentUrl.startsWith("http") ? attachmentUrl : `http://localhost:3000${attachmentUrl}`;
+
+    await sendEmailViaGraph(to, cc || "", bcc || "", subject, finalBodyHtml, fetchUrl, accessToken, fileName || "Quotation.pdf");
 
     // 6. Update RFQ Status to QUOTED_TO_CLIENT
     await prisma.rFQ.update({
@@ -96,7 +102,7 @@ export async function POST(
 
     return NextResponse.json({
       message: "Phê duyệt & Gửi báo giá thành công!",
-      fileUrl,
+      fileUrl: attachmentUrl,
       status: "QUOTED_TO_CLIENT"
     });
 

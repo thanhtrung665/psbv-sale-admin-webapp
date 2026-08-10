@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { to, cc, bcc, subject, bodyHtml, attachmentUrl, fileName } = await req.json();
+    const { to, cc, bcc, subject, bodyHtml, attachmentUrl, fileName, senderName } = await req.json();
 
     if (!to || !subject || !attachmentUrl) {
       return NextResponse.json({ error: "Missing required fields (to, subject, attachmentUrl)" }, { status: 400 });
@@ -95,8 +95,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Construct final HTML with senderName and Logo if senderName is provided
+    let finalBodyHtml = bodyHtml;
+    if (senderName) {
+      const PSBV_LOGO_URL = "https://nvcanmdfdmyllvopxdst.supabase.co/storage/v1/object/public/assets/logo.png";
+      finalBodyHtml = `
+        <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+          ${bodyHtml}
+          <br/><br/>
+          <p style="margin:0 0 20px 0; font-size:14px; font-weight:600; color:#0f172a;">${senderName}</p>
+          <img src="${PSBV_LOGO_URL}" alt="PSBV Logo" width="220" style="max-width:250px; height:auto; object-fit:contain; display:block;" />
+        </div>
+      `;
+    }
+
     // Call our Graph API function
-    await sendEmailViaGraph(to, cc || "", bcc || "", subject, bodyHtml, attachmentUrl, accessToken, fileName);
+    await sendEmailViaGraph(to, cc || "", bcc || "", subject, finalBodyHtml, attachmentUrl, accessToken, fileName);
 
     return NextResponse.json({
       success: true,

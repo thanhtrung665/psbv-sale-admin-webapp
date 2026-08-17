@@ -1,320 +1,166 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { FileSpreadsheet, FileText } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { SmartRfqSelector } from "./smart-rfq-selector";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogDescription,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 const DOC_TYPES = [
-  {
-    value: "QUOTATION_CLIENT_PDF",
-    label: "Báo Giá Commercial Quotation — Gửi Khách Hàng",
-    icon: "📋",
-  },
-  {
-    value: "MVPO_SUPPLIER_PDF",
-    label: "Đơn Đặt Hàng MVPO — Gửi Hãng",
-    icon: "🏭",
-  },
-  {
-    value: "COMMERCIAL_INVOICE_PDF",
-    label: "Commercial Invoice — Hóa Đơn Thương Mại [V3]",
-    icon: "🧾",
-  },
-  {
-    value: "CERTIFICATE_COC_COO_PDF",
-    label: "Chứng Nhận COC / COO [V3]",
-    icon: "📜",
-  },
+  { id: "QUOTATION_CLIENT_PDF", label: "File Quotation", icon: FileText, active: true },
+  { id: "MVPO_SUPPLIER_PDF", label: "Đặt hàng MVPO", icon: FileText, active: false },
+  { id: "COMMERCIAL_INVOICE_PDF", label: "File PS", icon: FileText, active: false },
+  { id: "CERTIFICATE_COC_COO_PDF", label: "File CI", icon: FileText, active: false },
 ] as const;
-
-type DocTypeValue = (typeof DOC_TYPES)[number]["value"];
-
-interface RfqSuggestion {
-  id: string;
-  rfqCode: string;
-  clientName: string;
-  companyName: string;
-}
-
-interface GeneratedFile {
-  url: string;
-  fileName: string;
-}
 
 export function GenerateFileModal() {
   const [open, setOpen] = useState(false);
   const [rfqCode, setRfqCode] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<RfqSuggestion[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedDocType, setSelectedDocType] = useState<DocTypeValue | "">("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedDocType, setSelectedDocType] = useState<string>("QUOTATION_CLIENT_PDF");
+  const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [generatedFile, setGeneratedFile] = useState<GeneratedFile | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const router = useRouter();
 
-  // Debounced search
-  useEffect(() => {
-    if (searchQuery.length < 2) {
-      setSuggestions([]);
+  const handleContinue = async () => {
+    if (!rfqCode.trim()) {
+      setError("❌ Vui lòng nhập Mã RFQ.");
       return;
     }
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    searchTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/rfq/search-codes?q=${searchQuery}`);
-        const data = await res.json();
-        if (Array.isArray(data)) setSuggestions(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [searchQuery]);
-
-  const handleGenerate = async () => {
-    if (!rfqCode) return setError("Vui lòng nhập hoặc chọn Mã Đơn Hàng.");
-    if (!selectedDocType) return setError("Vui lòng chọn Loại File cần tạo.");
-
-    setIsGenerating(true);
+    
+    setIsChecking(true);
     setError(null);
-    setGeneratedFile(null);
-
+    
     try {
-      const res = await fetch("/api/rfq/generate-document", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rfqCode, docType: selectedDocType }),
-      });
-
+      const res = await fetch(`/api/rfq/search-codes?q=${encodeURIComponent(rfqCode.trim())}`);
       const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Có lỗi khi tạo file.");
+      
+      if (Array.isArray(data)) {
+        const match = data.find((d: any) => d.rfqCode.toLowerCase() === rfqCode.trim().toLowerCase());
+        if (match) {
+          setOpen(false);
+          // Transition to the generation flow
+          router.push(`/rfq/${match.id}/quote-preview`);
+          return;
+        }
       }
-
-      setGeneratedFile({ url: data.url, fileName: data.fileName });
-    } catch (err: any) {
-      setError(err.message);
+      
+      setError("❌ Không tìm thấy mã RFQ này trong hệ thống. Vui lòng kiểm tra lại!");
+    } catch (err) {
+      setError("❌ Lỗi hệ thống khi tìm kiếm. Vui lòng thử lại.");
     } finally {
-      setIsGenerating(false);
+      setIsChecking(false);
     }
   };
 
-  const handleReset = () => {
-    setRfqCode("");
-    setSearchQuery("");
-    setSuggestions([]);
-    setSelectedDocType("");
-    setError(null);
-    setGeneratedFile(null);
-    setIsGenerating(false);
-  };
-
-  const selectedDocInfo = DOC_TYPES.find((d) => d.value === selectedDocType);
-
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(val) => {
-        setOpen(val);
-        if (!val) handleReset();
-      }}
-    >
-      <DialogTrigger className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all">
-        <span className="text-base">📄</span>
-        Tạo file
+    <Dialog open={open} onOpenChange={(val) => {
+      setOpen(val);
+      if (!val) {
+        setRfqCode("");
+        setError(null);
+      }
+    }}>
+      <DialogTrigger className="inline-flex h-8 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-sm transition-all">
+        <FileText className="w-3.5 h-3.5" />
+        Tạo File PDF
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[520px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <span className="text-2xl">📄</span>
-            Tạo File Chứng Từ
+      <DialogContent className="sm:max-w-[650px] w-[90vw] p-0 rounded-2xl overflow-hidden border border-slate-200 shadow-2xl bg-white gap-0">
+        <DialogHeader className="px-8 py-6 border-b border-slate-100 bg-white">
+          <DialogTitle className="flex items-center gap-2 text-xl font-bold text-slate-900 tracking-tight">
+            <FileSpreadsheet className="w-[22px] h-[22px] text-blue-600" />
+            Tạo Tài Liệu Đơn Hàng
           </DialogTitle>
-          <DialogDescription>
-            Chọn đơn hàng và loại file cần tạo. Hệ thống sẽ tự động render PDF
-            theo template chuẩn.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">
-              ⚠ {error}
-            </div>
-          )}
-
-          {/* Step 1: RFQ Code Search */}
-          <div className="space-y-2 relative">
-            <Label className="text-sm font-semibold text-gray-700">
-              1. Mã Đơn Hàng
-            </Label>
-            <div className="relative">
-              <Input
-                placeholder="Gõ mã ACxxxx / RFO... để tìm"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setRfqCode(e.target.value);
-                  setShowSuggestions(true);
-                  setGeneratedFile(null);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                className={`pr-8 ${rfqCode && suggestions.find((s) => s.rfqCode === rfqCode) ? "border-green-400 bg-green-50" : ""}`}
-              />
-              {rfqCode && suggestions.find((s) => s.rfqCode === rfqCode) && (
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-green-500 text-sm">
-                  ✓
-                </span>
-              )}
-            </div>
-
-            {showSuggestions && searchQuery.length >= 2 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-auto">
-                {isSearching ? (
-                  <div className="p-3 text-sm text-gray-500 text-center flex items-center justify-center gap-2">
-                    <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Đang tìm kiếm...
-                  </div>
-                ) : suggestions.length > 0 ? (
-                  suggestions.map((s) => (
-                    <div
-                      key={s.id}
-                      className="px-3 py-2.5 hover:bg-blue-50 cursor-pointer border-b last:border-0 transition-colors"
-                      onClick={() => {
-                        setSearchQuery(s.rfqCode);
-                        setRfqCode(s.rfqCode);
-                        setShowSuggestions(false);
-                        setGeneratedFile(null);
-                      }}
-                    >
-                      <div className="font-semibold text-sm text-blue-600">{s.rfqCode}</div>
-                      <div className="text-xs text-gray-500 truncate">
-                        {s.clientName} — {s.companyName}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="p-3 text-sm text-gray-400 text-center">
-                    Không tìm thấy đơn hàng phù hợp.
-                  </div>
-                )}
-              </div>
+        <div className="px-8 py-6 flex flex-col gap-6 bg-slate-50/30">
+          {/* Block 1: Matching Code */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-800">1. Mã RFQ / Inquiry Code</label>
+            <SmartRfqSelector 
+              value={rfqCode}
+              onChange={(code) => {
+                setRfqCode(code);
+                if (error) setError(null);
+              }}
+              placeholder="Nhập mã RFQ (ví dụ: AC0485, AC0001)..." 
+              className="h-11" 
+            />
+            {error && (
+              <p className="text-sm text-red-500 font-medium mt-1">{error}</p>
             )}
           </div>
 
-          {/* Step 2: Document Type */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold text-gray-700">
-              2. Loại File Cần Tạo
-            </Label>
-            <div className="grid grid-cols-1 gap-2">
-              {DOC_TYPES.map((doc) => (
-                <button
-                  key={doc.value}
-                  type="button"
-                  onClick={() => {
-                    setSelectedDocType(doc.value);
-                    setGeneratedFile(null);
-                  }}
-                  className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-left text-sm transition-all ${
-                    selectedDocType === doc.value
-                      ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
-                >
-                  <span className="text-lg shrink-0">{doc.icon}</span>
-                  <span className="font-medium">{doc.label}</span>
-                  {selectedDocType === doc.value && (
-                    <span className="ml-auto text-blue-500 shrink-0">✓</span>
-                  )}
-                </button>
-              ))}
+          {/* Block 2: Document Selectors */}
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-800">2. Chọn loại tài liệu cần tạo</label>
+            <div className="grid grid-cols-2 gap-3">
+              {DOC_TYPES.map((doc) => {
+                const Icon = doc.icon;
+                const isActive = selectedDocType === doc.id;
+
+                if (doc.active) {
+                  return (
+                    <div 
+                      key={doc.id}
+                      onClick={() => setSelectedDocType(doc.id)}
+                      className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all shadow-sm ${isActive ? 'border-2 border-blue-600 bg-blue-50/50' : 'border border-slate-200 bg-white hover:border-blue-300'}`}
+                    >
+                      <Icon className="w-5 h-5 text-blue-600 shrink-0" />
+                      <span className={`font-semibold text-sm ${isActive ? 'text-blue-900' : 'text-slate-700'}`}>{doc.label}</span>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div 
+                      key={doc.id}
+                      className="border border-slate-200 bg-slate-100/60 p-4 rounded-xl cursor-not-allowed flex items-center gap-3 opacity-60"
+                    >
+                      <Icon className="w-5 h-5 text-slate-400 shrink-0" />
+                      <span className="font-semibold text-sm text-slate-500">{doc.label}</span>
+                      <span className="bg-slate-200 text-slate-500 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ml-auto">Soon</span>
+                    </div>
+                  );
+                }
+              })}
             </div>
           </div>
+        </div>
 
-          {/* Generated File Result */}
-          {generatedFile && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 space-y-3">
-              <div className="flex items-center gap-2 text-green-700 font-semibold text-sm">
-                <span>✅</span>
-                <span>File đã được tạo thành công!</span>
-              </div>
-              <p className="text-xs text-green-600 font-mono truncate">{generatedFile.fileName}</p>
-              <div className="flex gap-2">
-                <a
-                  href={generatedFile.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-green-300 text-green-700 text-xs font-semibold hover:bg-green-50 transition-all"
-                >
-                  👁️ Xem trước PDF
-                </a>
-                <a
-                  href={generatedFile.url}
-                  download={generatedFile.fileName}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs font-semibold transition-all"
-                >
-                  📥 Tải File Về Máy
-                </a>
-              </div>
-            </div>
-          )}
-
-          {/* Generate Button */}
-          {!generatedFile && (
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || !rfqCode || !selectedDocType}
-              className="w-full flex justify-center items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:from-blue-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {isGenerating ? (
-                <>
-                  <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Đang tạo file{selectedDocInfo ? ` ${selectedDocInfo.icon}` : ""}...
-                </>
-              ) : (
-                <>
-                  <span>⚡</span>
-                  Tiến Hành Tạo File PDF
-                  {selectedDocInfo && (
-                    <span className="opacity-75 ml-1">{selectedDocInfo.icon}</span>
-                  )}
-                </>
-              )}
-            </button>
-          )}
-
-          {generatedFile && (
-            <button
-              onClick={handleReset}
-              className="w-full flex justify-center items-center gap-2 rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-all"
-            >
-              + Tạo File Mới
-            </button>
-          )}
+        {/* Footer Action */}
+        <div className="px-8 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
+          <button 
+            onClick={() => setOpen(false)}
+            className="h-10 px-5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            Hủy
+          </button>
+          <button 
+            onClick={handleContinue}
+            disabled={isChecking || !rfqCode.trim()}
+            className="h-10 px-7 text-sm font-semibold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isChecking ? (
+              <>
+                <svg className="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Đang kiểm tra...
+              </>
+            ) : (
+              <>
+                Tiếp tục ➔
+              </>
+            )}
+          </button>
         </div>
       </DialogContent>
     </Dialog>

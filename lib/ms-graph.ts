@@ -3,23 +3,38 @@ import { Client } from "@microsoft/microsoft-graph-client";
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials";
 import "isomorphic-fetch";
 
-// 1. Khởi tạo Credential từ Azure Identity
-const credential = new ClientSecretCredential(
-  process.env.AZURE_TENANT_ID as string,
-  process.env.AZURE_CLIENT_ID as string,
-  process.env.AZURE_CLIENT_SECRET as string
-);
-
-// 2. BẮT BUỘC: Khởi tạo Auth Provider với scope .default
-const authProvider = new TokenCredentialAuthenticationProvider(credential, {
-  scopes: ["https://graph.microsoft.com/.default"],
-});
-
-// 3. Khởi tạo Graph Client với middleware authProvider
 export const getGraphClient = () => {
-  return Client.initWithMiddleware({
+  // 1. Kiểm tra biến môi trường ngay lúc gọi hàm
+  const tenantId = process.env.AZURE_TENANT_ID;
+  const clientId = process.env.AZURE_CLIENT_ID;
+  const clientSecret = process.env.AZURE_CLIENT_SECRET;
+
+  if (!tenantId || !clientId || !clientSecret) {
+    throw new Error("[MS GRAPH FATAL] Thiếu biến môi trường AZURE trong file .env!");
+  }
+
+  // 2. Khởi tạo Credential
+  const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
+
+  // 3. Khởi tạo Client với Custom Auth Provider
+  return Client.init({
     debugLogging: true,
-    authProvider: authProvider,
+    authProvider: async (done) => {
+      try {
+        // Tự động gọi thẳng xuống Azure để xin Token với scope .default
+        const tokenResponse = await credential.getToken("https://graph.microsoft.com/.default");
+        
+        if (tokenResponse && tokenResponse.token) {
+          console.log("✅ [MS GRAPH] Đã lấy thành công Access Token!");
+          done(null, tokenResponse.token);
+        } else {
+          done(new Error("Token response bị rỗng từ Azure!"), null);
+        }
+      } catch (err: any) {
+        console.error("❌ [AZURE AUTH ERROR] Lỗi từ chối cấp Token từ máy chủ Azure:", err?.message || err);
+        done(err, null);
+      }
+    },
   });
 };
 

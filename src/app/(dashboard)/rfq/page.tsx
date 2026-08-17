@@ -1,30 +1,42 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { Plus, Calculator, Search, Inbox, Eye, FileSearch, Trash2 } from "lucide-react";
 
 import { GenerateFileModal } from "@/components/rfq/generate-file-modal";
 import { QuickEmailModal } from "@/components/rfq/quick-email-modal";
+import { ProcessFileModal } from "@/components/rfq/process-file-modal";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  INQUIRY_RECEIVED:     { label: "Đang xử lý AI",         color: "bg-blue-50 text-blue-700 border-blue-200" },
-  RFO_PENDING_ADMIN:    { label: "Chờ duyệt RFO",          color: "bg-amber-50 text-amber-700 border-amber-200" },
-  RFO_SENT_TO_SUPPLIER: { label: "Đã gửi Hãng",           color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  SUPPLIER_QUOTED:      { label: "Hãng đã báo giá",        color: "bg-violet-50 text-violet-700 border-violet-200" },
-  CBU_PENDING_ADMIN:    { label: "Chờ nhập phí CBU",       color: "bg-orange-50 text-orange-700 border-orange-200" },
-  QUOTATION_DRAFTED:    { label: "Đã tạo Báo giá nháp",   color: "bg-teal-50 text-teal-700 border-teal-200" },
-  QUOTED_TO_CLIENT:     { label: "Đã phát hành",           color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  INQUIRY_RECEIVED:     { label: "Yêu cầu Mới",          bg: "bg-slate-100",   text: "text-slate-700",   border: "border-slate-200" },
+  RFO_PENDING_ADMIN:    { label: "Chờ duyệt RFO",        bg: "bg-slate-100",   text: "text-slate-700",   border: "border-slate-200" },
+  RFO_SENT_TO_SUPPLIER: { label: "Gửi hỏi giá Hãng",     bg: "bg-sky-50",      text: "text-sky-700",     border: "border-sky-200" },
+  SUPPLIER_QUOTED:      { label: "Đã có phí Hãng",       bg: "bg-indigo-50",   text: "text-indigo-700",  border: "border-indigo-200" },
+  CBU_PENDING_ADMIN:    { label: "Chờ tính CBU",         bg: "bg-violet-50",   text: "text-violet-700",  border: "border-violet-200" },
+  QUOTATION_DRAFTED:    { label: "Báo giá Nháp",         bg: "bg-teal-50",     text: "text-teal-700",    border: "border-teal-200" },
+  QUOTED_TO_CLIENT:     { label: "Đã gửi Khách",         bg: "bg-emerald-50",  text: "text-emerald-700", border: "border-emerald-200" },
 };
 
 const STATUS_KEYS = Object.keys(STATUS_LABELS);
+
+const fmtUSD = (v: number) =>
+  v.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (dString: string) => {
+  const d = new Date(dString);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+};
 
 export default function RFQListPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeStatus = searchParams.get("status") || "";
-  const [rfqs, setRfqs] = useState<{ id: string; rfqCode: string; isProcessing: boolean; extractionError: string | null; status: string; createdAt: string; client: { name: string; companyName: string } | null }[]>([]);
+  
+  const [rfqs, setRfqs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchRfqs = useCallback(async () => {
     setLoading(true);
@@ -50,166 +62,283 @@ export default function RFQListPage() {
     }
   };
 
+  const filteredRfqs = useMemo(() => {
+    if (!searchQuery.trim()) return rfqs;
+    const lowerQ = searchQuery.toLowerCase();
+    return rfqs.filter(rfq => 
+      (rfq.rfqCode || "").toLowerCase().includes(lowerQ) ||
+      (rfq.client?.companyName || "").toLowerCase().includes(lowerQ) ||
+      (rfq.client?.name || "").toLowerCase().includes(lowerQ)
+    );
+  }, [rfqs, searchQuery]);
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="space-y-6 max-w-[1400px] mx-auto">
+      {/* Header & Compact Toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý Đơn hàng RFQ</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{rfqs.length} đơn hàng{activeStatus ? ` — ${STATUS_LABELS[activeStatus]?.label}` : " (tất cả)"}</p>
+          <h1 className="text-2xl font-bold text-slate-900">Quản lý Đơn hàng RFQ</h1>
+          <p className="text-slate-500 text-sm mt-1">Quản lý và theo dõi toàn bộ quy trình báo giá B2B</p>
         </div>
 
-        {/* ===== 4-BUTTON ACTION BAR ===== */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Tiếp nhận Inquiry — Primary */}
+        {/* ── 5-Button Compact Action Toolbar ── */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* 1 — Tiếp nhận Inquiry (Primary Dark) */}
           <Link
             href="/rfq/new"
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-all"
+            className="inline-flex h-8 items-center gap-1.5 px-3 rounded-lg border border-slate-900 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium shadow-sm transition-all"
           >
+            <Plus className="w-3.5 h-3.5" />
             Tiếp nhận Inquiry
           </Link>
 
-          {/* Xử lý Quote — Secondary (redirect to workspace) */}
-          <Link
-            href="/rfq/process-quote"
-            className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all"
-          >
-            <svg className="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            Xử lý Quote
-          </Link>
+          {/* 2 — Xử lý File (Quote & PO) */}
+          <ProcessFileModal />
 
-          {/* Tạo file — Secondary with Dropdown Modal */}
+          {/* 3 — Tính CBU */}
+          <CbuCalcModal rfqs={rfqs} />
+
+          {/* 4 — Tạo File PDF */}
           <GenerateFileModal />
 
-          {/* Gửi mail — Secondary with Email Dispatch Modal */}
+          {/* 5 — Soạn / Gửi Mail */}
           <QuickEmailModal />
         </div>
       </div>
 
+      {/* Search & Filter Bar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+        {/* Search */}
+        <div className="relative w-full md:w-[320px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input 
+            type="text"
+            placeholder="Tìm theo Mã RFO / Tên Khách hàng..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-9 pl-9 pr-3 rounded-lg border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+          />
+        </div>
 
-      {/* Status Filter Tabs */}
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href="/rfq"
-          className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
-            !activeStatus
-              ? "bg-gray-100 text-gray-900 border-gray-300 shadow-sm"
-              : "bg-white text-gray-500 border-gray-200 hover:text-gray-900 hover:bg-gray-50"
-          }`}
-        >
-          Tất cả
-        </Link>
-        {STATUS_KEYS.map((s) => (
+        {/* Status Filters */}
+        <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
           <Link
-            key={s}
-            href={`/rfq?status=${s}`}
-            className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all ${
-              activeStatus === s
-                ? STATUS_LABELS[s].color + " border-current shadow-sm"
-                : "bg-white text-gray-500 border-gray-200 hover:text-gray-900 hover:bg-gray-50"
+            href="/rfq"
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${
+              !activeStatus
+                ? "bg-slate-800 text-white border-slate-800 shadow-sm"
+                : "bg-white text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-50"
             }`}
           >
-            {STATUS_LABELS[s].label}
+            Tất cả
           </Link>
-        ))}
+          {STATUS_KEYS.map((s) => {
+            const st = STATUS_LABELS[s];
+            return (
+              <Link
+                key={s}
+                href={`/rfq?status=${s}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap ${
+                  activeStatus === s
+                    ? `${st.bg} ${st.text} border-${st.bg.replace("bg-", "")} shadow-sm`
+                    : "bg-white text-slate-600 border-slate-200 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+              >
+                {st.label}
+              </Link>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50/50">
-              {["Mã RFO", "Khách hàng", "Công ty", "Trạng thái", "Ngày tạo", "Thao tác"].map((h) => (
-                <th key={h} className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-5 py-4">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading ? (
-              <tr><td colSpan={6} className="text-center py-16">Đang tải...</td></tr>
-            ) : (!Array.isArray(rfqs) || rfqs.length === 0) ? (
-              <tr>
-                <td colSpan={6} className="text-center py-16 text-gray-500">
-                  <div className="flex flex-col items-center gap-3">
-                    <svg className="w-10 h-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-sm">Chưa có đơn hàng nào.</p>
-                    <Link href="/rfq/new" className="text-xs text-blue-600 hover:underline">
-                      Tiếp nhận Inquiry đầu tiên →
-                    </Link>
-                  </div>
-                </td>
+      {/* Historical RFQ Data Table */}
+      <div className="bg-white border border-slate-200/80 rounded-xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/50">
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Mã RFO</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Dự án / Khách hàng</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Hãng Cung Cấp</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Ngày tạo</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Tổng Giá Trị ($)</th>
+                <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Trạng thái</th>
+                <th className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider px-5 py-3.5">Thao tác</th>
               </tr>
-            ) : (
-              (Array.isArray(rfqs) ? rfqs : []).map((rfq) => {
-                if (!rfq) return null;
-                const statusInfo = STATUS_LABELS[rfq?.status] || { label: rfq?.status || "Unknown", color: "bg-gray-100 text-gray-500 border-gray-200" };
-                return (
-                  <tr key={rfq?.id || Math.random()} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4">
-                      <span className="font-mono text-xs text-blue-600 font-semibold">{rfq?.rfqCode || "—"}</span>
-                      {rfq?.isProcessing && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs text-gray-500">
-                          <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          AI đang xử lý...
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={7} className="text-center py-16 text-slate-500 animate-pulse">Đang tải dữ liệu...</td></tr>
+              ) : filteredRfqs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-20">
+                    <div className="flex flex-col items-center justify-center text-slate-400">
+                      <Inbox className="w-10 h-10 mb-3 opacity-40" />
+                      <p className="text-sm font-medium mb-4 text-slate-500">Chưa có đơn hàng nào.</p>
+                      <Link href="/rfq/new" className="inline-flex h-9 items-center px-4 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-semibold text-xs transition-colors">
+                        <Plus className="w-4 h-4 mr-1.5" />
+                        Tạo Inquiry đầu tiên
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredRfqs.map((rfq) => {
+                  const st = STATUS_LABELS[rfq.status] || { label: rfq.status || "Unknown", bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" };
+                  return (
+                    <tr key={rfq.id} className="hover:bg-slate-50/80 transition-colors group">
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs text-slate-900 font-semibold bg-slate-100 px-2 py-1 rounded">{rfq.rfqCode || "—"}</span>
+                        {rfq.isProcessing && (
+                          <span className="ml-2 inline-flex items-center gap-1 text-[10px] uppercase font-bold text-blue-500">
+                            <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                            AI Processing
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="text-slate-900 font-medium text-sm">{rfq.opportunityName || rfq.client?.name || "—"}</div>
+                        <div className="text-slate-500 text-xs truncate max-w-[200px]">{rfq.client?.companyName || "—"}</div>
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 text-sm">{rfq.supplierName || "—"}</td>
+                      <td className="px-5 py-3.5 text-slate-500 text-sm font-medium">
+                        {rfq.createdAt ? fmtDate(rfq.createdAt) : "N/A"}
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <span className="text-slate-900 font-mono text-sm font-semibold">
+                          {(rfq.totalRevenueUsd || 0) > 0 ? fmtUSD(rfq.totalRevenueUsd) : "—"}
                         </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-gray-900 text-sm font-medium">{rfq?.client?.name || "—"}</td>
-                    <td className="px-5 py-4 text-gray-500 text-sm">{rfq?.client?.companyName || "—"}</td>
-                    <td className="px-5 py-4">
-                      <span className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg font-semibold border ${statusInfo.color}`}>
-                        <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                        {statusInfo.label}
-                      </span>
-                      {rfq?.extractionError && (
-                        <p className="text-xs text-red-500 mt-1 truncate max-w-[160px]" title={rfq.extractionError}>
-                          {rfq.extractionError.substring(0, 40)}...
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-5 py-4 text-gray-500 text-sm">
-                      {rfq?.createdAt ? new Date(rfq.createdAt).toLocaleDateString("vi-VN") : "N/A"}
-                    </td>
-                    <td className="px-5 py-4">
-                      {rfq?.extractionError ? (
-                        <button
-                          onClick={() => handleRetry(rfq.id)}
-                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-all font-medium"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                          </svg>
-                          Thử lại
-                        </button>
-                      ) : (
-                        <Link
-                          href={`/rfq/${rfq?.id}/rfo-review`}
-                          className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900 border border-gray-200 transition-all font-medium"
-                        >
-                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                          Xem RFO
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                      </td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex flex-col items-start gap-1">
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md font-medium border ${st.bg} ${st.text} ${st.border}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${st.text.replace("text-", "bg-")}`} />
+                            {st.label}
+                          </span>
+                          {rfq.extractionError && (
+                            <span className="text-[10px] text-red-500 truncate max-w-[150px] font-medium" title={rfq.extractionError}>
+                              ⚠ Lỗi: {rfq.extractionError.substring(0, 30)}...
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-right">
+                        {rfq.extractionError ? (
+                          <button
+                            onClick={() => handleRetry(rfq.id)}
+                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700 transition-colors"
+                            title="Thử lại"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <Link
+                              href={`/rfq/${rfq.id}/cbu-calc`}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-500 hover:text-slate-900 shadow-sm transition-all"
+                              title="Tính CBU"
+                            >
+                              <Calculator className="w-4 h-4" />
+                            </Link>
+                            <Link
+                              href={rfq.status === 'QUOTATION_DRAFTED' || rfq.status === 'QUOTED_TO_CLIENT' 
+                                ? `/rfq/${rfq.id}/quote-preview` 
+                                : rfq.status === 'CBU_PENDING_ADMIN'
+                                ? `/rfq/${rfq.id}/cbu-calc`
+                                : `/rfq/${rfq.id}/rfo-review`}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-500 hover:text-slate-900 shadow-sm transition-all"
+                              title="Xem chi tiết"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Link>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
+  );
+}
+
+function CbuCalcModal({ rfqs }: { rfqs: any[] }) {
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    const target = rfqs.find(r => (r.rfqCode || "").toLowerCase() === code.trim().toLowerCase());
+    if (target) {
+      setError(null);
+      setOpen(false);
+      setCode("");
+      router.push(`/rfq/${target.id}/cbu-calc`);
+    } else {
+      const msg = `❌ Không tìm thấy đơn hàng nào có Mã RFQ: ${code}. Vui lòng kiểm tra lại!`;
+      setError(msg);
+      // Fallback to native alert as a pseudo-toast if there is no global toast manager
+      alert(msg);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(val) => {
+      setOpen(val);
+      if (!val) { setCode(""); setError(null); }
+    }}>
+      <DialogTrigger className="inline-flex h-8 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-sm transition-all">
+        <Calculator className="w-3.5 h-3.5" />
+        Tính CBU
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[420px] rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-lg flex items-center gap-2">
+            <span className="text-2xl">🧮</span>
+            Tính CBU Đơn Hàng
+          </DialogTitle>
+          <DialogDescription>
+            Nhập Mã RFQ (Ví dụ: AC0485, AC0001...) để tra cứu và chuyển ngay đến trang Tính CBU.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {error && (
+            <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg font-medium">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Mã RFQ cần tìm</label>
+            <input
+              autoFocus
+              value={code}
+              onChange={e => {
+                setCode(e.target.value);
+                if (error) setError(null);
+              }}
+              placeholder="Gõ mã RFQ rồi nhấn Enter..."
+              className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+            />
+          </div>
+          <button 
+            type="submit" 
+            disabled={!code.trim()}
+            className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Xác nhận & Chuyển sang CBU Calc
+          </button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

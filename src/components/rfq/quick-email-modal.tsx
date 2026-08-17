@@ -1,5 +1,7 @@
 "use client";
 
+import { Mail } from "lucide-react";
+
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Dialog,
@@ -288,9 +290,9 @@ export function QuickEmailModal() {
 
   return (
     <Dialog open={open} onOpenChange={(val) => { setOpen(val); if (!val) handleReset(); }}>
-      <DialogTrigger className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-gray-50 text-gray-700 text-sm font-semibold rounded-xl border border-gray-200 shadow-sm transition-all">
-        <span className="text-base">✉️</span>
-        Gửi mail
+      <DialogTrigger className="inline-flex h-8 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-sm transition-all">
+        <Mail className="w-3.5 h-3.5" />
+        Gửi Mail Nhanh
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-[780px] max-h-[90vh] overflow-hidden flex flex-col">

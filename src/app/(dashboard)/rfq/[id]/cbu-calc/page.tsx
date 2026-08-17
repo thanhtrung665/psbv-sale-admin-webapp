@@ -19,9 +19,9 @@ const parseNumInput = (val: any) => {
 };
 
 // Tailwind class for inputs
-const NUM_INPUT_CLASS = "w-full px-2 py-1 border border-slate-200 rounded text-right text-xs font-mono focus:outline-none hover:border-slate-300 focus:border-slate-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none bg-white";
-const GLOBAL_INPUT_CLASS = "w-full border border-slate-200 rounded p-1.5 text-sm text-right font-mono focus:ring-2 focus:ring-blue-500/50 outline-none";
-const GLOBAL_SELECT_CLASS = "w-full border border-slate-200 rounded p-1.5 text-sm focus:ring-2 focus:ring-blue-500/50 outline-none bg-white";
+const NUM_INPUT_CLASS = "w-full h-8 px-2.5 rounded-md border border-slate-200 bg-slate-50/50 text-right text-xs font-mono focus:outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 hover:border-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+const GLOBAL_INPUT_CLASS = "w-full h-10 px-3 rounded-md border border-slate-300 shadow-sm focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-slate-400 bg-white";
+const GLOBAL_SELECT_CLASS = "w-full h-10 px-3 rounded-md border border-slate-300 shadow-sm focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 hover:border-slate-400 bg-white";
 
 export default function CBUCalcPage({ params }: { params: { id: string } }) {
   const { id: rfqId } = params;
@@ -196,6 +196,16 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
     setInputs(prev => ({ ...prev, [key]: value }));
   };
 
+  const calculateTargetMarginAll = () => {
+    const margin = parseNumInput(inputs.targetMarginPercent);
+    if (!margin || margin <= 0) return;
+    const newInputs = { ...inputs };
+    items.forEach((item) => {
+      newInputs[`${item.id}_marginPercent`] = margin.toString();
+    });
+    setInputs(newInputs);
+  };
+
   // ── Save handler ─────────────────────────────────────────────────────
   const handleSave = async (finalize: boolean) => {
     if (!cbuResult) return;
@@ -309,37 +319,38 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
   if (!cbuResult) return null;
 
   return (
-    <div className="space-y-5 max-w-[1700px] mx-auto pb-12">
-      {/* ── Header ───────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
+    <div className="flex items-center justify-center min-h-[calc(100vh-2rem)] p-4">
+      <div className="sm:max-w-[1400px] w-[95vw] max-h-[90vh] flex flex-col p-0 gap-0 rounded-2xl overflow-hidden border border-slate-200/80 shadow-2xl bg-white">
+        {/* ── Header ───────────────────────────────────────────────────── */}
+        <div className="p-5 border-b border-slate-200/80 flex items-center justify-between bg-white shrink-0">
+          <div className="flex items-center gap-2">
             <Link href="/rfq" className="text-slate-400 hover:text-slate-700 transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </Link>
-            <h1 className="text-xl font-bold text-slate-900">Tính Toán CBU - Cấu Trúc Mới</h1>
+            <h1 className="text-base font-semibold text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="text-blue-600"><svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><line x1="8" y1="9" x2="16" y2="9"></line><line x1="12" y1="13" x2="16" y2="13"></line><line x1="8" y1="13" x2="8.01" y2="13"></line><line x1="12" y1="17" x2="16" y2="17"></line><line x1="8" y1="17" x2="8.01" y2="17"></line></svg></span>
+              Tính toán CBU & Chi phí DDP
+            </h1>
+            <span className="ml-3 px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs font-mono font-medium">{rfqCode}</span>
           </div>
-          <p className="text-slate-500 text-sm">
-            <span className="font-semibold text-blue-600">{rfqCode}</span>
-            {clientName && <> · {clientName}</>}
-            {companyName && <> — {companyName}</>}
-            {supplierName && <> · <span className="font-medium text-slate-700">{supplierName}</span></>}
-          </p>
+          
+          <div className="flex gap-3">
+             <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">Inco:</span>
+                <span className="text-xs font-medium text-slate-800">{incoTerm || "-"}</span>
+             </div>
+             <div className="w-px h-4 bg-slate-200 self-center"></div>
+             <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-400 font-semibold uppercase">Pay:</span>
+                <span className="text-xs font-medium text-slate-800">{paymentTerm || "-"}</span>
+             </div>
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-           <div className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase">Incoterm</span>
-              <span className="text-sm font-medium text-slate-800">{incoTerm || "-"}</span>
-           </div>
-           <div className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 flex flex-col">
-              <span className="text-[10px] text-slate-400 font-semibold uppercase">Payment</span>
-              <span className="text-sm font-medium text-slate-800">{paymentTerm || "-"}</span>
-           </div>
-        </div>
-      </div>
+
+        {/* ── Body ──────────────────────────────────────────────────────── */}
+        <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50 space-y-5">
 
       {/* ── Alerts ────────────────────────────────────────────────────── */}
       {error && (
@@ -371,110 +382,143 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
       )}
 
       {/* ── Settings Panel ───────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Basic Settings */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
-          <h3 className="font-semibold text-slate-800 border-b pb-2">Tỷ giá & Điều kiện</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Tỷ giá VND/USD</label>
-              <input type="text" inputMode="decimal" value={inputs.exchangeRate} onChange={(e) => handleInput("exchangeRate", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tỷ giá & Điều kiện */}
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-5">
+          <h3 className="font-semibold text-slate-800 border-b pb-3">Cài đặt Tỷ giá & Điều kiện</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Tỷ giá VND/USD</label>
+              <input type="text" inputMode="decimal" value={inputs.exchangeRate} onChange={(e) => handleInput("exchangeRate", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Booking Rate</label>
-              <input type="text" inputMode="decimal" value={inputs.bookingExchangeRate} onChange={(e) => handleInput("bookingExchangeRate", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Booking Rate</label>
+              <input type="text" inputMode="decimal" value={inputs.bookingExchangeRate} onChange={(e) => handleInput("bookingExchangeRate", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Làm tròn VND</label>
-              <input type="text" inputMode="decimal" value={inputs.vndRoundingStep} onChange={(e) => handleInput("vndRoundingStep", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Làm tròn VND</label>
+              <input type="text" inputMode="decimal" value={inputs.vndRoundingStep} onChange={(e) => handleInput("vndRoundingStep", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Lb to Kg</label>
-              <input type="text" inputMode="decimal" value={inputs.lbToKg} onChange={(e) => handleInput("lbToKg", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Lb to Kg</label>
+              <input type="text" inputMode="decimal" value={inputs.lbToKg} onChange={(e) => handleInput("lbToKg", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Nguồn hàng</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Nguồn hàng</label>
               <select value={inputs.goodsOrigin} onChange={(e) => handleInput("goodsOrigin", e.target.value)} className={GLOBAL_SELECT_CLASS}>
                 <option value="Oversea">Oversea</option>
                 <option value="Local">Local</option>
               </select>
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Quốc gia đích</label>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Quốc gia đích</label>
               <input type="text" value={inputs.destinationCountry} onChange={(e) => handleInput("destinationCountry", e.target.value)} className={GLOBAL_INPUT_CLASS} />
             </div>
           </div>
         </div>
 
         {/* Logistics Settings */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4">
-          <h3 className="font-semibold text-slate-800 border-b pb-2">Logistics Inputs ($)</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Freight (All-in)</label>
-              <input type="text" inputMode="decimal" value={inputs.freightCost} onChange={(e) => handleInput("freightCost", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-5">
+          <h3 className="font-semibold text-slate-800 border-b pb-3">Logistics Inputs ($)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Freight (All-in)</label>
+              <input type="text" inputMode="decimal" value={inputs.freightCost} onChange={(e) => handleInput("freightCost", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Freight Fixed</label>
-              <input type="text" inputMode="decimal" value={inputs.freightFixed} onChange={(e) => handleInput("freightFixed", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50" : "")} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Freight Fixed</label>
+              <input type="text" inputMode="decimal" value={inputs.freightFixed} onChange={(e) => handleInput("freightFixed", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + " text-right font-mono" + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50 cursor-not-allowed" : "")} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Rate Per Kg</label>
-              <input type="text" inputMode="decimal" value={inputs.freightRatePerKg} onChange={(e) => handleInput("freightRatePerKg", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50" : "")} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Rate Per Kg</label>
+              <input type="text" inputMode="decimal" value={inputs.freightRatePerKg} onChange={(e) => handleInput("freightRatePerKg", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + " text-right font-mono" + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50 cursor-not-allowed" : "")} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Chargeable Wt</label>
-              <input type="text" inputMode="decimal" value={inputs.chargeableWeightKg} onChange={(e) => handleInput("chargeableWeightKg", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50" : "")} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Chargeable Wt</label>
+              <input type="text" inputMode="decimal" value={inputs.chargeableWeightKg} onChange={(e) => handleInput("chargeableWeightKg", e.target.value)} disabled={parseNumInput(inputs.freightCost) > 0} className={GLOBAL_INPUT_CLASS + " text-right font-mono" + (parseNumInput(inputs.freightCost) > 0 ? " opacity-50 bg-slate-50 cursor-not-allowed" : "")} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Clearance Cost</label>
-              <input type="text" inputMode="decimal" value={inputs.clearanceCost} onChange={(e) => handleInput("clearanceCost", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Clearance Cost</label>
+              <input type="text" inputMode="decimal" value={inputs.clearanceCost} onChange={(e) => handleInput("clearanceCost", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Inland Cost</label>
-              <input type="text" inputMode="decimal" value={inputs.inlandCost} onChange={(e) => handleInput("inlandCost", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Inland Cost</label>
+              <input type="text" inputMode="decimal" value={inputs.inlandCost} onChange={(e) => handleInput("inlandCost", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
           </div>
         </div>
 
         {/* Bank & Finance Settings */}
-        <div className="bg-white border border-slate-200 rounded-lg p-4 space-y-4 lg:col-span-2">
-          <h3 className="font-semibold text-slate-800 border-b pb-2">Bank & Finance Inputs</h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-5 lg:col-span-2">
+          <h3 className="font-semibold text-slate-800 border-b pb-3">Bank, Finance & Margin Inputs</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Import Tax %</label>
+              <input type="text" inputMode="decimal" value={inputs.importTaxPercent} onChange={(e) => handleInput("importTaxPercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Handling Fee %</label>
+              <input type="text" inputMode="decimal" value={inputs.handlingFeePercent} onChange={(e) => handleInput("handlingFeePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Bank Fee %</label>
+              <input type="text" inputMode="decimal" value={inputs.bankFeePercent} onChange={(e) => handleInput("bankFeePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Capital Fee %</label>
+              <input type="text" inputMode="decimal" value={inputs.capitalFeePercent} onChange={(e) => handleInput("capitalFeePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
+            </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-2">
+              <label className="text-sm font-semibold text-blue-600">Target Margin %</label>
+              <input type="text" inputMode="decimal" value={inputs.targetMarginPercent} onChange={(e) => handleInput("targetMarginPercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono !border-blue-400 focus:!ring-blue-500 font-bold"} />
+            </div>
+            <div className="flex flex-col gap-1.5 lg:col-span-2 justify-end">
+              <button 
+                onClick={calculateTargetMarginAll}
+                className="w-full h-10 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-md shadow-sm transition-all flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                Áp dụng Target Margin cho tất cả Items
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-6 border-t border-slate-100">
             {/* Remittance */}
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Remit Rate (%)</label>
-              <input type="text" inputMode="decimal" value={inputs.remittanceRatePercent} onChange={(e) => handleInput("remittanceRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Remit Rate (%)</label>
+              <input type="text" inputMode="decimal" value={inputs.remittanceRatePercent} onChange={(e) => handleInput("remittanceRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Min Remit ($)</label>
-              <input type="text" inputMode="decimal" value={inputs.minRemittanceFeeUsd} onChange={(e) => handleInput("minRemittanceFeeUsd", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Min Remit ($)</label>
+              <input type="text" inputMode="decimal" value={inputs.minRemittanceFeeUsd} onChange={(e) => handleInput("minRemittanceFeeUsd", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">VAT Factor</label>
-              <input type="text" inputMode="decimal" value={inputs.bankVatFactor} onChange={(e) => handleInput("bankVatFactor", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">VAT Factor</label>
+              <input type="text" inputMode="decimal" value={inputs.bankVatFactor} onChange={(e) => handleInput("bankVatFactor", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
             {/* Receive */}
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Receive Rate (%)</label>
-              <input type="text" inputMode="decimal" value={inputs.receiveRatePercent} onChange={(e) => handleInput("receiveRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Receive Rate (%)</label>
+              <input type="text" inputMode="decimal" value={inputs.receiveRatePercent} onChange={(e) => handleInput("receiveRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Min Receive ($)</label>
-              <input type="text" inputMode="decimal" value={inputs.minReceiveFeeUsd} onChange={(e) => handleInput("minReceiveFeeUsd", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Min Receive ($)</label>
+              <input type="text" inputMode="decimal" value={inputs.minReceiveFeeUsd} onChange={(e) => handleInput("minReceiveFeeUsd", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Receive Base ($)</label>
-              <input type="text" inputMode="decimal" value={inputs.receiveBaseUsd} onChange={(e) => handleInput("receiveBaseUsd", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Receive Base ($)</label>
+              <input type="text" inputMode="decimal" value={inputs.receiveBaseUsd} onChange={(e) => handleInput("receiveBaseUsd", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
             {/* Finance */}
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Financed (%)</label>
-              <input type="text" inputMode="decimal" value={inputs.percentValueFinanced} onChange={(e) => handleInput("percentValueFinanced", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Financed (%)</label>
+              <input type="text" inputMode="decimal" value={inputs.percentValueFinanced} onChange={(e) => handleInput("percentValueFinanced", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
-            <div>
-              <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Interest Rate (%)</label>
-              <input type="text" inputMode="decimal" value={inputs.interestRatePercent} onChange={(e) => handleInput("interestRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS} />
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium text-slate-700">Interest Rate (%)</label>
+              <input type="text" inputMode="decimal" value={inputs.interestRatePercent} onChange={(e) => handleInput("interestRatePercent", e.target.value)} className={GLOBAL_INPUT_CLASS + " text-right font-mono"} />
             </div>
           </div>
         </div>
@@ -744,27 +788,25 @@ export default function CBUCalcPage({ params }: { params: { id: string } }) {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* ── Bottom Action Buttons ─────────────────────────────────────── */}
-      <div className="flex items-center justify-end gap-3 pt-2">
-        <button onClick={() => handleSave(false)} disabled={saving} className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-300 text-slate-700 font-semibold text-sm rounded-lg hover:bg-slate-50 transition-all disabled:opacity-40">
-          Save Draft
-        </button>
-
-        <button onClick={() => handleSave(true)} disabled={saving} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm rounded-lg shadow-sm transition-all">
-          {saving ? (
-            <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-              Đang lưu...
-            </>
-          ) : (
-            <>
-              Complete CBU & Generate Quote
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-            </>
-          )}
-        </button>
+        </div>
+        </div>
+        
+        {/* ── Sticky Footer ─────────────────────────────────────────────── */}
+        <div className="shrink-0 p-4 border-t border-slate-200/80 bg-white flex items-center justify-end gap-3">
+          <Link href="/rfq" className="h-9 px-4 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg flex items-center justify-center transition-colors">
+            Hủy
+          </Link>
+          <button onClick={() => handleSave(true)} disabled={saving} className="h-9 px-5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-all disabled:opacity-50 flex items-center justify-center">
+            {saving ? (
+              <>
+                <svg className="animate-spin w-3.5 h-3.5 mr-2" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                Đang lưu...
+              </>
+            ) : (
+              "💾 Lưu & Cập nhật CBU"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

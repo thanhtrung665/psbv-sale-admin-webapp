@@ -8,7 +8,8 @@ import { Plus, Calculator, Search, Inbox, Eye, FileSearch, Trash2 } from "lucide
 import { GenerateFileModal } from "@/components/rfq/generate-file-modal";
 import { QuickEmailModal } from "@/components/rfq/quick-email-modal";
 import { ProcessFileModal } from "@/components/rfq/process-file-modal";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { RfqSelector } from "@/components/rfq/RfqSelector";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; border: string }> = {
   INQUIRY_RECEIVED:     { label: "Yêu cầu Mới",          bg: "bg-slate-100",   text: "text-slate-700",   border: "border-slate-200" },
@@ -96,7 +97,7 @@ export default function RFQListPage() {
           <ProcessFileModal />
 
           {/* 3 — Tính CBU */}
-          <CbuCalcModal rfqs={rfqs} />
+          <CbuCalcModal />
 
           {/* 4 — Tạo File PDF */}
           <GenerateFileModal />
@@ -269,75 +270,92 @@ export default function RFQListPage() {
   );
 }
 
-function CbuCalcModal({ rfqs }: { rfqs: any[] }) {
+function CbuCalcModal() {
   const [open, setOpen] = useState(false);
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [rfqCode, setRfqCode] = useState("");
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!code.trim()) return;
-    const target = rfqs.find(r => (r.rfqCode || "").toLowerCase() === code.trim().toLowerCase());
-    if (target) {
-      setError(null);
-      setOpen(false);
-      setCode("");
-      router.push(`/rfq/${target.id}/cbu-calc`);
-    } else {
-      const msg = `❌ Không tìm thấy đơn hàng nào có Mã RFQ: ${code}. Vui lòng kiểm tra lại!`;
-      setError(msg);
-      // Fallback to native alert as a pseudo-toast if there is no global toast manager
-      alert(msg);
+  const [navigating, setNavigating] = useState(false);
+  const [navError, setNavError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!rfqCode.trim()) return;
+    setNavigating(true);
+    setNavError(null);
+    try {
+      const res = await fetch(`/api/rfq/search-codes?q=${encodeURIComponent(rfqCode.trim())}`);
+      const data = await res.json();
+      const match = Array.isArray(data)
+        ? data.find((r: any) => r.rfqCode?.toLowerCase() === rfqCode.trim().toLowerCase())
+        : null;
+      if (match?.id) {
+        setOpen(false);
+        setRfqCode("");
+        router.push(`/rfq/${match.id}/cbu-calc`);
+      } else {
+        setNavError(`Không tìm thấy RFQ: ${rfqCode.trim()}`);
+      }
+    } catch {
+      setNavError("Lỗi kết nối, vui lòng thử lại.");
+    } finally {
+      setNavigating(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={(val) => {
       setOpen(val);
-      if (!val) { setCode(""); setError(null); }
+      if (!val) setRfqCode("");
     }}>
       <DialogTrigger className="inline-flex h-8 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-sm transition-all">
         <Calculator className="w-3.5 h-3.5" />
         Tính CBU
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[420px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-lg flex items-center gap-2">
-            <span className="text-2xl">🧮</span>
-            Tính CBU Đơn Hàng
+
+      <DialogContent className="sm:max-w-[450px] p-0 rounded-2xl overflow-hidden border border-slate-200 shadow-2xl bg-white">
+        {/* Header */}
+        <DialogHeader className="px-6 py-5 border-b border-slate-100 bg-white">
+          <DialogTitle className="text-lg font-semibold text-slate-900 tracking-tight">
+            Tính toán CBU &amp; DDP
           </DialogTitle>
-          <DialogDescription>
-            Nhập Mã RFQ (Ví dụ: AC0485, AC0001...) để tra cứu và chuyển ngay đến trang Tính CBU.
-          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {error && (
-            <div className="p-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg font-medium">
-              {error}
-            </div>
-          )}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Mã RFQ cần tìm</label>
-            <input
-              autoFocus
-              value={code}
-              onChange={e => {
-                setCode(e.target.value);
-                if (error) setError(null);
-              }}
-              placeholder="Gõ mã RFQ rồi nhấn Enter..."
-              className="w-full h-10 px-3.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono"
+
+        {/* Body */}
+        <div className="px-6 py-6 bg-slate-50/30">
+          <label className="text-sm font-medium text-slate-700 mb-2 block">
+            Mã RFQ / Inquiry Code
+          </label>
+          <div className="w-full">
+            <RfqSelector
+              value={rfqCode}
+              onChange={(v) => { setRfqCode(v); setNavError(null); }}
+              placeholder="Nhập hoặc chọn mã RFQ..."
             />
           </div>
-          <button 
-            type="submit" 
-            disabled={!code.trim()}
-            className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-medium text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          {navError && (
+            <p className="mt-2 text-xs text-red-600 font-medium">{navError}</p>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 pb-6 pt-2 bg-slate-50/30 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={!rfqCode.trim() || navigating}
+            className="w-full h-11 text-sm font-bold bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Xác nhận & Chuyển sang CBU Calc
+            <Calculator size={16} />
+            {navigating ? "Đang tìm kiếm..." : "Tính CBU & DDP"}
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="w-full h-9 text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
+          >
+            Hủy
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

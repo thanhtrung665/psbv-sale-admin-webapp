@@ -59,6 +59,13 @@ model RFQ {
   // Thông tin Hãng
   supplierQuoteCode String?      
   supplierName      String?
+  supplierAddress   String?
+  supplierPhone     String?
+  supplierEmail     String?
+
+  // Thông tin PO / MVPO
+  poNumber          String?
+  deliveryDate      DateTime?
   
   // Thông tin Cơ hội & Điều khoản
   opportunityName   String?      // Tên cơ hội kinh doanh (vd: "Gói thầu van VSP")

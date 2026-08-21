@@ -29,6 +29,8 @@ export default function QuotePreviewPage() {
   const [rfq, setRfq] = useState<RFQDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<string | null>(null);
   
   const [to, setTo] = useState("");
   const [cc, setCc] = useState("");
@@ -94,6 +96,35 @@ export default function QuotePreviewPage() {
     }
   };
 
+  // ── Blob PDF download (forces application/pdf MIME, no .txt garbage) ────────
+  const handleDownloadPdf = async () => {
+    if (!pdfUrl) return;
+    setDownloading(true);
+    setDownloadStatus("⏳ Đang tải file PDF...");
+    try {
+      const pdfResponse = await fetch(pdfUrl);
+      if (!pdfResponse.ok) throw new Error(`HTTP ${pdfResponse.status}`);
+      const blob = await pdfResponse.blob();
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([blob], { type: "application/pdf" })
+      );
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName || `Quotation_${rfq?.rfqCode || "Document"}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      setDownloadStatus("✅ Đã tải Báo giá PDF!");
+      setTimeout(() => setDownloadStatus(null), 3000);
+    } catch (err: any) {
+      setDownloadStatus(`❌ Lỗi: ${err.message}`);
+      setTimeout(() => setDownloadStatus(null), 4000);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-10 text-gray-500">Đang tải...</div>;
   }
@@ -122,10 +153,18 @@ export default function QuotePreviewPage() {
             ← Quay lại CBU
           </Link>
           {pdfUrl && (
-            <a href={pdfUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-sm font-medium transition-colors shadow-sm">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-              Tải File PDF
-            </a>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 disabled:opacity-60 text-gray-700 rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              {downloading ? (
+                <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              )}
+              {downloading ? "Đang tải..." : "Tải File PDF"}
+            </button>
           )}
         </div>
       </div>
@@ -244,14 +283,29 @@ export default function QuotePreviewPage() {
               PDF Live Preview
             </h2>
             {pdfUrl && (
-              <a 
-                href={`/api/download-pdf?url=${encodeURIComponent(pdfUrl)}&filename=${encodeURIComponent(fileName)}`}
-                download
-                className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1.5 rounded transition-colors shadow-sm"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                📥 Tải PDF xuống
-              </a>
+              <div className="flex items-center gap-2">
+                {downloadStatus && (
+                  <span className="text-xs font-medium text-slate-600 px-1">{downloadStatus}</span>
+                )}
+                {/* Open in new tab — for viewing */}
+                <a
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 px-2.5 py-1.5 rounded transition-colors shadow-sm"
+                >
+                  🔗 Mở tab mới
+                </a>
+                {/* Blob download — forces application/pdf MIME type */}
+                <button
+                  onClick={handleDownloadPdf}
+                  disabled={downloading}
+                  className="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-60 px-2.5 py-1.5 rounded transition-colors shadow-sm"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  {downloading ? "Đang tải..." : "📥 Tải PDF xuống"}
+                </button>
+              </div>
             )}
           </div>
           

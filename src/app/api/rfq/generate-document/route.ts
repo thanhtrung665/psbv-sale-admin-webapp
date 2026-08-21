@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { rfqCode, docType } = body as { rfqCode: string; docType: DocType };
+    const { rfqCode, docType, overrides } = body as { rfqCode: string; docType: DocType; overrides?: Record<string, unknown> };
 
     if (!rfqCode || !rfqCode.trim()) {
       return NextResponse.json(
@@ -51,56 +51,143 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const totalAmount = (rfq.items || []).reduce((sum, item) => sum + (Number(item.ddpPriceUsd || 0) * Number(item.qty || 0)), 0);
-    const totalWeight = (rfq.items || []).reduce((sum, item) => sum + (Number(item.netWeightLbs || 0)), 0);
-
-    const payload = {
-      client_name: rfq?.client?.companyName || rfq?.client?.name || "",
-      client_address: rfq?.client?.address || "",
-      client_tel: rfq?.client?.phone || "",
-      client_attn: rfq?.client?.name || "",
-      client_email: rfq?.client?.email || "",
-      cinq_ref: rfq?.opportunityName ? `Enquiry: ${rfq.opportunityName}` : "",
-      quote_no: rfq?.rfqCode || "",
-      quote_date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-'),
-      job_file: rfq?.rfqCode || "",
-      sales_director: "Vo Huu Trong",
-      sales_pic: "Vu Trong Hung",
-      currency: "$",
-      currency_code: "USD",
-      min_rows: 8,
-      items: (rfq.items || []).map((item: any) => ({
-        part_no: item?.standardPartNo || item?.rawPartNumber || "",
-        brand_origin: rfq?.supplierName ? `${rfq.supplierName}/USA` : item?.supplier || "USA",
-        description: item?.rawDescription || item?.description || "",
-        leadtime: "1-2 days",
-        quantity: String(item?.qty || 0),
-        uom: item?.uom || "Ea",
-        unit_price: Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        amount: Number(item.ddpPriceUsd || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      })),
-      total_weight: `${totalWeight.toLocaleString('en-US', { minimumFractionDigits: 2 })} LBS`,
-      total_label: `${rfq?.incoTerm || 'FCA'} USA Incoterms 2020`,
-      total_amount: totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      term_document: "Declaration of Compliance/Certificate of Origin issued by MNF (Copy)",
-      delivery_terms: `${rfq?.incoTerm || 'FCA'} Houston, USA Incoterms 2020`,
-      payment_terms: rfq?.paymentTerm || "TT 100% Payment with order",
-      quote_validity: "30 days from quote date",
-      min_order_note: "Orders less than 500 USD is subject to a surcharge of 50 USD small ordering costs",
-      price_basis_note: "Price quote based on order in full quantity of item quoted"
-    };
+    // ── Payload & Template ID — branched by docType ──────────────────────────
+    let payload: Record<string, unknown>;
+    let templateId: string;
 
     const rawApiKey = process.env.APITEMPLATE_API_KEY || "";
-    const rawTemplateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID || "";
-    
-    const apiKey = rawApiKey.replace(/['"]/g, '').trim();
-    const templateId = rawTemplateId.replace(/['"]/g, '').trim();
+    const apiKey = rawApiKey.replace(/['"]/g, "").trim();
 
-    if (!apiKey || apiKey === "undefined" || !templateId) {
-      return NextResponse.json({ 
-        success: false, 
-        message: `[VERCEL ENV ERROR] Không tìm thấy API Key hoặc Template ID. Giá trị hiện tại: API_KEY=${apiKey}` 
+    if (!apiKey || apiKey === "undefined") {
+      return NextResponse.json({
+        success: false,
+        message: "[ENV ERROR] Thiếu APITEMPLATE_API_KEY.",
       }, { status: 500 });
+    }
+
+    if (docType === "MVPO_SUPPLIER_PDF") {
+      // ── MVPO: Purchase Order sent to Supplier ──────────────────────────────
+      const rawMvpoTemplateId = process.env.APITEMPLATE_MVPO_TEMPLATE_ID || "";
+      templateId = rawMvpoTemplateId.replace(/['"]/g, "").trim();
+      if (!templateId) {
+        return NextResponse.json({
+          success: false,
+          message: "[ENV ERROR] Thiếu APITEMPLATE_MVPO_TEMPLATE_ID trong biến môi trường.",
+        }, { status: 500 });
+      }
+
+      // If frontend provides a fully-built payload (with edited fields), use it directly.
+      // Otherwise fall back to DB-computed values.
+      if (overrides && typeof overrides === "object" && Object.keys(overrides).length > 0) {
+        payload = overrides;
+      } else {
+        // MVPO total uses supplierUnitPrice (cost price, NOT selling price)
+        const mvpoTotal = (rfq.items || []).reduce(
+          (sum, item) => sum + (Number(item.supplierUnitPrice ?? 0) * Number(item.qty ?? 0)),
+          0
+        );
+
+        payload = {
+          po_date: new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }),
+          po_number: rfq.poNumber || `${rfq.rfqCode}-MVPO`,
+          currency: "USD",
+          job_file: rfq.opportunityName ? `${rfq.rfqCode} - ${rfq.opportunityName}` : rfq.rfqCode,
+          payment_term: rfq.paymentTerm || "30 days since invoice date",
+          delivery_date: rfq.deliveryDate
+            ? new Date(rfq.deliveryDate).toLocaleDateString("en-GB")
+            : "TBA",
+          buyer_name: "Vu Trong Hung",
+          supplier_name: rfq.supplierName || "",
+          supplier_short_name: rfq.supplierName ? rfq.supplierName.split(" ")[0] : "",
+          supplier_address: rfq.supplierAddress || "",
+          supplier_tel: rfq.supplierPhone || "",
+          supplier_email: rfq.supplierEmail || "",
+          items: (rfq.items || []).map((item) => ({
+            part_no: item.standardPartNo || item.rawPartNumber || "",
+            description: item.rawDescription || item.supplierDescription || "",
+            uom: item.uom || "ea",
+            quantity: String(item.qty ?? 0),
+            unit_price: Number(item.supplierUnitPrice ?? 0).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
+            amount: (Number(item.supplierUnitPrice ?? 0) * Number(item.qty ?? 0)).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            }),
+          })),
+          total_amount: mvpoTotal.toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+        };
+      }
+    } else {
+      // ── Quotation (default) ────────────────────────────────────────────────
+      const rawTemplateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID || "";
+      templateId = rawTemplateId.replace(/['"]/g, "").trim();
+      if (!templateId) {
+        return NextResponse.json({
+          success: false,
+          message: "[ENV ERROR] Thiếu APITEMPLATE_QUOTATION_TEMPLATE_ID.",
+        }, { status: 500 });
+      }
+
+      const totalAmount = (rfq.items || []).reduce(
+        (sum, item) => sum + (Number(item.ddpPriceUsd ?? 0) * Number(item.qty ?? 0)),
+        0
+      );
+      const totalWeight = (rfq.items || []).reduce(
+        (sum, item) => sum + Number(item.netWeightLbs ?? 0),
+        0
+      );
+
+      payload = {
+        client_name: rfq?.client?.companyName || rfq?.client?.name || "",
+        client_address: rfq?.client?.address || "",
+        client_tel: rfq?.client?.phone || "",
+        client_attn: rfq?.client?.name || "",
+        client_email: rfq?.client?.email || "",
+        cinq_ref: rfq?.opportunityName ? `Enquiry: ${rfq.opportunityName}` : "",
+        quote_no: rfq?.rfqCode || "",
+        quote_date: new Date()
+          .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+          .replace(/ /g, "-"),
+        job_file: rfq?.rfqCode || "",
+        sales_director: "Vo Huu Trong",
+        sales_pic: "Vu Trong Hung",
+        currency: "$",
+        currency_code: "USD",
+        min_rows: 8,
+        items: (rfq.items || []).map((item) => ({
+          part_no: item?.standardPartNo || item?.rawPartNumber || "",
+          brand_origin: rfq?.supplierName ? `${rfq.supplierName}/USA` : item?.supplier || "USA",
+          description: item?.rawDescription || item?.supplierDescription || "",
+          leadtime: "1-2 days",
+          quantity: String(item?.qty ?? 0),
+          uom: item?.uom || "Ea",
+          unit_price: Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+          amount: Number(item.ddpPriceUsd ?? 0).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+        })),
+        total_weight: `${totalWeight.toLocaleString("en-US", { minimumFractionDigits: 2 })} LBS`,
+        total_label: `${rfq?.incoTerm || "FCA"} USA Incoterms 2020`,
+        total_amount: totalAmount.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+        term_document: "Declaration of Compliance/Certificate of Origin issued by MNF (Copy)",
+        delivery_terms: `${rfq?.incoTerm || "FCA"} Houston, USA Incoterms 2020`,
+        payment_terms: rfq?.paymentTerm || "TT 100% Payment with order",
+        quote_validity: "30 days from quote date",
+        min_order_note: "Orders less than 500 USD is subject to a surcharge of 50 USD small ordering costs",
+        price_basis_note: "Price quote based on order in full quantity of item quoted",
+      };
     }
 
     const apitemplateRes = await fetch(`https://rest.apitemplate.io/v2/create-pdf?template_id=${templateId}`, {

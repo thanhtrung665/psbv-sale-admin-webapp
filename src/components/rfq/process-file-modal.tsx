@@ -13,11 +13,11 @@ import {
   FileSearch, FileUp, X, Zap, CheckCircle2, AlertCircle,
   FileSpreadsheet, FileText, Loader2, FileCheck, Save, ArrowRight, Calculator,
 } from "lucide-react";
-import { SmartRfqSelector } from "./smart-rfq-selector";
+import { RfqSelector } from "./RfqSelector";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabKey = "quote" | "po";
+type TabKey = "quote" | "po" | "split";
 
 interface UploadedFile {
   id: string;
@@ -188,9 +188,16 @@ function QuoteTab({ onClose }: { onClose: () => void }) {
     files.forEach((f) => fd.append("files", f.file));
     if (rfq.trim()) fd.append("rfqCode", rfq.trim());
     try {
-      const res = await fetch("/api/rfq/parse-supplier-quote", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || "Lỗi bóc tách.");
+      const res = await fetch("/api/parse-quote", { method: "POST", body: fd });
+      const rawText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Raw response from server:", rawText);
+        throw new Error("Server không trả về định dạng JSON. Vui lòng kiểm tra Terminal của Server.");
+      }
+      if (!res.ok || !data.success) throw new Error(data.error || data.message || "Lỗi bóc tách.");
       setFiles((p) => p.map((f) => ({ ...f, status: "done" as const })));
       setRows((data.rows || []).map((r: any) => ({
         lineNo: r.lineNo, partNumber: r.partNumber || "", brand: r.brand || "",
@@ -214,8 +221,15 @@ function QuoteTab({ onClose }: { onClose: () => void }) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rfqCode: rfq.trim() || undefined, rfqId: meta?.rfqId || undefined, supplierQuoteCode: meta?.quoteCode || undefined, supplierName: meta?.supplier || undefined, rows }),
     });
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.message || "Lỗi khi lưu.");
+    const rawText = await res.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch (e) {
+      console.error("Raw response from server:", rawText);
+      throw new Error("Server không trả về định dạng JSON. Vui lòng kiểm tra Terminal của Server.");
+    }
+    if (!res.ok || !data.success) throw new Error(data.error || data.message || "Lỗi khi lưu.");
     return data;
   };
 
@@ -248,7 +262,7 @@ function QuoteTab({ onClose }: { onClose: () => void }) {
       {/* Toolbar */}
       <div className="shrink-0 px-5 py-3 border-b border-slate-200/80 flex items-center gap-3 bg-white">
         <div className="w-64 shrink-0">
-          <SmartRfqSelector 
+          <RfqSelector 
             value={rfq} 
             onChange={(code) => setRfq(code)} 
             placeholder="Mã RFQ (vd: AC0485)..."
@@ -403,8 +417,15 @@ function PoTab() {
     if (rfq.trim()) fd.append("rfqCode", rfq.trim());
     try {
       const res = await fetch("/api/rfq/parse-customer-po", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || "Lỗi bóc tách PO.");
+      const rawText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Raw response from server:", rawText);
+        throw new Error("Server không trả về định dạng JSON. Vui lòng kiểm tra Terminal của Server.");
+      }
+      if (!res.ok || !data.success) throw new Error(data.error || data.message || "Lỗi bóc tách PO.");
       setFiles((p) => p.map((f) => ({ ...f, status: "done" as const })));
       setRows(data.rows || []);
       setMeta({ rfqId: data.rfqId || null, poNumber: data.poNumber || "", company: data.customerName || "", delivery: data.deliveryDate || "", currency: data.currency || "USD" });
@@ -422,8 +443,15 @@ function PoTab() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rfqCode: rfq.trim() || undefined, rfqId: meta?.rfqId || undefined, poNumber: meta?.poNumber, customerName: meta?.company, deliveryDate: meta?.delivery, currency: meta?.currency, rows }),
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.message || "Lỗi khi lưu.");
+      const rawText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error("Raw response from server:", rawText);
+        throw new Error("Server không trả về định dạng JSON. Vui lòng kiểm tra Terminal của Server.");
+      }
+      if (!res.ok || !data.success) throw new Error(data.error || data.message || "Lỗi khi lưu.");
       setSaved(true); toast$("success", data.message || "Lưu PO thành công.");
     } catch (err: any) { toast$("error", err.message); }
     finally { setSaving(false); }
@@ -436,7 +464,7 @@ function PoTab() {
       {/* Toolbar */}
       <div className="shrink-0 px-5 py-3 border-b border-slate-200/80 flex items-center gap-3 bg-white">
         <div className="w-64 shrink-0">
-          <SmartRfqSelector 
+          <RfqSelector 
             value={rfq} 
             onChange={(code) => setRfq(code)} 
             placeholder="Mã RFQ (vd: AC0485)..."
@@ -542,6 +570,228 @@ function PoTab() {
   );
 }
 
+// ─── PDF Blob download from base64 ───────────────────────────────────────────
+
+const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: string) => {
+  if (!base64Data) {
+    alert("❌ File này không có dữ liệu (0 trang) nên không thể tải.");
+    return;
+  }
+
+  try {
+    // Dùng native fetch() để chuyển Base64 sang Blob. Tránh dùng atob() dễ gây lỗi RAM và sai mã hóa.
+    const dataUrl = base64Data.startsWith('data:')
+      ? base64Data
+      : `data:application/pdf;base64,${base64Data.replace(/[^A-Za-z0-9+/=]/g, "")}`;
+
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+
+    if (blob.size === 0) throw new Error("File PDF tạo ra bị rỗng (0 byte).");
+
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+  } catch (err: any) {
+    alert(`❌ Lỗi tải file: ${err.message}`);
+  }
+};
+
+// ─── Split Tab ────────────────────────────────────────────────────────────────
+
+interface SplitResult {
+  totalPages: number;
+  splitPageIndex: number;
+  file1: { defaultName: string; label: string; pageRange: string; pageCount: number; base64: string };
+  file2: { defaultName: string; label: string; pageRange: string; pageCount: number; base64: string };
+}
+
+function SplitTab() {
+  const [rfq, setRfq] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [drag, setDrag] = useState(false);
+  const [splitting, setSplitting] = useState(false);
+  const [result, setResult] = useState<SplitResult | null>(null);
+  const [name1, setName1] = useState("");
+  const [name2, setName2] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const toast$ = (type: "success" | "error", msg: string) => {
+    setToast({ type, msg }); setTimeout(() => setToast(null), 4500);
+  };
+
+  const onFileSelected = (f: File) => { setFile(f); setResult(null); setError(null); };
+
+  const handleSplit = async () => {
+    if (!file) return;
+    setSplitting(true); setResult(null); setError(null);
+    const fd = new FormData();
+    fd.append("file", file);
+    if (rfq.trim()) fd.append("rfqCode", rfq.trim());
+    try {
+      const res = await fetch("/api/pdf/split-cipl", { method: "POST", body: fd });
+      const rawText = await res.text();
+      let data: any;
+      try { data = JSON.parse(rawText); } catch { throw new Error("Server trả về phản hồi không hợp lệ."); }
+      if (!res.ok || !data.success) throw new Error(data.error || "Lỗi tách file.");
+      setResult(data);
+      setName1(data.file1.defaultName);
+      setName2(data.file2.defaultName);
+      toast$("success", `✅ Tách thành công! Điểm tách: Trang ${data.splitPageIndex} / ${data.totalPages} trang.`);
+    } catch (err: any) {
+      setError(err.message);
+      toast$("error", err.message);
+    } finally { setSplitting(false); }
+  };
+
+  const downloadBoth = () => {
+    if (!result) return;
+    downloadPdfFromBase64(result.file1.base64, name1);
+    setTimeout(() => downloadPdfFromBase64(result.file2.base64, name2), 600);
+  };
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Toolbar */}
+      <div className="shrink-0 px-5 py-3 border-b border-slate-200/80 flex items-center gap-3 bg-white">
+        <div className="w-64 shrink-0">
+          <RfqSelector value={rfq} onChange={setRfq} placeholder="Mã RFQ (tùy chọn)..." className="h-9 text-xs rounded-lg" />
+        </div>
+
+        {/* Single-file drop zone */}
+        <div className="flex-1">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFileSelected(f); }}
+            onClick={() => inputRef.current?.click()}
+            className={`h-10 border border-dashed rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all px-4 ${
+              drag ? "border-violet-500 bg-violet-50" : file ? "border-emerald-400 bg-emerald-50/50" : "border-slate-200 hover:border-violet-400 bg-slate-50/30"
+            }`}
+          >
+            <FileText size={14} className={file ? "text-emerald-500" : "text-slate-400"} />
+            <span className="text-xs font-medium text-slate-600 truncate max-w-[300px]">
+              {file ? file.name : "Kéo thả hoặc chọn file PDF bộ chứng từ..."}
+            </span>
+            {file && (
+              <X size={12} className="text-slate-400 hover:text-red-500 shrink-0"
+                onClick={(e) => { e.stopPropagation(); setFile(null); setResult(null); }} />
+            )}
+            <input ref={inputRef} type="file" accept=".pdf" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFileSelected(f); e.target.value = ""; }} />
+          </div>
+        </div>
+
+        <button
+          onClick={handleSplit}
+          disabled={!file || splitting}
+          className="shrink-0 h-9 inline-flex items-center gap-1.5 px-4 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        >
+          {splitting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang tách...</> : <>✂️ Cắt & Tách PDF</>}
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && <div className="shrink-0 px-5 pt-3"><Toast t={toast} /></div>}
+
+      {/* Error detail */}
+      {error && !toast && (
+        <div className="shrink-0 mx-5 mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 whitespace-pre-wrap">{error}</div>
+      )}
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50">
+        {result ? (
+          <div className="flex flex-col gap-4 max-w-2xl mx-auto">
+            {/* Info banner */}
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700 font-medium">
+              ✅ Đã tách thành công · Tổng {result.totalPages} trang · Điểm tách: Trang {result.splitPageIndex}
+            </div>
+
+            {/* File 1 — CIPL */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 uppercase tracking-wider">
+                    <FileCheck className="w-4 h-4" />
+                    File 1 · CIPL
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{result.file1.label}</p>
+                </div>
+                <span className="shrink-0 inline-flex items-center h-6 px-2.5 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-semibold text-blue-700 font-mono">
+                  {result.file1.pageRange} · {result.file1.pageCount} trang
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="text" value={name1} onChange={(e) => setName1(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-all" />
+                <button
+                  onClick={() => downloadPdfFromBase64(result.file1.base64, name1)}
+                  className="shrink-0 h-8 inline-flex items-center gap-1.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all shadow-sm"
+                >
+                  📥 Tải CIPL
+                </button>
+              </div>
+            </div>
+
+            {/* File 2 — COO/COC */}
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 uppercase tracking-wider">
+                    <FileCheck className="w-4 h-4" />
+                    File 2 · COO & COC
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{result.file2.label}</p>
+                </div>
+                <span className="shrink-0 inline-flex items-center h-6 px-2.5 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-semibold text-emerald-700 font-mono">
+                  {result.file2.pageRange} · {result.file2.pageCount} trang
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="text" value={name2} onChange={(e) => setName2(e.target.value)}
+                  className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all" />
+                <button
+                  onClick={() => downloadPdfFromBase64(result.file2.base64, name2)}
+                  className="shrink-0 h-8 inline-flex items-center gap-1.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all shadow-sm"
+                >
+                  📥 Tải COO/COC
+                </button>
+              </div>
+            </div>
+
+            {/* Bulk download */}
+            <button
+              onClick={downloadBoth}
+              className="w-full h-10 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white text-xs font-bold transition-all shadow-md"
+            >
+              📦 Tải Cả 2 File PDF
+            </button>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-center gap-3 text-slate-400">
+            <div className="w-16 h-16 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center text-3xl">✂️</div>
+            <p className="text-sm font-semibold text-slate-600">Tách CIPL / COO-COC</p>
+            <p className="text-xs text-slate-400 max-w-xs">
+              Tải lên file PDF bộ chứng từ tổng hợp (CIPL + COO + COC). Hệ thống sẽ tự động tìm trang{" "}
+              <strong className="font-semibold text-slate-600">&quot;Certificate of Compliance&quot;</strong>{" "}
+              và tách thành 2 file riêng biệt.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export function ProcessFileModal() {
@@ -551,6 +801,7 @@ export function ProcessFileModal() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: "quote", label: "Báo giá Hãng" },
     { key: "po",    label: "Đơn hàng PO" },
+    { key: "split", label: "✂️ Tách CIPL" },
   ];
 
   return (
@@ -603,6 +854,9 @@ export function ProcessFileModal() {
           </div>
           <div className={`h-full ${tab === "po" ? "flex flex-col" : "hidden"}`}>
             <PoTab />
+          </div>
+          <div className={`h-full ${tab === "split" ? "flex flex-col" : "hidden"}`}>
+            <SplitTab />
           </div>
         </div>
       </DialogContent>

@@ -1,9 +1,9 @@
 "use client";
 
-import { FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText, ShoppingCart } from "lucide-react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SmartRfqSelector } from "./smart-rfq-selector";
+import { RfqSelector } from "./RfqSelector";
 import {
   Dialog,
   DialogContent,
@@ -13,19 +13,21 @@ import {
 } from "@/components/ui/dialog";
 
 const DOC_TYPES = [
-  { id: "QUOTATION_CLIENT_PDF", label: "File Quotation", icon: FileText, active: true },
-  { id: "MVPO_SUPPLIER_PDF", label: "Đặt hàng MVPO", icon: FileText, active: false },
-  { id: "COMMERCIAL_INVOICE_PDF", label: "File PS", icon: FileText, active: false },
-  { id: "CERTIFICATE_COC_COO_PDF", label: "File CI", icon: FileText, active: false },
+  { id: "QUOTATION_CLIENT_PDF",   label: "File Quotation",   icon: FileText,     active: true  },
+  { id: "MVPO_SUPPLIER_PDF",      label: "Đặt hàng MVPO",    icon: ShoppingCart, active: true  },
+  { id: "COMMERCIAL_INVOICE_PDF", label: "File PS",           icon: FileText,     active: false },
+  { id: "CERTIFICATE_COC_COO_PDF", label: "File CI",          icon: FileText,     active: false },
 ] as const;
+
+type DocTypeId = (typeof DOC_TYPES)[number]["id"];
 
 export function GenerateFileModal() {
   const [open, setOpen] = useState(false);
   const [rfqCode, setRfqCode] = useState("");
-  const [selectedDocType, setSelectedDocType] = useState<string>("QUOTATION_CLIENT_PDF");
+  const [selectedDocType, setSelectedDocType] = useState<DocTypeId>("QUOTATION_CLIENT_PDF");
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   const router = useRouter();
 
   const handleContinue = async () => {
@@ -33,26 +35,31 @@ export function GenerateFileModal() {
       setError("❌ Vui lòng nhập Mã RFQ.");
       return;
     }
-    
+
     setIsChecking(true);
     setError(null);
-    
+
     try {
       const res = await fetch(`/api/rfq/search-codes?q=${encodeURIComponent(rfqCode.trim())}`);
       const data = await res.json();
-      
+
       if (Array.isArray(data)) {
         const match = data.find((d: any) => d.rfqCode.toLowerCase() === rfqCode.trim().toLowerCase());
         if (match) {
           setOpen(false);
-          // Transition to the generation flow
-          router.push(`/rfq/${match.id}/quote-preview`);
+          // Route to dedicated page per document type
+          if (selectedDocType === "MVPO_SUPPLIER_PDF") {
+            router.push(`/rfq/${match.id}/mvpo`);
+          } else {
+            // Default: Quotation preview
+            router.push(`/rfq/${match.id}/quote-preview`);
+          }
           return;
         }
       }
-      
+
       setError("❌ Không tìm thấy mã RFQ này trong hệ thống. Vui lòng kiểm tra lại!");
-    } catch (err) {
+    } catch {
       setError("❌ Lỗi hệ thống khi tìm kiếm. Vui lòng thử lại.");
     } finally {
       setIsChecking(false);
@@ -81,51 +88,59 @@ export function GenerateFileModal() {
         </DialogHeader>
 
         <div className="px-8 py-6 flex flex-col gap-6 bg-slate-50/30">
-          {/* Block 1: Matching Code */}
+          {/* Block 1: RFQ Code */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-semibold text-slate-800">1. Mã RFQ / Inquiry Code</label>
-            <SmartRfqSelector 
+            <RfqSelector
               value={rfqCode}
               onChange={(code) => {
                 setRfqCode(code);
                 if (error) setError(null);
               }}
-              placeholder="Nhập mã RFQ (ví dụ: AC0485, AC0001)..." 
-              className="h-11" 
+              placeholder="Nhập mã RFQ (ví dụ: AC0485, AC0001)..."
+              className="h-11"
             />
             {error && (
               <p className="text-sm text-red-500 font-medium mt-1">{error}</p>
             )}
           </div>
 
-          {/* Block 2: Document Selectors */}
+          {/* Block 2: Document Type */}
           <div className="flex flex-col gap-2">
             <label className="text-sm font-semibold text-slate-800">2. Chọn loại tài liệu cần tạo</label>
             <div className="grid grid-cols-2 gap-3">
               {DOC_TYPES.map((doc) => {
                 const Icon = doc.icon;
-                const isActive = selectedDocType === doc.id;
+                const isSelected = selectedDocType === doc.id;
 
                 if (doc.active) {
                   return (
-                    <div 
+                    <div
                       key={doc.id}
                       onClick={() => setSelectedDocType(doc.id)}
-                      className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all shadow-sm ${isActive ? 'border-2 border-blue-600 bg-blue-50/50' : 'border border-slate-200 bg-white hover:border-blue-300'}`}
+                      className={`p-4 rounded-xl cursor-pointer flex items-center gap-3 transition-all shadow-sm ${
+                        isSelected
+                          ? "border-2 border-blue-600 bg-blue-50/50"
+                          : "border border-slate-200 bg-white hover:border-blue-300"
+                      }`}
                     >
-                      <Icon className="w-5 h-5 text-blue-600 shrink-0" />
-                      <span className={`font-semibold text-sm ${isActive ? 'text-blue-900' : 'text-slate-700'}`}>{doc.label}</span>
+                      <Icon className={`w-5 h-5 shrink-0 ${isSelected ? "text-blue-600" : "text-slate-500"}`} />
+                      <span className={`font-semibold text-sm ${isSelected ? "text-blue-900" : "text-slate-700"}`}>
+                        {doc.label}
+                      </span>
                     </div>
                   );
                 } else {
                   return (
-                    <div 
+                    <div
                       key={doc.id}
                       className="border border-slate-200 bg-slate-100/60 p-4 rounded-xl cursor-not-allowed flex items-center gap-3 opacity-60"
                     >
                       <Icon className="w-5 h-5 text-slate-400 shrink-0" />
                       <span className="font-semibold text-sm text-slate-500">{doc.label}</span>
-                      <span className="bg-slate-200 text-slate-500 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ml-auto">Soon</span>
+                      <span className="bg-slate-200 text-slate-500 text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ml-auto">
+                        Soon
+                      </span>
                     </div>
                   );
                 }
@@ -134,15 +149,15 @@ export function GenerateFileModal() {
           </div>
         </div>
 
-        {/* Footer Action */}
+        {/* Footer */}
         <div className="px-8 py-4 bg-white border-t border-slate-100 flex items-center justify-end gap-3">
-          <button 
+          <button
             onClick={() => setOpen(false)}
             className="h-10 px-5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
           >
             Hủy
           </button>
-          <button 
+          <button
             onClick={handleContinue}
             disabled={isChecking || !rfqCode.trim()}
             className="h-10 px-7 text-sm font-semibold bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -156,9 +171,7 @@ export function GenerateFileModal() {
                 Đang kiểm tra...
               </>
             ) : (
-              <>
-                Tiếp tục ➔
-              </>
+              <>Tiếp tục ➔</>
             )}
           </button>
         </div>

@@ -179,7 +179,7 @@ export default function RFOReviewPage() {
     setSending(false);
     if (res.ok) {
       showToast("Đã phê duyệt & gửi RFO tới Hãng thành công.", "ok");
-      setTimeout(() => router.push(`/rfq/${rfqId}/cbu-calc`), 1800);
+      setTimeout(() => router.push(`/rfq/process-quote?rfqCode=${rfq?.rfqCode || ''}`), 1800);
     } else {
       const data = await res.json();
       showToast(data.error || "Có lỗi xảy ra khi gửi email.", "err");

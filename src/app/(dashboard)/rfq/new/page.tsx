@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PAYMENT_TERMS } from "@/lib/constants";
 
 type Tab = "upload" | "email" | "manual";
 
@@ -22,13 +24,6 @@ interface SupplierSuggestion {
 }
 
 const INCOTERMS = ["EXW", "DDP", "DAP", "FOB", "CIF", "CIP", "FCA", "CFR"];
-const PAYMENT_TERMS = [
-  "100% Advance",
-  "30 Days Net",
-  "50% Advance / 50% Before Shipment",
-  "60 Days Net",
-  "LC at Sight",
-];
 
 const STATUS_COLORS: Record<string, string> = {
   upload: "from-blue-600 to-indigo-600",
@@ -189,7 +184,7 @@ export default function NewRFQPage() {
 
   const handleManualCreate = async () => {
     if (!rfqCode.trim()) return showError("Vui lòng nhập Mã Inquiry (RFO).");
-    if (!clientName || !clientEmail) return showError("Vui lòng điền Tên khách và Email.");
+    if (!clientEmail) return showError("Vui lòng điền Email khách hàng.");
     if (manualItems.some((i) => !i.rawPartNumber)) return showError("Vui lòng điền Part Number cho tất cả dòng sản phẩm.");
     setLoading(true); setError(""); setSuccess("");
     const res = await fetch("/api/rfq/create-manual", {
@@ -369,7 +364,7 @@ export default function NewRFQPage() {
 
           {/* 4. Tên khách hàng */}
           <div>
-            <label className={labelClass}>Tên Khách Hàng *</label>
+            <label className={labelClass}>Tên Khách Hàng</label>
             <input
               type="text"
               value={clientName}
@@ -440,23 +435,18 @@ export default function NewRFQPage() {
           {/* 9. Payment Term */}
           <div>
             <label className={labelClass}>Payment Term</label>
-            <div className="relative">
-              <select
-                value={paymentTerm}
-                onChange={(e) => setPaymentTerm(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">— Chọn Payment Term —</option>
+            <Select value={paymentTerm} onValueChange={(v) => setPaymentTerm(v ?? "")}>
+              <SelectTrigger className="w-full h-10 px-3.5 bg-gray-50 border border-gray-200 rounded-xl text-gray-900 text-sm focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/40 data-[placeholder]:text-gray-400">
+                <SelectValue placeholder="— Chọn Payment Term —" />
+              </SelectTrigger>
+              <SelectContent className="bg-white rounded-xl border border-gray-200 shadow-lg z-[100]">
                 {PAYMENT_TERMS.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                  <SelectItem key={t} value={t} className="text-sm cursor-pointer hover:bg-gray-50">
+                    {t}
+                  </SelectItem>
                 ))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>

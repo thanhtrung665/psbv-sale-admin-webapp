@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import * as xlsx from "xlsx";
 
 // Config defaults
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -54,12 +55,47 @@ CRITICAL RULES:
 5. If a field is not found, use empty string "" for strings or 0 for numbers.
 6. Extract ALL line items — do not skip any.`;
 
+// ─── Excel file handler ───────────────────────────────────────────────────────
+
+function isExcelFile(mimeType: string | undefined, fileName: string | undefined): boolean {
+  if (!mimeType && !fileName) return false;
+  const excelMimeTypes = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/excel",
+  ];
+  const excelExtensions = [".xlsx", ".xls", ".csv"];
+
+  if (mimeType && excelMimeTypes.includes(mimeType)) return true;
+  if (fileName) {
+    const lower = fileName.toLowerCase();
+    return excelExtensions.some((ext) => lower.endsWith(ext));
+  }
+  return false;
+}
+
+function parseExcelToCsv(buffer: Buffer): string {
+  try {
+    const workbook = xlsx.read(buffer, { type: "buffer" });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new Error("No sheets found in Excel file");
+    }
+    const worksheet = workbook.Sheets[firstSheetName];
+    const csvData = xlsx.utils.sheet_to_csv(worksheet);
+    return csvData;
+  } catch (err) {
+    throw new Error(`Failed to parse Excel file: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
 // ─── Parser function ──────────────────────────────────────────────────────────
 
 export async function parseInquiryWithGemini(
   fileBuffer?: Buffer,
   mimeType?: string,
-  textContent?: string
+  textContent?: string,
+  fileName?: string
 ): Promise<ParsedInquiry> {
   const config = await prisma.aiConfig.findFirst({ where: { name: "core" } });
   const apiKey = config?.apiKey || DEFAULT_API_KEY;
@@ -74,20 +110,41 @@ export async function parseInquiryWithGemini(
 
   const parts: any[] = [];
 
-  // Add file part if provided (PDF, image, XLSX as base64)
+  // Handle file input
   if (fileBuffer && mimeType) {
-    parts.push({
-      inlineData: {
-        mimeType,
-        data: fileBuffer.toString("base64"),
-      },
-    });
+    const isExcel = isExcelFile(mimeType, fileName);
+
+    if (isExcel) {
+      // Convert Excel to CSV text and send as text content
+      console.log("[gemini-inquiry] Processing Excel file as CSV");
+      const csvData = parseExcelToCsv(fileBuffer);
+      parts.push({
+        text: `Extract procurement inquiry data from the following CSV/Excel content:\n\n${csvData}`,
+      });
+    } else if (mimeType.includes("pdf") || mimeType.startsWith("image/")) {
+      // Gemini supports PDF and images natively via inlineData
+      parts.push({
+        inlineData: {
+          mimeType,
+          data: fileBuffer.toString("base64"),
+        },
+      });
+      parts.push({ text: "Extract all procurement inquiry data from the provided document." });
+    } else {
+      // Fallback: try as text
+      console.warn(`[gemini-inquiry] Unsupported mimeType: ${mimeType}, treating as text`);
+      parts.push({
+        text: `Extract procurement inquiry data from the following content:\n\n${fileBuffer.toString("utf-8").substring(0, 5000)}`,
+      });
+    }
   }
 
   // Add text content if provided (email paste, or supplemental text)
   if (textContent) {
-    parts.push({ text: `Extract procurement inquiry data from the following content:\n\n${textContent}` });
-  } else {
+    parts.push({
+      text: `Extract procurement inquiry data from the following content:\n\n${textContent}`,
+    });
+  } else if (parts.length === 0) {
     parts.push({ text: "Extract all procurement inquiry data from the provided document." });
   }
 
@@ -117,11 +174,15 @@ export async function parseInquiryWithGemini(
       const supplier = item.supplier || "";
       let standardPartNo = "";
 
-      const { matchStandardPartNumber } = await import("./catalog-matcher");
-      const match = await matchStandardPartNumber(rawDescription, rawPartNumber);
-      if (match) {
-        standardPartNo = match.standardPartNo;
-        uom = match.uom || uom;
+      try {
+        const { matchStandardPartNumber } = await import("./catalog-matcher");
+        const match = await matchStandardPartNumber(rawDescription, rawPartNumber);
+        if (match) {
+          standardPartNo = match.standardPartNo;
+          uom = match.uom || uom;
+        }
+      } catch (matchErr) {
+        console.warn("[gemini-inquiry] Catalog matching failed, skipping:", matchErr);
       }
 
       return {

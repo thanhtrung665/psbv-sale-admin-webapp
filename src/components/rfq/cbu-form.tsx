@@ -391,7 +391,7 @@ export default function CBUForm() {
                       <input type="number" value={item.citPercent} onChange={e => handleItemChange(index, "citPercent", Number(e.target.value))} className="w-16 border border-blue-200 rounded p-1 text-xs bg-white" />
                     </td>
                     <td className="px-4 py-3 bg-blue-50/50">
-                      <input type="number" value={item.marginPercent} onChange={e => handleItemChange(index, "marginPercent", Number(e.target.value))} className="w-16 border border-blue-200 rounded p-1 text-xs bg-white" />
+                      <input type="number" value={item.marginPercent ?? ""} onChange={e => handleItemChange(index, "marginPercent", e.target.value ? Number(e.target.value) : null)} className="w-16 border border-blue-200 rounded p-1 text-xs bg-white" />
                     </td>
                     <td className="px-4 py-3 border-l text-right font-mono font-semibold text-green-600">
                       ${formatMoney(calculatedItem?.ddpPriceUsd)}

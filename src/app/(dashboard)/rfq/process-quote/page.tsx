@@ -98,7 +98,13 @@ export default function ProcessQuotePage() {
         method: "POST",
         body: formData,
       });
-      const data = await res.json();
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error("Server trả về dữ liệu không hợp lệ. Vui lòng thử lại.");
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Có lỗi xảy ra khi bóc tách.");
@@ -114,7 +120,9 @@ export default function ProcessQuotePage() {
       setExtractionDone(true);
       setSuccess(`Bóc tách thành công ${safeItems.length} dòng sản phẩm.`);
     } catch (err: any) {
-      setError(err.message);
+      const errorMsg = err.message || "❌ Không thể bóc tách file, vui lòng thử lại.";
+      setError(errorMsg);
+      console.error("[handleExtract] Error:", err);
     } finally {
       setIsExtracting(false);
     }

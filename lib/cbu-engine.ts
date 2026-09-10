@@ -58,8 +58,12 @@ export interface CBUItemEngineData {
   commissionPercent: number;
   /** % of the COMMISSION amount — not of material cost. 0-100. */
   citPercent: number;
-  /** Target gross margin on the selling price. 0-100. */
-  marginPercent: number;
+  /** Target gross margin on the selling price. 0-100. (Mode 2) */
+  marginPercent?: number | null;
+  /** Fixed margin per unit in USD (Mode 3). Overrides marginPercent if > 0. */
+  marginOverrideUsd?: number;
+  /** Fixed DDP Price input for PRICE_INPUT mode. */
+  targetDdpPriceUsd?: number;
 
   customValues: CustomColumnValues;
 
@@ -162,6 +166,12 @@ export interface CBUGlobals {
   /** Day-count basis. Default 360. */
   daysPerYear?: number;
 
+  /** Target gross margin on the selling price. 0-100. (Mode 1 Fallback) */
+  targetMarginPercent?: number;
+
+  /** CBU Calculation Mode. Default is MARGIN_INPUT. */
+  cbuMode?: "MARGIN_INPUT" | "PRICE_INPUT";
+
   customColumns: CustomColumnDef[];
 }
 
@@ -217,9 +227,12 @@ function g(v: unknown, fallback: number): number {
   return isFinite(num) ? num : fallback;
 }
 
-/** Percent (0-100) -> fraction. */
+/** Percent (0-100 or 0-1) -> fraction.
+ * Auto-detects: values ≤ 1 are treated as fractions (0.03 = 3%), values > 1 as percentages (3 = 3%).
+ */
 function pct(v: unknown): number {
-  return n(v) / 100;
+  const val = n(v);
+  return val <= 1 ? val : val / 100;
 }
 
 const EPS = 1e-9;
@@ -291,6 +304,7 @@ export function calculateCBU(
   const interestRatePercent = g(rawGlobals?.interestRatePercent, 15);
   const financingDays = g(rawGlobals?.financingDays, 15);
   const daysPerYear = g(rawGlobals?.daysPerYear, 360);
+  const targetMarginPercent = g(rawGlobals?.targetMarginPercent, 0);
 
   const customColumnsParsed = parseJsonField<CustomColumnDef[]>(
     rawGlobals?.customColumns,
@@ -327,7 +341,8 @@ export function calculateCBU(
       dutyPercent: n(item?.dutyPercent),
       commissionPercent: n(item?.commissionPercent),
       citPercent: n(item?.citPercent),
-      marginPercent: n(item?.marginPercent),
+      marginPercent: item?.marginPercent !== undefined && item?.marginPercent !== null && !isNaN(Number(item.marginPercent)) ? Number(item.marginPercent) : null,
+      marginOverrideUsd: n(item?.marginOverrideUsd),
       customValues,
       extWeightLbs,
       extWeightKg: extWeightLbs * lbToKg,
@@ -416,10 +431,16 @@ export function calculateCBU(
     const materialPerUnit = item.supplierUnitPrice;
 
     // -- Weight-driven pools: logistics + insurance ---------------------------
-    // The share is per unit, so SUM(qty * share) reconstitutes exactly 100%.
-    const weightShare = totalWeightLbs > 0 ? item.netWeightLbs / totalWeightLbs : 0;
-    const logisticsPerUnit = totalLogisticsUsd * weightShare;
-    const insurancePerUnit = totalInsuranceUsd * weightShare;
+    // EXCEL FORMULA: Pool × (weight_per_unit ÷ totalWeight)
+    // weight_per_unit = netWeightLbs / qty (trọng lượng MỘT đơn vị sản phẩm)
+    // totalWeight = tổng trọng lượng TẤT CẢ sản phẩm (đã × qty)
+    // This gives exact allocation where SUM(logisticsPerUnit × qty) = totalLogisticsUsd
+    const weightPerUnit = qty > 0 ? item.netWeightLbs / qty : 0;
+    // FIX: Use weight per unit / totalWeight (not item.netWeightLbs / totalWeightLbs)
+    // This ensures: logisticsPerUnit × qty correctly sums to totalLogisticsUsd
+    const logisticsPerUnit = totalLogisticsUsd * (totalWeightLbs > 0 ? weightPerUnit / totalWeightLbs : 0);
+    // Insurance: same weight-based allocation from the insurance pool
+    const insurancePerUnit = totalInsuranceUsd * (totalWeightLbs > 0 ? weightPerUnit / totalWeightLbs : 0);
 
     // -- Value-driven pool: bank fee, plus the financing cost ----------------
     const materialShare = totalMaterialUsd > 0 ? materialPerUnit / totalMaterialUsd : 0;
@@ -451,20 +472,40 @@ export function calculateCBU(
       customCostPerUnit;
 
     // -- Closed-form price: breaks the cost -> price -> commission loop -------
-    const m = pct(item.marginPercent);
     const q = pct(item.commissionPercent);
     const c = pct(item.citPercent);
-    const denominator = 1 - m - q * (1 + c);
-
+    
     let ddpPriceUsd: number;
-    if (denominator > EPS) {
-      ddpPriceUsd = roundUp(preMarginPerUnit / denominator, 2);
+    const marginOverrideUsd = n(item.marginOverrideUsd);
+    
+    if (rawGlobals?.cbuMode === "PRICE_INPUT") {
+      ddpPriceUsd = n(item.targetDdpPriceUsd);
     } else {
-      ddpPriceUsd = roundUp(preMarginPerUnit, 2);
-      warnings.push(
-        `Dòng ${item.lineNo ?? item.id}: margin ${item.marginPercent}% + commission ` +
-        `${item.commissionPercent}% vượt 100% — không tính được giá bán, đã trả về giá vốn.`
-      );
+      if (marginOverrideUsd > 0) {
+        // Mode 3: Override $/unit
+        const denominator = 1 - q * (1 + c);
+        if (denominator > EPS) {
+          ddpPriceUsd = roundUp((preMarginPerUnit + marginOverrideUsd) / denominator, 2);
+        } else {
+          ddpPriceUsd = roundUp(preMarginPerUnit + marginOverrideUsd, 2);
+          warnings.push(`Dòng ${item.lineNo ?? item.id}: commission % vượt 100% — không tính được giá bán.`);
+        }
+      } else {
+        // Mode 1 & 2: Margin % (Fallback to targetMarginPercent if item marginPercent is null)
+        const activeMarginPct = item.marginPercent !== null && item.marginPercent !== undefined ? item.marginPercent : targetMarginPercent;
+        const m = pct(activeMarginPct);
+        const denominator = 1 - m - q * (1 + c);
+
+        if (denominator > EPS) {
+          ddpPriceUsd = roundUp(preMarginPerUnit / denominator, 2);
+        } else {
+          ddpPriceUsd = roundUp(preMarginPerUnit, 2);
+          warnings.push(
+            `Dòng ${item.lineNo ?? item.id}: margin ${activeMarginPct}% + commission ` +
+            `${item.commissionPercent}% vượt 100% — không tính được giá bán, đã trả về giá vốn.`
+          );
+        }
+      }
     }
 
     // -- Price-dependent costs, resolved once the price is known -------------

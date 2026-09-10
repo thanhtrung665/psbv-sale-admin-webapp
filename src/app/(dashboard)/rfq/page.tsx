@@ -41,7 +41,19 @@ export default function RFQListPage() {
 
   const fetchRfqs = useCallback(async () => {
     setLoading(true);
-    const url = activeStatus ? `/api/rfq?status=${activeStatus}` : "/api/rfq";
+    // Only add ?status= if activeStatus is a real status value (not ALL/Tất cả/empty)
+    const VALID_STATUSES = [
+      "INQUIRY_RECEIVED",
+      "RFO_PENDING_ADMIN",
+      "RFO_SENT_TO_SUPPLIER",
+      "SUPPLIER_QUOTED",
+      "CBU_PENDING_ADMIN",
+      "QUOTATION_DRAFTED",
+      "QUOTED_TO_CLIENT",
+    ];
+    const url = activeStatus && VALID_STATUSES.includes(activeStatus)
+      ? `/api/rfq?status=${activeStatus}`
+      : "/api/rfq";
     const res = await fetch(url);
     const data = await res.json();
     setRfqs(Array.isArray(data) ? data : []);
@@ -66,7 +78,7 @@ export default function RFQListPage() {
   const filteredRfqs = useMemo(() => {
     if (!searchQuery.trim()) return rfqs;
     const lowerQ = searchQuery.toLowerCase();
-    return rfqs.filter(rfq => 
+    return rfqs.filter(rfq =>
       (rfq.rfqCode || "").toLowerCase().includes(lowerQ) ||
       (rfq.client?.companyName || "").toLowerCase().includes(lowerQ) ||
       (rfq.client?.name || "").toLowerCase().includes(lowerQ)
@@ -74,7 +86,8 @@ export default function RFQListPage() {
   }, [rfqs, searchQuery]);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
+    // Force re-render when status tab changes to ensure fresh data
+    <div className="space-y-6 max-w-[1400px] mx-auto" key={activeStatus || 'all'}>
       {/* Header & Compact Toolbar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -278,8 +291,17 @@ function CbuCalcModal() {
   const [navigating, setNavigating] = useState(false);
   const [navError, setNavError] = useState<string | null>(null);
 
+  const [customerGroup, setCustomerGroup] = useState("DOMESTIC");
+  const [cbuType, setCbuType] = useState("MARGIN");
+
   const handleSubmit = async () => {
     if (!rfqCode.trim()) return;
+    
+    if (customerGroup !== "DOMESTIC") {
+      setNavError("Tính năng cho nhóm khách này đang được phát triển. Vui lòng chọn Nhóm khách: Nội địa.");
+      return;
+    }
+
     setNavigating(true);
     setNavError(null);
     try {
@@ -291,7 +313,7 @@ function CbuCalcModal() {
       if (match?.id) {
         setOpen(false);
         setRfqCode("");
-        router.push(`/rfq/${match.id}/cbu-calc`);
+        router.push(`/rfq/${match.id}/cbu-calc?group=${customerGroup.toLowerCase()}&type=${cbuType.toLowerCase()}`);
       } else {
         setNavError(`Không tìm thấy RFQ: ${rfqCode.trim()}`);
       }
@@ -321,17 +343,45 @@ function CbuCalcModal() {
         </DialogHeader>
 
         {/* Body */}
-        <div className="px-6 py-6 bg-slate-50/30">
-          <label className="text-sm font-medium text-slate-700 mb-2 block">
-            Mã RFQ / Inquiry Code
-          </label>
-          <div className="w-full">
-            <RfqSelector
-              value={rfqCode}
-              onChange={(v) => { setRfqCode(v); setNavError(null); }}
-              placeholder="Nhập hoặc chọn mã RFQ..."
-            />
+        <div className="px-6 py-6 bg-slate-50/30 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-slate-700 mb-2 block">
+              Mã RFQ / Inquiry Code
+            </label>
+            <div className="w-full">
+              <RfqSelector
+                value={rfqCode}
+                onChange={(v) => { setRfqCode(v); setNavError(null); }}
+                placeholder="Nhập hoặc chọn mã RFQ..."
+              />
+            </div>
           </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-2 block">Nhóm khách</label>
+              <select
+                value={customerGroup}
+                onChange={(e) => { setCustomerGroup(e.target.value); setNavError(null); }}
+                className="w-full h-10 px-3 rounded-md border border-slate-300 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white text-sm"
+              >
+                <option value="DOMESTIC">Nội địa</option>
+                <option value="FOREIGN">Nước ngoài</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-2 block">Loại CBU</label>
+              <select
+                value={cbuType}
+                onChange={(e) => { setCbuType(e.target.value); setNavError(null); }}
+                className="w-full h-10 px-3 rounded-md border border-slate-300 shadow-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white text-sm"
+              >
+                <option value="MARGIN">Input Margin</option>
+                <option value="PRICE">Input Price</option>
+              </select>
+            </div>
+          </div>
+
           {navError && (
             <p className="mt-2 text-xs text-red-600 font-medium">{navError}</p>
           )}

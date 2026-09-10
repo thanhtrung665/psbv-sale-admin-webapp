@@ -3,10 +3,10 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateRfoId } from "@/lib/rfq-code";
-import { parseInquiryWithGemini } from "@/lib/gemini";
+import { parseInquiryWithGemini } from "@/lib/gemini-inquiry";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -75,15 +75,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // ── 3. Run Gemini Parser synchronously ──────────
+    // ── 3. Run Gemini Parser ──────────────────────────────────────────────
     try {
       let parsed;
 
       if (file) {
         const buffer = Buffer.from(await file.arrayBuffer());
-        parsed = await parseInquiryWithGemini(buffer, file.type);
+        // Pass filename to help detect Excel files by extension
+        parsed = await parseInquiryWithGemini(buffer, file.type || undefined, undefined, file.name);
       } else {
         parsed = await parseInquiryWithGemini(undefined, undefined, emailText!);
+      }
+
+      // Validate parsed result
+      if (!parsed) {
+        throw new Error("AI trả về kết quả trống.");
       }
 
       // Determine final client values: user-provided takes priority over AI-extracted
@@ -135,7 +141,7 @@ export async function POST(req: NextRequest) {
       if (client.email !== placeholderEmail) {
         await prisma.client.deleteMany({
           where: { email: placeholderEmail },
-        });
+        }).catch(() => { }); // Ignore if delete fails
       }
 
       return NextResponse.json(
@@ -143,20 +149,34 @@ export async function POST(req: NextRequest) {
         { status: 200 }
       );
     } catch (err: any) {
+      console.error("[parse-inquiry] AI parsing error:", err);
+
+      // Determine specific error message
+      let errorMessage = "❌ Không thể bóc tách file, vui lòng thử lại.";
+
+      if (err.message?.includes("JSON không hợp lệ")) {
+        errorMessage = "❌ File không đọc được. Vui lòng thử file PDF khác.";
+      } else if (err.message?.includes("quota") || err.message?.includes("rate limit")) {
+        errorMessage = "❌ AI đang bận. Vui lòng chờ vài giây rồi thử lại.";
+      } else if (err.message) {
+        errorMessage = `❌ ${err.message.substring(0, 80)}${err.message.length > 80 ? "..." : ""}`;
+      }
+
       await prisma.rFQ.update({
         where: { id: rfq.id },
         data: {
           isProcessing: false,
-          extractionError: err.message || "AI parsing failed",
+          extractionError: errorMessage,
         },
-      });
+      }).catch(() => { });
 
       return NextResponse.json(
-        { rfqId: rfq.id, rfqCode, error: err.message || "AI parsing failed, but RFQ created." },
+        { rfqId: rfq.id, rfqCode, error: errorMessage },
         { status: 500 }
       );
     }
   } catch (err: any) {
+    console.error("[parse-inquiry] Unexpected error:", err);
     return NextResponse.json(
       { error: err.message || "Có lỗi xảy ra." },
       { status: 500 }

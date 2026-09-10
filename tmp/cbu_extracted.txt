@@ -1,0 +1,548 @@
+CHÚ THÍCH BẢNG TÍNH CBU
+File: CBU-AC0084_DDP_VN_MARGIN_INPUT.xlsx  ·  Diễn giải toàn bộ tên ô, tên cột, công thức của 4 sheet: Guide, Margin Analysis, Logistic, Bank Fee
+Phiên bản: Margin per unit / % Margin làm INPUT để tính DDP Price  ·  10-08-2026
+Mục lục
+    Phần 1 — Tổng quan 4 sheet và quy ước màu
+    Phần 2 — Sheet Margin Analysis: thông tin đơn hàng & tham số giá
+    Phần 3 — Sheet Margin Analysis: 22 cột gốc (A–V)
+    Phần 4 — ĐIỂM MỚI: 2 cột Margin override (W, X) và 3 chế độ tính DDP Price
+    Phần 5 — Dòng TOTAL và khối SUMMARY & CHECKS
+    Phần 6 — Sheet Logistic
+    Phần 7 — Sheet Bank Fee
+    Phần 8 — Ví dụ tính tay: 3 chế độ margin trên cùng một dòng hàng
+    Phần 9 — Cảnh báo và lỗi cần biết
+Phần 1 — Tổng quan 4 sheet và quy ước màu
+Sheet
+Vai trò
+Guide
+Hướng dẫn sử dụng, bản đồ input/công thức cho toàn bộ workbook.
+Margin Analysis
+Sheet chính. Mỗi dòng là một mã hàng, gồm 2 khối: BLOCK 1 — AIR FREIGHT (dòng 15–31) và BLOCK 2 — SEA FREIGHT (dòng 36–52). Đây là nơi ra giá DDP Price cuối cùng.
+Logistic
+Tính pool cước vận chuyển + bảo hiểm cho 2 shipment (Air, Sea), sau đó Margin Analysis phân bổ xuống từng dòng theo trọng lượng.
+Bank Fee
+Tính phí ngân hàng (chuyển tiền quốc tế + nhận tiền quốc tế), sau đó Margin Analysis phân bổ xuống từng dòng theo giá trị material.
+Quy ước màu chữ trong file Excel: 
+XANH DƯƠNG (nền vàng) = ô nhập tay · 
+ĐEN = công thức nội bộ sheet · 
+XANH LÁ = công thức link sang sheet khác
+.
+Quy ước %: 
+các ô định dạng phần trăm trong Excel lưu ở dạng thập phân (0,25 = 25%) — khi gõ vào Excel bạn gõ 25% hoặc 0,25 là ra kết quả đúng, Excel tự hiển thị dấu %.
+Phần 2 — Sheet Margin Analysis: thông tin đơn hàng & tham số giá
+2.1 — Thông tin đơn hàng (B3:B9)
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Job No.
+B3
+Hiển thị
+Mã số công việc nội bộ. Ví dụ AC0084-PCS-OTHVN.
+Customer
+B4
+Hiển thị
+Tên khách hàng.
+Country
+B5
+Nhập
+Quốc gia nhận hàng. Điều khiển công thức phí nhận tiền ở Bank Fee!H6 — nếu = "VN" thì phí này tự động = 0.
+Goods origin
+B6
+Nhập
+Nguồn gốc hàng: Local hoặc Oversea. Điều khiển công thức phí chuyển tiền ở Bank Fee!H5 — nếu = "Local" thì phí này tự động = 0.
+Incoterm
+B7
+Hiển thị
+Điều kiện giao hàng, ví dụ DDP Vung Tau.
+Payment terms
+B8
+Hiển thị
+Điều khoản thanh toán, ví dụ "30% with order, 70% prior shipment". Chỉ mang tính mô tả — số thực tế nằm ở % Value financed (F8) và Financing days (F10), phải tự tay nhập khớp.
+Inquiry date
+B9
+Hiển thị
+Ngày lập báo giá.
+2.2 — PRICING PARAMETERS (F3:F13)
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Exchange rate (quote)
+F3
+Nhập
+Tỷ giá USD→VND dùng để quy DDP Price (USD) sang DDP Price (VND) trên báo giá. Giá trị mẫu: 26.500.
+Exchange rate (booking)
+F4
+Nhập
+Tỷ giá kế toán ghi nhận thực tế. Không ảnh hưởng giá bán, chỉ dùng để tính Effective Margin % ở khối SUMMARY. Giá trị mẫu: 26.445.
+Target margin (m)
+F5
+Nhập
+Margin mục tiêu MẶC ĐỊNH áp dụng cho cả đơn hàng, dùng khi một dòng hàng không có "Margin % override" và không có "Margin $/unit override". Giá trị mẫu: 25%.
+Commission rate (q)
+F6
+Nhập
+Tỷ lệ hoa hồng, tính trên GIÁ BÁN (DDP Price USD), không phải trên giá vốn. Giá trị mẫu: 3%.
+CIT on commission (c)
+F7
+Nhập
+Thuế nhà thầu, tính trên SỐ TIỀN HOA HỒNG (không phải trên giá vốn hay doanh thu). Giá trị mẫu: 20%. LƯU Ý: ô này từng bị lưu nhầm thành chữ "%" khiến toàn bộ 353 công thức phía dưới báo lỗi #VALUE! — luôn kiểm tra ô này là SỐ, không phải chữ.
+% Value financed
+F8
+Nhập
+Tỷ lệ giá trị lô hàng bị đọng vốn, suy từ điều khoản thanh toán. Giá trị mẫu: 50%.
+Interest rate p.a.
+F9
+Nhập
+Lãi suất vay vốn theo năm. Giá trị mẫu: 15%.
+Financing days
+F10
+Nhập
+Số ngày vốn bị đọng. Giá trị mẫu: 15.
+Days per year
+F11
+Nhập
+Cơ sở quy đổi lãi suất năm sang ngày. Giá trị mẫu: 360.
+VND rounding step
+F12
+Nhập
+Giá VND làm tròn LÊN bội số của số này. Giá trị mẫu: 10.000.
+Conversion factor lb → kg
+F13
+Nhập
+Hệ số quy đổi. Giá trị mẫu: 0,4536. Đặt = 1 nếu cột Total Weight đã nhập bằng kg.
+Phần 3 — Sheet Margin Analysis: 22 cột gốc (A–V)
+Áp dụng cho cả 2 khối AIR (dòng 15–31) và SEA (dòng 36–52). Ví dụ công thức lấy theo dòng 15.
+3.1 — Nhóm cột NHẬP
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+ITEM
+A
+Nhập
+Số thứ tự dòng, gõ tay hoặc để trống nếu không cần.
+Part No.
+B
+Nhập
+Mã hàng.
+Description
+C
+Nhập
+Mô tả hàng hoá.
+Supplier
+D
+Hiển thị
+Tên nhà cung cấp. Chỉ hiển thị.
+Q'ty
+E
+Nhập
+Số lượng đặt hàng.
+Total Weight (lb)
+F
+Nhập
+Tổng trọng lượng CẢ DÒNG (đã nhân số lượng), đơn vị pound.
+Weight (kg)
+G
+Tính
+=IF($E15=0,0,$F15/$E15*$F$13)  → trọng lượng MỖI ĐƠN VỊ, quy sang kg. Là mẫu số để chia chi phí logistics và bảo hiểm.
+Material Cost
+H
+Nhập
+Giá mua từ nhà cung cấp, USD cho MỖI ĐƠN VỊ.
+%Duty
+I
+Nhập
+Thuế suất nhập khẩu theo mã HS. Đa số = 0%.
+3.2 — Nhóm cột TÍNH: chi phí phân bổ
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Bank fee
+J
+Tính
+=$H15*$F$8*($F$9*$F$10/$F$11)+IF($H$31=0,0,'Bank Fee'!$H$8*$H15/$H$31)
+
+Gồm 2 phần: (a) chi phí vốn = Material×%Financed×(Interest%×Days÷360); (b) phí ngân hàng phân bổ = TOTAL BANK FEE × (Material dòng ÷ Tổng Material).
+Logistics
+K
+Tính
+=IF($G$31=0,0,(Logistic!$M$5+Logistic!$R$5)*$G15/$G$31)
+
+= Pool logistics của shipment tương ứng × (Trọng lượng đơn vị ÷ Tổng trọng lượng). BLOCK AIR dùng Logistic!M5+R5 (shipment 1); BLOCK SEA dùng Logistic!M6+R6 (shipment 2).
+Duty
+L
+Tính
+=($H15+$K15)*$I15
+
+= (Material + Logistics) × %Duty. Cơ sở tính thuế là trị giá CIF (gồm cả cước), không chỉ giá hàng.
+3.3 — Nhóm cột TÍNH: giá bán và lợi nhuận
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Commission
+M
+Tính
+=$F$6*$P15
+
+= Commission rate × DDP Price (USD). Tính SAU khi có giá bán P.
+CIT
+N
+Tính
+=$F$7*$M15
+
+= CIT rate × Commission (cột M), không phải trên giá vốn.
+Unit Cost
+O
+Tính
+=$H15+$J15+$K15+$L15+$M15+$N15
+
+= Material + Bank fee + Logistics + Duty + Commission + CIT.
+DDP Price (USD)
+P
+Tính
+Công thức đã thay đổi trong bản này — xem chi tiết ở Phần 4. Đây là ô quan trọng nhất của cả workbook.
+DDP Price (VND)
+Q
+Tính
+=ROUNDUP($P15*$F$3/$F$12,0)*$F$12
+
+= Làm tròn LÊN bội số VND rounding step của (DDP Price USD × Exchange rate quote).
+Total Revenue (VND)
+R
+Tính
+=$E15*$Q15
+
+= Q'ty × DDP Price (VND).
+Margin per unit
+S
+Tính
+=$P15-$O15
+
+= DDP Price (USD) − Unit Cost. LUÔN LÀ KẾT QUẢ, không phải nơi nhập.
+% Margin
+T
+Tính
+=IF($P15=0,0,$S15/$P15)
+
+= Margin per unit ÷ DDP Price (USD). LUÔN LÀ KẾT QUẢ THỰC TẾ sau khi tính, thường nhỉnh hơn mục tiêu do làm tròn lên.
+Total Margin
+U
+Tính
+=$E15*$S15
+
+= Q'ty × Margin per unit.
+Total Cost
+V
+Tính
+=$E15*$O15
+
+= Q'ty × Unit Cost.
+Phần 4 — ĐIỂM MỚI: 2 cột Margin override (W, X) và 3 chế độ tính DDP Price
+Đây là khác biệt duy nhất so với bản trước: thay vì DDP Price chỉ phụ thuộc Target margin (F5) chung cho cả đơn, bản này cho phép CHỌN MARGIN RIÊNG cho từng dòng hàng, bằng % hoặc bằng số tiền USD cụ thể.
+4.1 — Hai cột input mới, nằm ở cuối bảng
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Margin % override
+W
+Nhập
+Để trống = không dùng, hệ thống sẽ lấy Target margin (F5) chung. Điền số (VD 30%) = dòng này áp margin riêng 30% thay vì mặc định.
+Margin $/unit override
+X
+Nhập
+Để trống hoặc 0 = không dùng. Điền số > 0 (VD 2,00) = ƯU TIÊN CAO NHẤT trong 3 chế độ — DDP Price sẽ tính ra sao cho Margin per unit (cột S) đúng bằng số tiền USD đã nhập ở đây.
+4.2 — Công thức đầy đủ của DDP Price (USD) — cột P
+=IF($X15>0,
+   ROUNDUP(($H15+$J15+$K15+$L15+$X15)/(1-$F$6*(1+$F$7)),2),
+   ROUNDUP(($H15+$J15+$K15+$L15)/(1-IF($W15="",$F$5,$W15)-$F$6*(1+$F$7)),2)
+)
+4.3 — Ba chế độ hoạt động thế nào
+Chế độ
+Điều kiện kích hoạt
+Công thức rút gọn
+Khi nào dùng
+Chế độ 1 — Mặc định
+W và X đều để trống
+DDP = ROUNDUP( (Material+Bank+Logistics+Duty) ÷ (1 − Target margin − q×(1+c)) , 2 )
+Giống hệt bản trước, dùng Target margin (F5) chung cho cả đơn.
+Chế độ 2 — Override theo %
+W có giá trị, X để trống/0
+DDP = ROUNDUP( (Material+Bank+Logistics+Duty) ÷ (1 − W − q×(1+c)) , 2 )
+Thay Target margin (F5) bằng % riêng của dòng này. Dùng khi biết trước tỷ lệ margin mong muốn cho mã hàng cụ thể.
+Chế độ 3 — Override theo USD
+X > 0 (bất kể W)
+DDP = ROUNDUP( (Material+Bank+Logistics+Duty+X) ÷ (1 − q×(1+c)) , 2 )
+Đảm bảo lãi CHÍNH XÁC bằng X USD/đơn vị SAU KHI đã trừ cả hoa hồng và CIT phát sinh thêm từ giá bán mới. Dùng khi khách yêu cầu "lãi đúng 2 đô/cái" thay vì theo %.
+Vì sao chế độ 3 phải chia cho (1 − q×(1+c)) chứ không cộng thẳng X vào Unit Cost: 
+Hoa hồng và CIT được tính TRÊN GIÁ BÁN MỚI, tức chúng tăng lên cùng lúc với DDP Price. Nếu chỉ cộng thẳng DDP = Unit Cost cũ + X thì hoa hồng/CIT phát sinh thêm sẽ ăn vào phần lãi X, khiến Margin per unit thực tế THẤP HƠN X đã nhập. Công thức chia cho mẫu số đảm bảo sau khi trừ hết hoa hồng và CIT mới, phần còn lại đúng bằng X.
+4.4 — Cách kiểm tra kết quả đúng chưa
+Sau khi nhập override, kiểm tra 2 cột kết quả:
+Trường hợp
+Cách kiểm tra
+Kết quả mong đợi
+Đã dùng Chế độ 2 (% override)
+So sánh cột % Margin (T) với số đã nhập ở W
+% Margin (T) phải LỚN HƠN HOẶC BẰNG W một chút, do DDP Price bị làm tròn LÊN 2 số lẻ.
+Đã dùng Chế độ 3 ($/unit override)
+So sánh cột Margin per unit (S) với số đã nhập ở X
+Margin per unit (S) phải LỚN HƠN HOẶC BẰNG X một chút, cùng lý do làm tròn lên.
+Phần 5 — Dòng TOTAL và khối SUMMARY & CHECKS
+Dòng TOTAL (hàng 31 cho AIR, hàng 52 cho SEA) dùng 2 cách cộng khác nhau:
+Nhóm cột
+Công thức tổng
+Vì sao
+Cột đơn giá (H, J, K, L, M, N, O, P)
+SUMPRODUCT(Q'ty, cột đó)
+Vì mỗi dòng là giá của MỘT đơn vị, cộng thẳng vô nghĩa.
+Cột đã là tổng dòng (R, U, V)
+SUM(cột đó)
+Vì đã nhân Q'ty rồi, nhân lần nữa sẽ tính trùng.
+Cột W, X (override)
+ĐỂ TRỐNG ở dòng TOTAL
+Đây là input riêng từng dòng, cộng dồn không có ý nghĩa.
+Khối SUMMARY & CHECKS (dòng 55–67)
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Total Revenue (VND)
+D57/E57
+Tính
+= R31 (AIR) hoặc R52 (SEA).
+Revenue in USD @ quote rate
+D58/E58
+Tính
+= Total Revenue VND ÷ Exchange rate (quote).
+Revenue in USD @ booking rate
+D59/E59
+Tính
+= Total Revenue VND ÷ Exchange rate (booking).
+Nominal Margin % (on DDP USD)
+D61/E61
+Tính
+= T31/T52 (margin trung bình có trọng số, "trên giấy").
+Effective Margin % (after rounding & FX)
+D62/E62
+Tính
+= (Revenue @ booking rate − Total Cost) ÷ Revenue @ booking rate. Đây là margin THỰC SỰ vào P&L, gồm cả lãi làm tròn VND và chênh lệch tỷ giá.
+CHECK: Unit Cost = H+J+K+L+M+N (phải = 0)
+D66/E66
+Tính
+Nếu khác 0 nghĩa là công thức cột O đã bị sửa hỏng ở đâu đó.
+CHECK: Bank fee allocated = Bank Fee!H8 (phải = 0)
+D67/E67
+Tính
+Nếu khác 0 nghĩa là công thức phân bổ phí ngân hàng (cột J) bị sửa hỏng.
+Phần 6 — Sheet Logistic
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Weight (kg)
+B5/B6
+Tính
+='Margin Analysis'!$G$31 (Shipment 1 = AIR) hoặc $G$52 (Shipment 2 = SEA). Tự lấy tổng trọng lượng, không sửa tay.
+Fixed charge (USD)
+G5/G6
+Nhập
+Phần phí cước cố định, không phụ thuộc trọng lượng. Mẫu: Air 500, Sea 800.
+Rate (USD/kg)
+H5/H6
+Nhập
+Đơn giá cước theo kg. Mẫu: Air 2,5, Sea 0 (Sea gộp hết vào Fixed charge).
+Chargeable weight (kg)
+I5/I6
+Nhập
+Trọng lượng tính cước forwarder báo. Mẫu: Air 1.300, Sea 0.
+FREIGHT (USD)
+J5/J6
+Tính
+=G5+H5*I5
+
+Cước áp dụng = Fixed charge + Rate × Chargeable weight.
+Clearance (USD)
+K5/K6
+Nhập
+Phí thông quan trọn gói. Mẫu: 150 cả hai shipment.
+Inland (USD)
+L5/L6
+Nhập
+Phí vận chuyển nội địa. Mẫu: 100 cả hai shipment.
+Total Logistic (USD)
+M5/M6
+Tính
+=J5+K5+L5
+
+Pool logistics CHƯA gồm bảo hiểm.
+USD/kg
+N5/N6
+Tính
+=IF(B5=0,0,M5/B5)
+
+Đơn giá logistics bình quân trên mỗi kg.
+Goods value (USD)
+O5/O6
+Tính
+='Margin Analysis'!$H$31 hoặc $H$52. Tự lấy tổng Material Cost.
+% Insured value
+P5/P6
+Nhập
+Giá trị bảo hiểm bằng bao nhiêu % của (Goods value + FREIGHT). Mẫu: 110%.
+Insurance rate
+Q5/Q6
+Nhập
+Tỷ lệ phí bảo hiểm trên giá trị được bảo hiểm. Mẫu: 0,01%.
+Min insurance (USD)
+R5/R6
+Nhập
+Phí bảo hiểm tối thiểu. Mẫu: 15.
+Insurance (USD)
+S5/S6
+Tính
+=MAX((O5+M5)*P5*Q5,R5)
+
+= MAX( (Goods value+FREIGHT) × %Insured × Insurance rate ; Min insurance ).
+Total Logistic + Insurance
+T5/T6
+Tính
+=M5+S5
+
+Đây là con số THỰC SỰ được Margin Analysis lấy để phân bổ (cột K, công thức Logistic!$M$5+Logistic!$R$5 — chú ý công thức bên Margin Analysis cộng M+R chứ không dùng T, hai cách cho cùng kết quả vì R chính là công thức tính S).
+Phần 7 — Sheet Bank Fee
+Tên cột / ô
+Ô Excel
+Loại
+Ý nghĩa và công thức
+Rate (dòng 1: Remittance)
+C5
+Nhập
+Tỷ lệ phí chuyển tiền quốc tế trả nhà cung cấp. Mẫu: 0,2%.
+Rate (dòng 2: Receive)
+C6
+Nhập
+Tỷ lệ phí nhận tiền quốc tế từ khách. Mẫu: 0,05%. LƯU Ý: file gốc từng ghi nhãn 0,05% nhưng công thức là 0,005% — bản này đã chuẩn hoá về 0,05%, nên xác nhận lại với ngân hàng.
+VAT factor
+D5/D6
+Nhập
+Hệ số nhân VAT. Mẫu: 1,1 (remittance), 1 (receive).
+Min fee (USD)
+E5/E6
+Nhập
+Mức phí tối thiểu. Mẫu: 50 (remittance), 5 (receive).
+Base amount (USD) — Remittance
+F5
+Tính
+='Margin Analysis'!$H$31
+
+Tự lấy Total Material Cost, không sửa tay.
+Base amount (USD) — Receive
+F6
+Nhập
+PHẢI NHẬP TAY giá trị hợp đồng USD. Không link tự động vì sẽ tạo vòng lặp: doanh thu → phí NH → giá vốn → giá bán → doanh thu.
+Fee (USD) — Remittance
+H5
+Tính
+=IF('Margin Analysis'!$B$6="Local",0,MAX(C5*D5*F5,E5))
+
+= 0 nếu Goods origin = Local. Ngược lại = MAX( Rate×VAT×Base ; Min fee ).
+Fee (USD) — Receive
+H6
+Tính
+=IF('Margin Analysis'!$B$5="VN",0,MAX(C6*D6*F6,E6))
+
+= 0 nếu Country = VN.
+Other bank charges
+H7
+Nhập
+Phí khác, nhập tay. Mặc định 0.
+TOTAL BANK FEE
+H8
+Tính
+=SUM(H5:H7)
+
+Pool phí ngân hàng, Margin Analysis phân bổ xuống từng dòng theo tỷ trọng Material Cost (xem cột J, Phần 3.2).
+Phần 8 — Ví dụ tính tay: 3 chế độ margin trên cùng một dòng hàng
+Dùng số liệu thật của dòng 17 (A23-186) trong file: Material = 4,81 · Bank fee ≈ 0,04053 · Logistics ≈ 0,552 · Duty = 0. Cộng lại: preCost = Material+Bank+Logistics+Duty ≈ 5,40276. Commission rate q=3%, CIT rate c=20%.
+8.1 — Chế độ 1: Mặc định (Target margin F5 = 25%)
+#
+Bước
+Phép tính
+Kết quả
+1
+Mẫu số
+1 − 25% − 3%×(1+20%)
+0,714
+2
+DDP Price thô
+5,40276 ÷ 0,714
+7,56831 USD
+3
+DDP Price (USD)
+ROUNDUP(7,56831 ; 2)
+7,57 USD
+8.2 — Chế độ 2: Override % margin (W17 = 30%)
+#
+Bước
+Phép tính
+Kết quả
+1
+Mẫu số
+1 − 30% − 3%×(1+20%)
+0,664
+2
+DDP Price thô
+5,40276 ÷ 0,664
+8,13669 USD
+3
+DDP Price (USD)
+ROUNDUP(8,13669 ; 2)
+8,14 USD
+4
+% Margin thực tế (kiểm tra)
+(8,14 − Unit Cost) ÷ 8,14
+≈ 30,03% (≥ 30%, đúng như kỳ vọng)
+8.3 — Chế độ 3: Override margin $/unit (X17 = 2,00 USD)
+#
+Bước
+Phép tính
+Kết quả
+1
+Mẫu số
+1 − 3%×(1+20%)
+0,964
+2
+DDP Price thô
+(5,40276 + 2,00) ÷ 0,964
+7,68143 USD
+3
+DDP Price (USD)
+ROUNDUP(7,68143 ; 2)
+7,68 USD
+4
+Unit Cost
+preCost + Commission + CIT
+5,67924 USD
+5
+Margin per unit (kiểm tra)
+7,68 − 5,67924
+2,00076 USD (≥ 2,00, đúng như kỳ vọng)
+Phần 9 — Cảnh báo và lỗi cần biết
+Vấn đề
+Giải thích và cách xử lý
+Ô F7 (CIT on commission) bị lưu thành chữ "%"
+Đã xảy ra 1 lần trong quá trình chỉnh sửa file, gây lỗi #VALUE! toàn bộ 353 công thức. Luôn kiểm tra ô này hiển thị đúng dạng phần trăm và Excel không báo lỗi ở góc trái ô (dấu tam giác xanh = giá trị lưu dạng text).
+Nhầm cột S/T là ô nhập
+Cột "Margin per unit" (S) và "% Margin" (T) LUÔN LÀ KẾT QUẢ. Muốn set margin theo ý muốn, nhập vào cột W hoặc X ở cuối bảng, không sửa trực tiếp S/T.
+Điền cả W và X cùng lúc
+X (USD) luôn thắng W (%) nếu X > 0. Muốn dùng % thì phải xoá hoặc để X = 0.
+Margin% + Commission%×(1+CIT%) ≥ 100%
+Với q=3%, c=20% thì trần là 96,4%. Nếu W hoặc Target margin vượt ngưỡng này, mẫu số công thức DDP âm hoặc bằng 0, Excel trả về lỗi #DIV/0!. Không đặt margin quá cao.
+Copy công thức cột P sang dòng mới
+Khi thêm dòng hàng mới, phải copy đúng công thức 3-chế-độ ở cột P (xem Phần 4.2), không copy công thức cũ 1-chế-độ, nếu không cột W/X của dòng mới sẽ không có tác dụng.
+So sánh Nominal Margin % và Effective Margin %
+Khác nhau là ĐÚNG, không phải lỗi — do làm tròn VND lên bội số 10.000 và chênh lệch tỷ giá quote/booking.

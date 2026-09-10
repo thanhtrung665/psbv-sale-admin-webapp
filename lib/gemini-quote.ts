@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import * as xlsx from "xlsx";
 
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
 const DEFAULT_MODEL = "gemini-2.5-pro";
@@ -65,17 +66,53 @@ export function extractQuoteCodeFromFilename(fileName: string): string | null {
   return null;
 }
 
+// ─── Excel file handler ───────────────────────────────────────────────────────
+
+function isExcelFile(mimeType: string | undefined, fileName: string | undefined): boolean {
+  if (!mimeType && !fileName) return false;
+  const excelMimeTypes = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/excel",
+  ];
+  const excelExtensions = [".xlsx", ".xls", ".csv"];
+
+  if (mimeType && excelMimeTypes.includes(mimeType)) return true;
+  if (fileName) {
+    const lower = fileName.toLowerCase();
+    return excelExtensions.some((ext) => lower.endsWith(ext));
+  }
+  return false;
+}
+
+function parseExcelToCsv(buffer: Buffer): string {
+  try {
+    const workbook = xlsx.read(buffer, { type: "buffer" });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new Error("No sheets found in Excel file");
+    }
+    const worksheet = workbook.Sheets[firstSheetName];
+    const csvData = xlsx.utils.sheet_to_csv(worksheet);
+    return csvData;
+  } catch (err) {
+    throw new Error(`Failed to parse Excel file: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+}
+
 // ─── Parser ───────────────────────────────────────────────────────────────────
 
 export async function parseSupplierQuoteWithGemini(
   fileBuffer: Buffer,
-  mimeType: string,
+  mimeType: string | undefined,
   fileName?: string
 ): Promise<ParsedSupplierQuote> {
   const config = await prisma.aiConfig.findFirst({ where: { name: "core" } });
   const apiKey = config?.apiKey || DEFAULT_API_KEY;
   const modelName = config?.modelName || DEFAULT_MODEL;
   let currentPrompt = config?.quotePrompt || SYSTEM_PROMPT;
+
+  const effectiveMimeType = mimeType || "application/octet-stream";
 
   if (fileName) {
     currentPrompt += `\n\nFile PDF này có tên là '${fileName}'. Hãy kết hợp trích xuất mã Quote Hãng (supplierQuoteCode) từ cả tên file VÀ Header/Tiêu đề của file PDF. Nếu tên file chứa chuỗi như 'KET_67373' hoặc 'Quote_67373', hãy ưu tiên sử dụng mã này làm 'supplierQuoteCode'.`;
@@ -87,19 +124,39 @@ export async function parseSupplierQuoteWithGemini(
     systemInstruction: currentPrompt,
   });
 
+  const parts: any[] = [];
+
+  // Handle file input based on type
+  if (isExcelFile(effectiveMimeType, fileName)) {
+    // Convert Excel to CSV and send as text
+    console.log("[gemini-quote] Processing Excel file as CSV");
+    const csvData = parseExcelToCsv(fileBuffer);
+    parts.push({
+      text: `Extract all supplier quote data from the following CSV/Excel content:\n\n${csvData}`,
+    });
+  } else if (effectiveMimeType.includes("pdf") || effectiveMimeType.startsWith("image/")) {
+    // Gemini supports PDF and images natively
+    parts.push({
+      inlineData: {
+        mimeType: effectiveMimeType,
+        data: fileBuffer.toString("base64"),
+      },
+    });
+    parts.push({ text: "Extract all supplier quote data from this document." });
+  } else {
+    // Fallback: try as text
+    console.warn(`[gemini-quote] Unsupported mimeType: ${effectiveMimeType}, treating as text`);
+    const textContent = fileBuffer.toString("utf-8");
+    parts.push({
+      text: `Extract all supplier quote data from the following content:\n\n${textContent.substring(0, 10000)}`,
+    });
+  }
+
   const result = await model.generateContent({
     contents: [
       {
         role: "user",
-        parts: [
-          {
-            inlineData: {
-              mimeType,
-              data: fileBuffer.toString("base64"),
-            },
-          },
-          { text: "Extract all supplier quote data from this document." },
-        ],
+        parts,
       },
     ],
   });
@@ -124,7 +181,6 @@ export async function parseSupplierQuoteWithGemini(
   return {
     supplierQuoteCode: finalQuoteCode,
     supplierName: parsed.supplierName || "",
-    // Filter null/undefined elements Gemini sometimes emits in the items array
     items: (Array.isArray(parsed.items) ? parsed.items : [])
       .filter((item: any) => item !== null && item !== undefined && typeof item === "object")
       .map((item: any) => ({

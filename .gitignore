@@ -39,6 +39,8 @@ next-env.d.ts
 # mac
 .DS_Store
 
-# scripts
-scripts/*.mjs
-!scripts/.gitkeep
+# scripts - but keep test scripts
+scripts/test-ms-graph.mjs
+scripts/html-to-pdf.mjs
+scripts/seed-supplier.ts
+*.bot

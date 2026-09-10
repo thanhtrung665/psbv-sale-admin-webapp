@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { parseSupplierQuoteWithGemini } from "@/lib/gemini-quote";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90; // Increased timeout for AI parsing
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -13,12 +13,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let rfqCode: string | null = null;
+  let file: File | null = null;
+
   try {
     const formData = await req.formData();
-    const rfqCode = formData.get("rfqCode") as string | null;
-    const file = formData.get("file") as File | null;
+    rfqCode = formData.get("rfqCode") as string | null;
+    file = formData.get("file") as File | null;
 
-    if (!rfqCode) {
+    // ── Validation ───────────────────────────────────────────────────────
+    if (!rfqCode || !rfqCode.trim()) {
       return NextResponse.json(
         { success: false, message: "Vui lòng cung cấp mã RFQ." },
         { status: 400 }
@@ -32,9 +36,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find the RFQ by Code
+    // Validate file type
+    const validTypes = ["application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel"];
+    if (file.type && !validTypes.includes(file.type)) {
+      console.warn("[extract-quote-data] Unexpected file type:", file.type);
+    }
+
+    // ── Find RFQ ────────────────────────────────────────────────────────
     const rfq = await prisma.rFQ.findUnique({
-      where: { rfqCode },
+      where: { rfqCode: rfqCode.trim() },
       include: {
         items: { orderBy: { lineNo: "asc" } },
         client: true,
@@ -48,11 +58,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Run Gemini parser ──────────────────────────────────────────────────
+    // ── Parse with Gemini ───────────────────────────────────────────────
+    console.log(`[extract-quote-data] Processing file: ${file.name} (${file.size} bytes)`);
+
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const parsed = await parseSupplierQuoteWithGemini(fileBuffer, file.type, file.name);
 
-    // ── Match extracted items with existing RFQ items ─────────────────────
+    // Validate parsed result
+    if (!parsed || !Array.isArray(parsed.items)) {
+      throw new Error("AI trả về dữ liệu không hợp lệ. Vui lòng thử lại với file khác.");
+    }
+
+    console.log(`[extract-quote-data] Parsed ${parsed.items.length} items from Gemini`);
+
+    // ── Match items ────────────────────────────────────────────────────
     const normalize = (s: string) => s.toUpperCase().replace(/[\s\-\.]/g, "");
 
     const mergedItems = rfq.items.map((dbItem) => {
@@ -75,7 +94,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    // Also include any extracted items that didn't match existing DB items
+    // Include unmatched extracted items
     const unmatchedExtracted = parsed.items.filter(
       (qi) =>
         !rfq.items.some(
@@ -106,11 +125,27 @@ export async function POST(req: NextRequest) {
       supplierQuoteCode: parsed.supplierQuoteCode,
       supplierName: parsed.supplierName,
       items: [...mergedItems, ...extraItems],
+      totalItems: mergedItems.length + extraItems.length,
     });
   } catch (err: any) {
-    console.error("[extract-quote-data]", err);
+    console.error("[extract-quote-data] Error:", err);
+
+    // Determine specific error message
+    let errorMessage = "❌ Không thể bóc tách file, vui lòng thử lại.";
+
+    if (err.message?.includes("JSON không hợp lệ")) {
+      errorMessage = "❌ File không đọc được. Vui lòng thử file khác hoặc định dạng khác (PDF, Excel).";
+    } else if (err.message?.includes("quota") || err.message?.includes("rate limit")) {
+      errorMessage = "❌ AI đang bận. Vui lòng chờ vài giây rồi thử lại.";
+    } else if (err.message?.includes("invalid") || err.message?.includes("Invalid")) {
+      errorMessage = "❌ API key không hợp lệ. Vui lòng kiểm tra cấu hình AI.";
+    } else if (err.message) {
+      // Truncate long error messages
+      errorMessage = `❌ ${err.message.substring(0, 100)}${err.message.length > 100 ? "..." : ""}`;
+    }
+
     return NextResponse.json(
-      { success: false, message: err.message || "Có lỗi xảy ra khi bóc tách." },
+      { success: false, message: errorMessage },
       { status: 500 }
     );
   }

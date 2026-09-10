@@ -14,9 +14,24 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
 
+  // Build where clause: only filter by status if status is a valid non-empty value
+  // Accepts: "INQUIRY_RECEIVED", "RFO_PENDING_ADMIN", etc.
+  // Rejects: "", "ALL", "Tất cả", null, undefined
+  const VALID_STATUSES = [
+    "INQUIRY_RECEIVED",
+    "RFO_PENDING_ADMIN",
+    "RFO_SENT_TO_SUPPLIER",
+    "SUPPLIER_QUOTED",
+    "CBU_PENDING_ADMIN",
+    "QUOTATION_DRAFTED",
+    "QUOTED_TO_CLIENT",
+  ];
+
+  const shouldFilter = status && VALID_STATUSES.includes(status);
+
   try {
     const rfqs = await prisma.rFQ.findMany({
-      where: status ? { status: status as any } : undefined,
+      where: shouldFilter ? { status: status as any } : undefined,
       include: { client: { select: { name: true, companyName: true } } },
       orderBy: { createdAt: "desc" },
       take: 100,

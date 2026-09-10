@@ -585,11 +585,15 @@ const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: s
       : `data:application/pdf;base64,${base64Data.replace(/[^A-Za-z0-9+/=]/g, "")}`;
 
     const response = await fetch(dataUrl);
+    // QUAN TRỌNG: set type='application/pdf' rõ ràng để browser nhận diện đúng
     const blob = await response.blob();
+    const pdfBlob = new Blob([blob], { type: 'application/pdf' });
 
-    if (blob.size === 0) throw new Error("File PDF tạo ra bị rỗng (0 byte).");
+    if (pdfBlob.size === 0) throw new Error("File PDF tạo ra bị rỗng (0 byte).");
 
-    const blobUrl = window.URL.createObjectURL(blob);
+    console.log(`[Download] ${fileName}: ${(pdfBlob.size / 1024).toFixed(1)}KB`);
+
+    const blobUrl = window.URL.createObjectURL(pdfBlob);
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
@@ -597,7 +601,8 @@ const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: s
     link.click();
 
     document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
+    // Đợi 1s rồi mới revoke để browser kịp xử lý
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
   } catch (err: any) {
     alert(`❌ Lỗi tải file: ${err.message}`);
   }
@@ -608,6 +613,11 @@ const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: s
 interface SplitResult {
   totalPages: number;
   splitPageIndex: number;
+  detectMethod?: "size" | "ocr";
+  sizeInfo?: {
+    baselineSize: { width: number; height: number };
+    newSize: { width: number; height: number };
+  } | null;
   file1: { defaultName: string; label: string; pageRange: string; pageCount: number; base64: string };
   file2: { defaultName: string; label: string; pageRange: string; pageCount: number; base64: string };
 }
@@ -712,8 +722,20 @@ function SplitTab() {
         {result ? (
           <div className="flex flex-col gap-4 max-w-2xl mx-auto">
             {/* Info banner */}
-            <div className="flex items-center gap-2 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700 font-medium">
-              ✅ Đã tách thành công · Tổng {result.totalPages} trang · Điểm tách: Trang {result.splitPageIndex}
+            <div className="flex flex-col gap-1.5 px-4 py-2.5 bg-violet-50 border border-violet-200 rounded-xl text-xs text-violet-700">
+              <div className="flex items-center gap-2 font-medium">
+                ✅ Đã tách thành công · Tổng {result.totalPages} trang · Điểm tách: Trang {result.splitPageIndex}
+              </div>
+              {result.detectMethod === "size" && result.sizeInfo && (
+                <div className="text-[11px] text-violet-600 font-mono">
+                  🔍 Phát hiện theo kích thước: {result.sizeInfo.baselineSize.width}×{result.sizeInfo.baselineSize.height}pt → {result.sizeInfo.newSize.width}×{result.sizeInfo.newSize.height}pt
+                </div>
+              )}
+              {result.detectMethod === "ocr" && (
+                <div className="text-[11px] text-violet-600">
+                  🔍 Phát hiện theo OCR (kích thước trang giống nhau)
+                </div>
+              )}
             </div>
 
             {/* File 1 — CIPL */}
@@ -780,11 +802,13 @@ function SplitTab() {
           <div className="h-full flex flex-col items-center justify-center text-center gap-3 text-slate-400">
             <div className="w-16 h-16 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center text-3xl">✂️</div>
             <p className="text-sm font-semibold text-slate-600">Tách CIPL / COO-COC</p>
-            <p className="text-xs text-slate-400 max-w-xs">
-              Tải lên file PDF bộ chứng từ tổng hợp (CIPL + COO + COC). Hệ thống sẽ tự động tìm trang{" "}
-              <strong className="font-semibold text-slate-600">&quot;Certificate of Compliance&quot;</strong>{" "}
-              và tách thành 2 file riêng biệt.
+            <p className="text-xs text-slate-500 max-w-md leading-relaxed">
+              Tải lên file PDF bộ chứng từ tổng hợp (CIPL + COO + COC). Hệ thống sẽ:
             </p>
+            <ul className="text-[11px] text-slate-500 max-w-md text-left space-y-1.5">
+              <li>• <strong>Ưu tiên 1:</strong> Tách theo kích thước trang (CIPL & COO/COC thường khác khổ giấy)</li>
+              <li>• <strong>Ưu tiên 2:</strong> Nếu cùng khổ, tìm tiêu đề &quot;Certificate of Compliance&quot; bằng OCR</li>
+            </ul>
           </div>
         )}
       </div>

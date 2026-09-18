@@ -17,7 +17,7 @@ import { RfqSelector } from "./RfqSelector";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabKey = "quote" | "po" | "split";
+type TabKey = "quote" | "po" | "split" | "cipl";
 
 interface UploadedFile {
   id: string;
@@ -579,13 +579,11 @@ const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: s
   }
 
   try {
-    // Dùng native fetch() để chuyển Base64 sang Blob. Tránh dùng atob() dễ gây lỗi RAM và sai mã hóa.
     const dataUrl = base64Data.startsWith('data:')
       ? base64Data
       : `data:application/pdf;base64,${base64Data.replace(/[^A-Za-z0-9+/=]/g, "")}`;
 
     const response = await fetch(dataUrl);
-    // QUAN TRỌNG: set type='application/pdf' rõ ràng để browser nhận diện đúng
     const blob = await response.blob();
     const pdfBlob = new Blob([blob], { type: 'application/pdf' });
 
@@ -599,14 +597,307 @@ const downloadPdfFromBase64 = async (base64Data: string | undefined, fileName: s
     link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
     document.body.appendChild(link);
     link.click();
-
     document.body.removeChild(link);
-    // Đợi 1s rồi mới revoke để browser kịp xử lý
     setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
   } catch (err: any) {
     alert(`❌ Lỗi tải file: ${err.message}`);
   }
 };
+
+// ─── CIPL Extract Tab ────────────────────────────────────────────────────────
+
+interface CiplItemRow {
+  part_no: string;
+  description: string;
+  hs_code: string;
+  quantity: string;
+  country_origin: string;
+  uom: string;
+  unit_price: string;
+  ext_price: string;
+  batch_no: string;
+  net_weight: string;
+}
+
+interface CiplHeaderData {
+  invoice_no: string;
+  invoice_date: string;
+  po_no: string;
+  po_date: string;
+  incoterm: string;
+  mot: string;
+  pol: string;
+  pod: string;
+  consignee_name: string;
+  consignee_address: string;
+  consignee_attn: string;
+  consignee_email: string;
+  consignee_tel: string;
+  total_amount: string;
+  total_weight_lbs: string;
+  number_of_box: string;
+  box_dimension: string;
+  shipping_mark_product: string;
+}
+
+function CiplTab() {
+  const [rfq, setRfq] = useState("");
+  const [rfqId, setRfqId] = useState<string | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [drag, setDrag] = useState(false);
+  const [extracting, setExtracting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [header, setHeader] = useState<CiplHeaderData | null>(null);
+  const [items, setItems] = useState<CiplItemRow[]>([]);
+  const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const toast$ = (type: "success" | "error", msg: string) => {
+    setToast({ type, msg }); setTimeout(() => setToast(null), 4500);
+  };
+
+  const onFileSelected = (f: File) => { setFile(f); setHeader(null); setItems([]); setSaved(false); };
+
+  const updateHeader = (field: keyof CiplHeaderData, val: string) =>
+    setHeader(prev => prev ? { ...prev, [field]: val } : prev);
+
+  const updateItem = (idx: number, field: keyof CiplItemRow, val: string) =>
+    setItems(prev => prev.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+
+  const handleExtract = async () => {
+    if (!file) return;
+    setExtracting(true); setHeader(null); setItems([]); setSaved(false);
+    const fd = new FormData();
+    fd.append("file", file);
+    if (rfq.trim()) fd.append("rfqCode", rfq.trim());
+    try {
+      const res = await fetch("/api/cipl/extract", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Lỗi bóc tách CIPL.");
+      const d = data.data;
+      setRfqId(data.rfqId || null);
+      setHeader({
+        invoice_no: d.invoice_no || "",
+        invoice_date: d.invoice_date || "",
+        po_no: d.po_no || "",
+        po_date: d.po_date || "",
+        incoterm: d.incoterm || "",
+        mot: d.mot || "",
+        pol: d.pol || "",
+        pod: d.pod || "",
+        consignee_name: d.consignee_name || "",
+        consignee_address: d.consignee_address || "",
+        consignee_attn: d.consignee_attn || "",
+        consignee_email: d.consignee_email || "",
+        consignee_tel: d.consignee_tel || "",
+        total_amount: d.total_amount || "",
+        total_weight_lbs: d.total_weight_lbs || "",
+        number_of_box: d.number_of_box || "",
+        box_dimension: d.box_dimension || "",
+        shipping_mark_product: d.shipping_mark_product || "",
+      });
+      setItems((d.items || []).map((item: any) => ({
+        part_no: item.part_no || "",
+        description: item.description || "",
+        hs_code: item.hs_code || "",
+        quantity: item.quantity || "",
+        country_origin: item.country_origin || "",
+        uom: item.uom || "",
+        unit_price: item.unit_price || "",
+        ext_price: item.ext_price || "",
+        batch_no: item.batch_no || "",
+        net_weight: item.net_weight || "",
+      })));
+      toast$("success", `✅ Bóc tách thành công! ${(d.items || []).length} dòng hàng hóa.`);
+    } catch (err: any) {
+      toast$("error", err.message || "Lỗi bóc tách.");
+    } finally { setExtracting(false); }
+  };
+
+  const handleSave = async () => {
+    if (!header || !rfqId) {
+      toast$("error", "Vui lòng chọn RFQ và bóc tách CIPL trước khi lưu.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { ...header, items };
+      const res = await fetch("/api/cipl/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rfqId, data: payload, fileName: file?.name }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Lỗi lưu dữ liệu.");
+      setSaved(true);
+      toast$("success", `✅ Đã lưu CIPL vào database! (${data.itemCount} dòng)`);
+    } catch (err: any) {
+      toast$("error", err.message);
+    } finally { setSaving(false); }
+  };
+
+  const Field = ({ label, field }: { label: string; field: keyof CiplHeaderData }) => (
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <input
+        type="text"
+        value={header?.[field] || ""}
+        onChange={e => updateHeader(field, e.target.value)}
+        className="px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+      />
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Toolbar */}
+      <div className="shrink-0 px-5 py-3 border-b border-slate-200/80 flex items-center gap-3 bg-white">
+        <div className="w-64 shrink-0">
+          <RfqSelector
+            value={rfq}
+            onChange={(code) => { setRfq(code); setSaved(false); }}
+            placeholder="Mã RFQ (bắt buộc)..."
+            className="h-9 text-xs rounded-lg border-slate-200"
+          />
+        </div>
+
+        <div className="flex-1">
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) onFileSelected(f); }}
+            onClick={() => inputRef.current?.click()}
+            className={`h-10 border border-dashed rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all px-4 ${
+              drag ? "border-blue-500 bg-blue-50" : file ? "border-emerald-400 bg-emerald-50/50" : "border-slate-200 hover:border-blue-400 bg-slate-50/30"
+            }`}
+          >
+            <FileText size={14} className={file ? "text-emerald-500" : "text-slate-400"} />
+            <span className="text-xs font-medium text-slate-600 truncate max-w-[300px]">
+              {file ? file.name : "Kéo thả hoặc chọn file PDF CIPL hãng gửi..."}
+            </span>
+            {file && (
+              <X size={12} className="text-slate-400 hover:text-red-500 shrink-0"
+                onClick={(e) => { e.stopPropagation(); setFile(null); setHeader(null); setItems([]); }} />
+            )}
+            <input ref={inputRef} type="file" accept=".pdf" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFileSelected(f); e.target.value = ""; }} />
+          </div>
+        </div>
+
+        <button
+          onClick={handleExtract}
+          disabled={!file || extracting}
+          className="shrink-0 h-9 inline-flex items-center gap-1.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        >
+          {extracting ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang bóc tách...</> : <>🤖 Bóc Tách CIPL</>}
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && <div className="shrink-0 px-5 pt-3"><Toast t={toast} /></div>}
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-5 bg-slate-50/50 space-y-4">
+        {header ? (
+          <>
+            {/* Header Section */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-4">📋 Thông Tin Chứng Từ (có thể chỉnh sửa)</h3>
+              <div className="grid grid-cols-4 gap-3">
+                <Field label="Invoice No" field="invoice_no" />
+                <Field label="Invoice Date" field="invoice_date" />
+                <Field label="PO No" field="po_no" />
+                <Field label="PO Date" field="po_date" />
+                <Field label="Incoterm" field="incoterm" />
+                <Field label="Mode of Transport" field="mot" />
+                <Field label="Port of Loading" field="pol" />
+                <Field label="Port of Discharge" field="pod" />
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-3">
+                <Field label="Consignee Name" field="consignee_name" />
+                <Field label="Consignee Attn" field="consignee_attn" />
+                <div className="col-span-2"><Field label="Consignee Address" field="consignee_address" /></div>
+                <Field label="Consignee Email" field="consignee_email" />
+                <Field label="Consignee Tel" field="consignee_tel" />
+              </div>
+              <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-4 gap-3">
+                <Field label="Total Amount (USD)" field="total_amount" />
+                <Field label="Total Weight (lbs)" field="total_weight_lbs" />
+                <Field label="No. of Boxes" field="number_of_box" />
+                <Field label="Box Dimension" field="box_dimension" />
+                <div className="col-span-4"><Field label="Shipping Mark / Product" field="shipping_mark_product" /></div>
+              </div>
+            </div>
+
+            {/* Items Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">📦 Danh Sách Hàng Hóa ({items.length} dòng)</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px]">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200/80">
+                      {["#", "Part No", "Description", "HS Code", "Batch No", "Net Wt", "Qty", "UOM", "COO", "Unit Price", "Ext Price"].map((h, i) => (
+                        <th key={h} className={`text-[10px] font-semibold uppercase tracking-wider text-slate-500 px-3 py-2 whitespace-nowrap ${
+                          i === 0 ? "pl-4 w-8" : ""} ${[6, 9, 10].includes(i) ? "text-right" : "text-left"}`}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {items.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/60 transition-colors text-xs text-slate-700">
+                        <td className="px-3 py-2 pl-4 text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="px-3 py-2"><Cell value={item.part_no} onChange={v => updateItem(idx, "part_no", v)} mono /></td>
+                        <td className="px-3 py-2 max-w-[200px]"><Cell value={item.description} onChange={v => updateItem(idx, "description", v)} /></td>
+                        <td className="px-3 py-2"><Cell value={item.hs_code} onChange={v => updateItem(idx, "hs_code", v)} mono /></td>
+                        <td className="px-3 py-2"><Cell value={item.batch_no} onChange={v => updateItem(idx, "batch_no", v)} mono /></td>
+                        <td className="px-3 py-2"><Cell value={item.net_weight} onChange={v => updateItem(idx, "net_weight", v)} /></td>
+                        <td className="px-3 py-2"><Cell value={item.quantity} onChange={v => updateItem(idx, "quantity", v)} align="right" /></td>
+                        <td className="px-3 py-2"><Cell value={item.uom} onChange={v => updateItem(idx, "uom", v)} /></td>
+                        <td className="px-3 py-2"><Cell value={item.country_origin} onChange={v => updateItem(idx, "country_origin", v)} /></td>
+                        <td className="px-3 py-2"><Cell value={item.unit_price} onChange={v => updateItem(idx, "unit_price", v)} align="right" mono /></td>
+                        <td className="px-3 py-2"><Cell value={item.ext_price} onChange={v => updateItem(idx, "ext_price", v)} align="right" mono /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-slate-50/80 border-t border-slate-200">
+                      <td colSpan={10} className="px-3 py-2 pl-4 text-right text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Amount</td>
+                      <td className="px-3 py-2 text-right text-sm font-bold text-slate-900 font-mono">${header.total_amount}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="h-full flex items-center justify-center text-center">
+            <p className="text-sm font-medium text-slate-400">Vui lòng tải lên file CIPL để bắt đầu</p>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      {header && (
+        <div className="shrink-0 p-4 bg-white border-t border-slate-200/80 flex items-center justify-between gap-3">
+          <span className="text-xs text-slate-400 font-mono">
+            {saved ? "✅ Đã lưu vào database" : `${items.length} dòng hàng · Total: $${header.total_amount}`}
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={saving || saved || !rfqId}
+            className="h-9 px-5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            {saved ? "Đã Lưu" : "💾 Lưu vào Database"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Split Tab ────────────────────────────────────────────────────────────────
 
@@ -799,16 +1090,8 @@ function SplitTab() {
             </button>
           </div>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center gap-3 text-slate-400">
-            <div className="w-16 h-16 rounded-2xl bg-violet-50 border border-violet-100 flex items-center justify-center text-3xl">✂️</div>
-            <p className="text-sm font-semibold text-slate-600">Tách CIPL / COO-COC</p>
-            <p className="text-xs text-slate-500 max-w-md leading-relaxed">
-              Tải lên file PDF bộ chứng từ tổng hợp (CIPL + COO + COC). Hệ thống sẽ:
-            </p>
-            <ul className="text-[11px] text-slate-500 max-w-md text-left space-y-1.5">
-              <li>• <strong>Ưu tiên 1:</strong> Tách theo kích thước trang (CIPL & COO/COC thường khác khổ giấy)</li>
-              <li>• <strong>Ưu tiên 2:</strong> Nếu cùng khổ, tìm tiêu đề &quot;Certificate of Compliance&quot; bằng OCR</li>
-            </ul>
+          <div className="h-full flex items-center justify-center text-center">
+            <p className="text-sm font-medium text-slate-400">Vui lòng tải lên file bộ chứng từ để bắt đầu</p>
           </div>
         )}
       </div>
@@ -825,7 +1108,8 @@ export function ProcessFileModal() {
   const tabs: { key: TabKey; label: string }[] = [
     { key: "quote", label: "Báo giá Hãng" },
     { key: "po",    label: "Đơn hàng PO" },
-    { key: "split", label: "✂️ Tách CIPL" },
+    { key: "split", label: "Tách CIPL" },
+    { key: "cipl",  label: "Extract CIPL" },
   ];
 
   return (
@@ -881,6 +1165,9 @@ export function ProcessFileModal() {
           </div>
           <div className={`h-full ${tab === "split" ? "flex flex-col" : "hidden"}`}>
             <SplitTab />
+          </div>
+          <div className={`h-full ${tab === "cipl" ? "flex flex-col" : "hidden"}`}>
+            <CiplTab />
           </div>
         </div>
       </DialogContent>

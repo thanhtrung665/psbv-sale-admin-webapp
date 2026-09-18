@@ -1,0 +1,1199 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Báo cáo Kỹ thuật V2 — PSBV Sales Agent Platform</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+
+  :root{
+    --ink:#1a2332; --ink-2:#3d4b5f; --muted:#6b7a90; --line:#dde3ec;
+    --bg:#ffffff; --bg-soft:#f6f8fb; --accent:#1d4ed8; --accent-soft:#eff4ff;
+    --red:#b91c1c; --red-bg:#fef2f2; --amber:#b45309; --amber-bg:#fffbeb;
+    --green:#15803d; --green-bg:#f0fdf4; --yellow:#a16207;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    font-size:10.5pt; line-height:1.62;
+  }
+  .page{max-width:190mm; margin:0 auto; padding:12mm 0 20mm}
+
+  /* ---------- Cover ---------- */
+  .cover{
+    text-align:center; padding:26mm 10mm 16mm; margin-bottom:10mm;
+    border-bottom:3px solid var(--accent);
+  }
+  .cover .eyebrow{
+    font-size:8.5pt; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--accent); font-weight:700; margin-bottom:7mm;
+  }
+  .cover h1{
+    font-size:26pt; line-height:1.2; margin:0 0 3mm; font-weight:800; letter-spacing:-.02em;
+  }
+  .cover h2{
+    font-size:13pt; font-weight:500; color:var(--ink-2); margin:0 0 2mm;
+  }
+  .cover .ver{font-size:10pt; color:var(--muted); margin:0 0 9mm}
+  .cover-meta{
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:2.5mm 8mm; max-width:130mm; margin:0 auto; text-align:left;
+    font-size:9.5pt; border-top:1px solid var(--line); padding-top:6mm;
+  }
+  .cover-meta div{display:flex; gap:3mm}
+  .cover-meta b{color:var(--muted); font-weight:600; min-width:38mm}
+
+  /* ---------- Typography ---------- */
+  h2.sec{
+    font-size:15pt; font-weight:750; margin:11mm 0 4mm; padding-bottom:2mm;
+    border-bottom:2px solid var(--accent); letter-spacing:-.01em;
+    break-after:avoid; page-break-after:avoid;
+  }
+  h3{
+    font-size:11.5pt; font-weight:700; margin:7mm 0 3mm; color:var(--ink);
+    break-after:avoid; page-break-after:avoid;
+  }
+  h4{font-size:10.5pt; font-weight:700; margin:5mm 0 2mm; color:var(--ink-2)}
+  p{margin:0 0 3mm}
+  ul,ol{margin:0 0 3mm; padding-left:6mm}
+  li{margin-bottom:1.2mm}
+  strong{font-weight:700}
+  code{
+    font-family:var(--mono); font-size:9pt; background:var(--bg-soft);
+    border:1px solid var(--line); border-radius:3px; padding:.5mm 1.2mm;
+    word-break:break-word;
+  }
+
+  /* ---------- Tables ---------- */
+  .tw{overflow-x:auto; margin:0 0 5mm}
+  table{width:100%; border-collapse:collapse; font-size:9pt; break-inside:auto}
+  thead{display:table-header-group}
+  tr{break-inside:avoid; page-break-inside:avoid}
+  th{
+    background:var(--bg-soft); text-align:left; font-weight:700; font-size:8.5pt;
+    text-transform:uppercase; letter-spacing:.04em; color:var(--ink-2);
+    padding:2mm 2.4mm; border:1px solid var(--line); border-bottom-width:2px;
+  }
+  td{padding:1.9mm 2.4mm; border:1px solid var(--line); vertical-align:top}
+  tbody tr:nth-child(even){background:#fafbfd}
+  td code{font-size:8.3pt}
+  .num{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono)}
+  .ctr{text-align:center}
+
+  /* ---------- Code blocks ---------- */
+  pre{
+    background:var(--bg-soft); border:1px solid var(--line); border-left:3px solid var(--accent);
+    border-radius:4px; padding:3mm 3.5mm; overflow-x:auto; margin:0 0 5mm;
+    font-family:var(--mono); font-size:8.4pt; line-height:1.5; white-space:pre;
+    break-inside:avoid; page-break-inside:avoid;
+  }
+  pre code{background:none; border:none; padding:0; font-size:inherit}
+  pre.ascii{font-size:7.2pt; line-height:1.34; border-left-color:var(--muted)}
+
+  /* ---------- Callouts ---------- */
+  .note{
+    border-left:3px solid var(--accent); background:var(--accent-soft);
+    padding:3mm 4mm; margin:0 0 5mm; border-radius:0 4px 4px 0; font-size:9.5pt;
+    break-inside:avoid; page-break-inside:avoid;
+  }
+  .note.warn{border-left-color:var(--amber); background:var(--amber-bg)}
+  .note.crit{border-left-color:var(--red); background:var(--red-bg)}
+  .note.ok{border-left-color:var(--green); background:var(--green-bg)}
+  .note p:last-child{margin-bottom:0}
+  .note .lbl{
+    display:block; font-size:8pt; font-weight:800; letter-spacing:.1em;
+    text-transform:uppercase; margin-bottom:1.5mm;
+  }
+  .note .lbl{color:var(--accent)}
+  .note.warn .lbl{color:var(--amber)}
+  .note.crit .lbl{color:var(--red)}
+  .note.ok .lbl{color:var(--green)}
+
+  /* ---------- Badges ---------- */
+  .b{
+    display:inline-block; padding:.3mm 1.8mm; border-radius:3px;
+    font-size:7.8pt; font-weight:700; white-space:nowrap; border:1px solid;
+  }
+  .b-red{color:var(--red); background:var(--red-bg); border-color:#fecaca}
+  .b-amb{color:var(--amber); background:var(--amber-bg); border-color:#fde68a}
+  .b-yel{color:var(--yellow); background:#fefce8; border-color:#fef08a}
+  .b-grn{color:var(--green); background:var(--green-bg); border-color:#bbf7d0}
+  .b-gry{color:var(--muted); background:var(--bg-soft); border-color:var(--line)}
+
+  /* ---------- KPI grid ---------- */
+  .kpis{
+    display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3mm; margin:0 0 5mm;
+  }
+  .kpi{
+    border:1px solid var(--line); border-radius:5px; padding:3mm; text-align:center;
+    background:var(--bg-soft); break-inside:avoid;
+  }
+  .kpi .v{font-size:17pt; font-weight:800; color:var(--accent); line-height:1.1; font-variant-numeric:tabular-nums}
+  .kpi .k{font-size:7.8pt; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin-top:1mm; font-weight:600}
+
+  /* ---------- TOC ---------- */
+  .toc{
+    border:1px solid var(--line); border-radius:5px; padding:5mm 6mm;
+    background:var(--bg-soft); margin:0 0 6mm; break-inside:avoid;
+  }
+  .toc h3{margin:0 0 3mm; font-size:11pt}
+  .toc ol{columns:2; column-gap:9mm; margin:0; padding-left:5mm; font-size:9.3pt}
+  .toc li{margin-bottom:1.1mm; break-inside:avoid}
+  .toc a{color:var(--ink-2); text-decoration:none}
+  .toc a:hover{color:var(--accent); text-decoration:underline}
+
+  /* ---------- Misc ---------- */
+  hr{border:none; border-top:1px solid var(--line); margin:8mm 0}
+  .foot{
+    margin-top:10mm; padding-top:4mm; border-top:1px solid var(--line);
+    font-size:8.5pt; color:var(--muted); text-align:center; font-style:italic;
+  }
+  .pb{break-before:page; page-break-before:always}
+
+  @media print{
+    body{font-size:9.8pt}
+    .page{max-width:none; padding:0}
+    .cover{padding-top:14mm}
+    a{color:inherit; text-decoration:none}
+    .tw{overflow:visible}
+  }
+  @media (max-width:820px){
+    .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .toc ol{columns:1}
+    .cover-meta{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ============ COVER ============ -->
+<header class="cover">
+  <div class="eyebrow">Báo cáo Kỹ thuật — Phiên bản 2</div>
+  <h1>PSBV Sales Agent Platform</h1>
+  <h2>Hệ thống CRM B2B nội bộ cho Team Sale Admin</h2>
+  <p class="ver">Version 0.1.0 · MVP mở rộng</p>
+  <div class="cover-meta">
+    <div><b>Ngày phát hành</b><span>11/09/2026</span></div>
+    <div><b>Tác giả</b><span>PSBV Trading &amp; Service — Technical Team</span></div>
+    <div><b>Triển khai</b><span>Vercel (Next.js 14 App Router)</span></div>
+    <div><b>Commit cơ sở</b><span><code>0b02859</code> + working tree</span></div>
+    <div><b>Quy mô</b><span>43 API routes · 18 pages · 11 models</span></div>
+    <div><b>Codebase</b><span>~21.000 dòng TypeScript/TSX</span></div>
+  </div>
+</header>
+
+<div class="note">
+  <span class="lbl">Phương pháp lập báo cáo</span>
+  <p>Toàn bộ số liệu được trích xuất trực tiếp từ mã nguồn tại thời điểm 11/09/2026 (branch <code>main</code>). Các mục đánh dấu <span class="b b-red">⚠</span> là phát hiện đã kiểm chứng bằng lệnh thực thi, không phải suy đoán. Mọi con số có thể tái kiểm chứng bằng các lệnh ở Phụ lục D.</p>
+</div>
+
+<!-- ============ TOC ============ -->
+<nav class="toc">
+  <h3>Mục lục</h3>
+  <ol>
+    <li><a href="#s1">Tóm tắt điều hành</a></li>
+    <li><a href="#s2">Thay đổi so với Version 1</a></li>
+    <li><a href="#s3">Kiến trúc hệ thống</a></li>
+    <li><a href="#s4">Tech Stack</a></li>
+    <li><a href="#s5">Cấu trúc Database</a></li>
+    <li><a href="#s6">Lớp Validation (Zod)</a></li>
+    <li><a href="#s7">Hạ tầng Testing</a></li>
+    <li><a href="#s8">CBU Pricing Engine</a></li>
+    <li><a href="#s9">AI Integration Layer</a></li>
+    <li><a href="#s10">Tính năng CIPL (mới)</a></li>
+    <li><a href="#s11">Document Generation</a></li>
+    <li><a href="#s12">Email &amp; Communication</a></li>
+    <li><a href="#s13">API Endpoints</a></li>
+    <li><a href="#s14">Bảo mật &amp; Phân quyền</a></li>
+    <li><a href="#s15">Điểm mạnh</a></li>
+    <li><a href="#s16">Điểm yếu &amp; Nợ kỹ thuật</a></li>
+    <li><a href="#s17">Định hướng tiếp theo</a></li>
+    <li><a href="#s18">Phụ lục</a></li>
+  </ol>
+</nav>
+
+<!-- ============ 1 ============ -->
+<h2 class="sec" id="s1">1. Tóm tắt điều hành</h2>
+
+<h3>1.1 Quy mô hệ thống</h3>
+<div class="kpis">
+  <div class="kpi"><div class="v">43</div><div class="k">API Routes</div></div>
+  <div class="kpi"><div class="v">18</div><div class="k">Pages UI</div></div>
+  <div class="kpi"><div class="v">11</div><div class="k">Prisma Models</div></div>
+  <div class="kpi"><div class="v">52</div><div class="k">Test cases</div></div>
+</div>
+
+<div class="tw"><table>
+<thead><tr><th>Khu vực</th><th class="num">Dòng code</th><th>Ghi chú</th></tr></thead>
+<tbody>
+<tr><td><code>src/app</code> (pages)</td><td class="num">9.955</td><td>18 trang, gồm UI CBU 19 cột</td></tr>
+<tr><td><code>src/app/api</code></td><td class="num">3.944</td><td>43 route handlers</td></tr>
+<tr><td><code>src/components</code></td><td class="num">3.901</td><td>21 component</td></tr>
+<tr><td><code>lib/</code> (root)</td><td class="num">1.607</td><td>Engine, AI, integrations</td></tr>
+<tr><td><code>src/lib/</code></td><td class="num">905</td><td>Validation, schemas, utils</td></tr>
+<tr><td><code>__tests__/</code></td><td class="num">706</td><td>4 file test</td></tr>
+<tr><td><b>Tổng ước tính</b></td><td class="num"><b>~21.000</b></td><td>TypeScript + TSX</td></tr>
+</tbody></table></div>
+
+<h3>1.2 Ba phát hiện quan trọng nhất</h3>
+<p>Báo cáo ghi nhận đúng thực trạng, kể cả khi thực trạng chưa hoàn chỉnh:</p>
+<div class="tw"><table>
+<thead><tr><th style="width:4%">#</th><th style="width:56%">Phát hiện</th><th style="width:16%">Mức độ</th><th style="width:24%">Trạng thái</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>Lớp Zod validation đã viết xong nhưng chưa route nào sử dụng</b> — 0/43 routes import <code>@/lib/validation</code> hoặc <code>@/lib/schemas</code></td><td><span class="b b-red">Cao</span></td><td>Chưa wire</td></tr>
+<tr><td>2</td><td><b>3/4 test suite FAIL</b> — <code>jest.config.js</code> thiếu <code>moduleNameMapper</code> cho alias <code>@/</code></td><td><span class="b b-red">Cao</span></td><td>Lỗi cấu hình</td></tr>
+<tr><td>3</td><td><b>Migration drift</b> — 7/11 models không có migration tương ứng</td><td><span class="b b-amb">Trung bình</span></td><td>Cần đồng bộ</td></tr>
+</tbody></table></div>
+
+<div class="note ok">
+  <span class="lbl">Điểm tích cực</span>
+  <p>Cả ba đều là lỗi <b>cấu hình / tích hợp</b>, không phải lỗi logic. TypeScript compile hoàn toàn sạch: <code>npx tsc --noEmit</code> → 0 lỗi. Phần khó (thiết kế schema, viết test) đã xong; phần còn lại là thao tác cơ học.</p>
+</div>
+
+<!-- ============ 2 ============ -->
+<h2 class="sec" id="s2">2. Thay đổi so với Version 1</h2>
+
+<h3>2.1 Tính năng mới</h3>
+<div class="tw"><table>
+<thead><tr><th>Hạng mục</th><th>V1</th><th>V2</th></tr></thead>
+<tbody>
+<tr><td><b>CIPL module</b></td><td><span class="b b-gry">Không có</span></td><td>3 API routes + 1 page + 1 Gemini module + 2 Prisma models</td></tr>
+<tr><td><b>Zod validation</b></td><td><span class="b b-gry">Không cài</span></td><td><code>zod@^3.25.76</code>, 6 schema files, 1 helper module</td></tr>
+<tr><td><b>Unit tests</b></td><td><span class="b b-gry">Không có</span></td><td>4 test files, 52 test cases</td></tr>
+<tr><td><b>Test tooling</b></td><td><span class="b b-gry">Không có</span></td><td><code>jest@^30.4.2</code>, <code>ts-jest</code>, <code>jest-mock-extended</code></td></tr>
+<tr><td><b>Document types</b></td><td>4</td><td>5 (thêm <code>CIPL_PDF</code>)</td></tr>
+<tr><td><b>Prisma models</b></td><td>9</td><td>11 (thêm <code>CiplRecord</code>, <code>CiplItem</code>)</td></tr>
+</tbody></table></div>
+
+<h3>2.2 Đối chiếu nợ kỹ thuật V1</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:40%">Nợ kỹ thuật V1</th><th style="width:22%">Trạng thái V2</th><th>Ghi chú</th></tr></thead>
+<tbody>
+<tr><td>"Cần thêm Zod validation cho API inputs"</td><td><span class="b b-amb">Hoàn thành 50%</span></td><td>Schema + helper đã viết và test đầy đủ, nhưng <b>chưa gắn vào route nào</b></td></tr>
+<tr><td>"Chưa có unit tests hoặc integration tests"</td><td><span class="b b-amb">Hoàn thành 60%</span></td><td>52 test cases đã viết, nhưng 42/52 không chạy được do lỗi config</td></tr>
+</tbody></table></div>
+
+<div class="note">
+  <span class="lbl">Kết luận thẳng thắn</span>
+  <p>Cả hai hạng mục đã hoàn thành phần <i>khó</i> (thiết kế schema, viết test), còn lại phần <i>dễ</i> (sửa 3 dòng config, wire 7 routes). Ước tính <b>1–2 ngày công</b> để đóng hoàn toàn.</p>
+</div>
+
+<!-- ============ 3 ============ -->
+<h2 class="sec pb" id="s3">3. Kiến trúc hệ thống</h2>
+
+<h3>3.1 Sơ đồ tổng thể</h3>
+<pre class="ascii">┌─────────────────────────────────────────────────────────────────────┐
+│                          BROWSER CLIENT                              │
+│  ┌───────────────────────────────────────────────────────────────┐  │
+│  │  Next.js 14 App Router                                        │  │
+│  │  ├── (auth)/login                                             │  │
+│  │  └── (dashboard)/  ← middleware.ts bảo vệ                      │  │
+│  │      ├── overview, clients, tasks, database                   │  │
+│  │      ├── system-users, ai-config, settings  [ADMIN only]      │  │
+│  │      └── rfq/[id]/ ─┬─ rfo-review                             │  │
+│  │                     ├─ cbu-calc   ← CBU engine chạy ở client  │  │
+│  │                     ├─ mvpo                                   │  │
+│  │                     ├─ quote-preview                          │  │
+│  │                     └─ cipl        ← MỚI                      │  │
+│  └───────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                     VERCEL SERVERLESS (43 routes)                    │
+│                                                                      │
+│  /api/rfq/*     (24)   /api/cipl/*   (3)   /api/clients/* (2)        │
+│  /api/database/*(4)    /api/tasks/*  (2)   /api/users     (1)        │
+│  /api/email/*   (2)    /api/pdf/*    (1)   /api/auth      (1)        │
+│  /api/ai-config (1)    /api/agent    (1)   /api/suppliers (1)        │
+│                                                                      │
+│  ┌──────────┐ ┌────────────┐ ┌──────────┐ ┌──────────────┐           │
+│  │  Gemini  │ │APITemplate │ │ Supabase │ │  MS Graph    │           │
+│  │2.5 Pro/  │ │   .io      │ │ Storage  │ │  (Outlook)   │           │
+│  │  Flash   │ │  (PDF)     │ │(documents│ │              │           │
+│  └──────────┘ └────────────┘ └──────────┘ └──────────────┘           │
+│                                                                      │
+│  ┌───────────────────────────────────────────────────────────────┐   │
+│  │  PostgreSQL (Prisma 7 + @prisma/adapter-pg, pool max=5)       │   │
+│  │  User · Client · RFQ · RFQItem · Document · Task · AiConfig   │   │
+│  │  MasterPart · Supplier · CiplRecord · CiplItem                │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────┘</pre>
+
+<h3>3.2 <span class="b b-amb">⚠</span> Vấn đề kiến trúc: hai thư mục <code>lib/</code></h3>
+<p>Dự án tồn tại <b>song song hai thư mục</b> <code>lib/</code> (root) và <code>src/lib/</code>. <code>tsconfig.json</code> cấu hình:</p>
+<pre><code>"paths": { "@/*": ["./src/*", "./*"] }</code></pre>
+<p><code>src/</code> được ưu tiên trước. Hệ quả:</p>
+<div class="tw"><table>
+<thead><tr><th>Module</th><th class="ctr"><code>lib/</code></th><th class="ctr"><code>src/lib/</code></th><th><code>@/lib/x</code> trỏ tới</th><th>Trạng thái</th></tr></thead>
+<tbody>
+<tr><td><code>ms-graph.ts</code></td><td class="ctr">✅ Azure SDK</td><td class="ctr">✅ raw fetch</td><td><b><code>src/lib/</code></b></td><td><span class="b b-red">dead code</span> ở <code>lib/</code></td></tr>
+<tr><td><code>email-builder.ts</code></td><td class="ctr">✅</td><td class="ctr">✅</td><td><b><code>src/lib/</code></b></td><td><span class="b b-red">dead code</span> ở <code>lib/</code></td></tr>
+<tr><td><code>cbu-engine.ts</code></td><td class="ctr">✅</td><td class="ctr">—</td><td><code>lib/</code></td><td><span class="b b-grn">OK</span></td></tr>
+<tr><td><code>auth · prisma · gemini-*</code></td><td class="ctr">✅</td><td class="ctr">—</td><td><code>lib/</code></td><td><span class="b b-grn">OK</span></td></tr>
+<tr><td><code>validation · schemas · utils</code></td><td class="ctr">—</td><td class="ctr">✅</td><td><code>src/lib/</code></td><td><span class="b b-grn">OK</span></td></tr>
+</tbody></table></div>
+
+<p>Thêm một tầng phức tạp: <code>next.config.mjs</code> ghi đè alias riêng cho webpack:</p>
+<pre><code>config.resolve.alias['@/lib'] = path.resolve(__dirname, 'lib');</code></pre>
+
+<div class="note crit">
+  <span class="lbl">Rủi ro</span>
+  <p><b>Webpack (runtime) và TypeScript (IDE) phân giải <code>@/lib/*</code> khác nhau.</b> IDE báo xanh nhưng build có thể lấy file khác — nguồn lỗi tiềm ẩn nghiêm trọng.</p>
+  <p style="margin-top:2mm">Đáng lưu ý: hai bản <code>email-builder.ts</code> có hành vi khác nhau. Bản <code>lib/</code> có ràng buộc <i>"Must NOT contain any client/customer information"</i> trong email gửi supplier — ràng buộc nghiệp vụ này <b>đã mất</b> khi bản <code>src/lib/</code> được dùng thay thế.</p>
+</div>
+
+<!-- ============ 4 ============ -->
+<h2 class="sec" id="s4">4. Tech Stack</h2>
+
+<h3>4.1 Dependencies chính</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:16%">Nhóm</th><th style="width:46%">Package</th><th>Version</th></tr></thead>
+<tbody>
+<tr><td rowspan="3"><b>Framework</b></td><td><code>next</code></td><td>14.2.35 <span class="b b-gry">pinned</span></td></tr>
+<tr><td><code>react</code> / <code>react-dom</code></td><td>^18</td></tr>
+<tr><td><code>typescript</code></td><td>^5</td></tr>
+<tr><td rowspan="3"><b>Database</b></td><td><code>@prisma/client</code></td><td>^7.9.1</td></tr>
+<tr><td><code>@prisma/adapter-pg</code></td><td>^7.9.1</td></tr>
+<tr><td><code>pg</code></td><td>^8.22.0</td></tr>
+<tr><td rowspan="2"><b>Auth</b></td><td><code>next-auth</code></td><td>^4.24.15</td></tr>
+<tr><td><code>bcryptjs</code></td><td>^3.0.3</td></tr>
+<tr><td><b>Validation</b></td><td><code>zod</code></td><td><b>^3.25.76</b> <span class="b b-grn">mới</span></td></tr>
+<tr><td><b>AI</b></td><td><code>@google/generative-ai</code></td><td>^0.24.1</td></tr>
+<tr><td rowspan="4"><b>Email</b></td><td><code>@microsoft/microsoft-graph-client</code></td><td>^3.0.7</td></tr>
+<tr><td><code>@azure/identity</code></td><td>^4.13.1</td></tr>
+<tr><td><code>nodemailer</code></td><td>^7.0.13</td></tr>
+<tr><td><code>resend</code></td><td>^6.18.1</td></tr>
+<tr><td rowspan="2"><b>Storage</b></td><td><code>@supabase/supabase-js</code></td><td>^2.111.0</td></tr>
+<tr><td><code>@supabase/ssr</code></td><td>^0.12.4</td></tr>
+<tr><td rowspan="4"><b>PDF / OCR</b></td><td><code>pdf-lib</code></td><td>^1.17.1</td></tr>
+<tr><td><code>pdf2pic</code></td><td>^3.2.0</td></tr>
+<tr><td><code>tesseract.js</code></td><td>^7.0.0</td></tr>
+<tr><td><code>@tesseract.js-data/eng</code></td><td>^1.0.0</td></tr>
+<tr><td rowspan="3"><b>UI</b></td><td><code>tailwindcss</code></td><td>^3.4.1</td></tr>
+<tr><td><code>@base-ui/react</code></td><td>^1.6.0</td></tr>
+<tr><td><code>lucide-react</code> / <code>cmdk</code></td><td>^1.27.0 / ^1.1.1</td></tr>
+<tr><td rowspan="3"><b>Data</b></td><td><code>swr</code></td><td>^2.5.1</td></tr>
+<tr><td><code>xlsx</code></td><td>^0.18.5</td></tr>
+<tr><td><code>string-similarity</code></td><td>^4.0.4</td></tr>
+</tbody></table></div>
+
+<h3>4.2 DevDependencies — Testing (mới)</h3>
+<div class="tw"><table>
+<thead><tr><th>Package</th><th>Version</th><th>Vai trò</th></tr></thead>
+<tbody>
+<tr><td><code>jest</code></td><td>^30.4.2</td><td>Test runner</td></tr>
+<tr><td><code>ts-jest</code></td><td>^29.4.12</td><td>TypeScript transform</td></tr>
+<tr><td><code>@types/jest</code> · <code>@jest/globals</code></td><td>^30.0.0 · ^30.4.1</td><td>Type definitions</td></tr>
+<tr><td><code>jest-mock-extended</code></td><td>^4.0.1</td><td>Mock Prisma <span class="b b-yel">chưa dùng</span></td></tr>
+<tr><td><code>puppeteer</code></td><td>^25.8.0</td><td>PDF rendering (script local)</td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+  <span class="lbl">Thiếu</span>
+  <p><code>@testing-library/react</code> và <code>jest-environment-jsdom</code> chưa được cài → <b>không thể test React component</b>. Ngoài ra <code>testMatch</code> chỉ khớp <code>*.test.ts</code>, không bao gồm <code>.tsx</code>.</p>
+</div>
+
+<h3>4.3 Scripts</h3>
+<pre><code>"dev":         "next dev"
+"build":       "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build"
+"start":       "next start"
+"lint":        "next lint"
+"test":        "jest"
+"test:watch":  "jest --watch"
+"postinstall": "prisma generate"</code></pre>
+
+<!-- ============ 5 ============ -->
+<h2 class="sec pb" id="s5">5. Cấu trúc Database</h2>
+
+<h3>5.1 Sơ đồ quan hệ</h3>
+<pre class="ascii">   User ──┬──1:N──&gt; Task (assignee)
+          └──1:N──&gt; Task (creator)
+
+   Client ──1:N──&gt; RFQ ──┬──1:N──&gt; RFQItem
+                         ├──1:N──&gt; Document
+                         └──1:N──&gt; CiplRecord ──1:N──&gt; CiplItem   ★ MỚI
+
+   Độc lập: AiConfig · MasterPart · Supplier</pre>
+
+<h3>5.2 Enums</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:18%">Enum</th><th>Giá trị</th></tr></thead>
+<tbody>
+<tr><td><code>Role</code></td><td><code>ADMIN</code>, <code>SALE_ADMIN</code></td></tr>
+<tr><td><code>OrderStatus</code></td><td><code>INQUIRY_RECEIVED</code> → <code>RFO_PENDING_ADMIN</code> → <code>RFO_SENT_TO_SUPPLIER</code> → <code>SUPPLIER_QUOTED</code> → <code>CBU_PENDING_ADMIN</code> → <code>QUOTATION_DRAFTED</code> → <code>QUOTED_TO_CLIENT</code></td></tr>
+<tr><td><code>TaskStatus</code></td><td><code>PENDING</code>, <code>IN_PROGRESS</code>, <code>DONE</code></td></tr>
+</tbody></table></div>
+
+<h3>5.3 Model RFQ — tham số CBU</h3>
+<p>Model <code>RFQ</code> có <b>~50 trường</b>, phần lớn là tham số CBU:</p>
+<div class="tw"><table>
+<thead><tr><th style="width:18%">Nhóm</th><th style="width:52%">Trường</th><th>Default</th></tr></thead>
+<tbody>
+<tr><td rowspan="4"><b>Tỷ giá</b></td><td><code>exchangeRate</code></td><td class="num">26.500</td></tr>
+<tr><td><code>bookingExchangeRate</code></td><td>null</td></tr>
+<tr><td><code>vndRoundingStep</code></td><td class="num">10.000</td></tr>
+<tr><td><code>lbToKg</code></td><td class="num">0,4536</td></tr>
+<tr><td rowspan="2"><b>Điều kiện</b></td><td><code>goodsOrigin</code></td><td>"Oversea"</td></tr>
+<tr><td><code>destinationCountry</code></td><td>"VN"</td></tr>
+<tr><td rowspan="4"><b>Logistics</b></td><td><code>freightCost</code> / <code>freightFixed</code> / <code>freightRatePerKg</code></td><td class="num">0</td></tr>
+<tr><td><code>chargeableWeightKg</code></td><td class="num">0</td></tr>
+<tr><td><code>clearanceCost</code></td><td class="num">150</td></tr>
+<tr><td><code>inlandCost</code></td><td class="num">100</td></tr>
+<tr><td rowspan="3"><b>Bảo hiểm</b></td><td><code>insuredValuePercent</code></td><td class="num">110</td></tr>
+<tr><td><code>insuranceRatePercent</code></td><td class="num">0,01</td></tr>
+<tr><td><code>minInsuranceUsd</code></td><td class="num">15</td></tr>
+<tr><td rowspan="5"><b>Ngân hàng</b></td><td><code>remittanceRatePercent</code></td><td class="num">0,2</td></tr>
+<tr><td><code>bankVatFactor</code></td><td class="num">1,1</td></tr>
+<tr><td><code>minRemittanceFeeUsd</code></td><td class="num">50</td></tr>
+<tr><td><code>receiveRatePercent</code></td><td class="num">0,05</td></tr>
+<tr><td><code>minReceiveFeeUsd</code></td><td class="num">5</td></tr>
+<tr><td rowspan="4"><b>Chi phí vốn</b></td><td><code>percentValueFinanced</code></td><td class="num">50</td></tr>
+<tr><td><code>interestRatePercent</code></td><td class="num">15</td></tr>
+<tr><td><code>financingDays</code></td><td class="num">15</td></tr>
+<tr><td><code>daysPerYear</code></td><td class="num">360</td></tr>
+<tr><td><b>Kết quả CBU</b></td><td><code>totalCostUsd</code>, <code>totalRevenueUsd</code>, <code>totalMarginUsd</code>, <code>actualMarginPct</code>, <code>totalRevenueVnd</code> <span class="b b-gry">BigInt</span></td><td>null</td></tr>
+</tbody></table></div>
+
+<h3>5.4 Models CIPL (mới)</h3>
+<p><b><code>CiplRecord</code></b> — 20 trường: header (<code>invoiceNo</code>, <code>invoiceDate</code>, <code>poNo</code>, <code>poDate</code>), vận chuyển (<code>incoterm</code>, <code>mot</code>, <code>pol</code>, <code>pod</code>), consignee (5 trường), tổng hợp (<code>totalAmount</code>, <code>totalWeightLbs</code>, <code>numberOfBox</code>, <code>boxDimension</code>, <code>shippingMark</code>), nguồn (<code>sourceFileUrl</code>).</p>
+<p><b><code>CiplItem</code></b> — <code>lineNo</code> (Int), <code>partNo</code> (String bắt buộc), và 9 trường <code>String?</code>.</p>
+
+<div class="note">
+  <span class="lbl">Quyết định thiết kế</span>
+  <p>Mọi giá trị số và ngày trong CIPL được lưu dạng <code>String?</code> để giữ nguyên định dạng in trên chứng từ gốc (ví dụ <code>"1,116.00"</code>, <code>"30-Jul-2026"</code>). Đây là lựa chọn hợp lý cho chứng từ hải quan — nơi định dạng gốc có giá trị pháp lý — nhưng đồng nghĩa <b>không thể tính toán/tổng hợp trực tiếp</b> trên các trường này.</p>
+</div>
+
+<h3>5.5 <span class="b b-amb">⚠</span> Migration drift</h3>
+<p><code>prisma/migrations/</code> chỉ có <b>duy nhất 1 migration</b>, tạo: <code>Role</code>, <code>OrderStatus</code>, <code>User</code>, <code>Client</code>, <code>RFQ</code>, <code>RFQItem</code>, <code>Document</code>.</p>
+<div class="tw"><table>
+<thead><tr><th>Model / Enum</th><th class="ctr">Trong <code>schema.prisma</code></th><th class="ctr">Trong migration</th></tr></thead>
+<tbody>
+<tr><td><code>TaskStatus</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>Task</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>AiConfig</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>MasterPart</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>Supplier</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>CiplRecord</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>CiplItem</code></td><td class="ctr">✅</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+</tbody></table></div>
+
+<div class="note crit">
+  <span class="lbl">Rủi ro deploy</span>
+  <p>Các bảng này hiện tồn tại trên DB production do được áp dụng bằng <code>prisma db push</code> hoặc SQL thủ công. Nếu deploy lên môi trường mới bằng <code>prisma migrate deploy</code>, <b>7 bảng này sẽ không được tạo</b> và ứng dụng lỗi runtime.</p>
+</div>
+
+<h3>5.6 <span class="b b-amb">⚠</span> Thiếu index</h3>
+<p>Schema <b>không có bất kỳ <code>@@index</code> hoặc <code>@@unique</code> composite nào</b>. Toàn bộ uniqueness ở mức field. Các foreign key chưa index, đáng chú ý nhất:</p>
+<ul>
+<li><code>CiplRecord.rfqId</code> — route <code>GET /api/cipl/[rfqId]</code> query <code>where: { rfqId }</code> + <code>orderBy: { createdAt: desc }</code> → sequential scan</li>
+<li><code>CiplItem.ciplRecordId</code>, <code>RFQItem.rfqId</code>, <code>Document.rfqId</code>, <code>Task.assigneeId</code>, <code>Task.creatorId</code></li>
+</ul>
+
+<!-- ============ 6 ============ -->
+<h2 class="sec pb" id="s6">6. Lớp Validation (Zod)</h2>
+
+<h3>6.1 Cấu trúc</h3>
+<pre><code>src/lib/
+├── validation.ts            # Helper functions (139 dòng)
+└── schemas/
+    ├── index.ts             # Barrel export
+    ├── common.schemas.ts    # Primitives dùng chung
+    ├── rfq.schemas.ts       # RFQ domain
+    ├── client.schemas.ts    # Client CRUD
+    ├── task.schemas.ts      # Task CRUD
+    └── user.schemas.ts      # User management</code></pre>
+
+<h3>6.2 API surface của <code>validation.ts</code></h3>
+<pre><code>interface ValidationErrorItem { field: string; message: string }
+
+type ValidationResult&lt;T&gt; =
+  | { success: true;  data: T }
+  | { success: false; response: NextResponse }
+
+formatZodErrors(error: ZodError): ValidationErrorItem[]
+createValidationErrorResponse(error, statusCode = 400): NextResponse
+validateBody&lt;T&gt;(req, schema): Promise&lt;ValidationResult&lt;T&gt;&gt;
+validateQuery&lt;T&gt;(url, schema): ValidationResult&lt;T&gt;
+validatePathParam(param, fieldName, schema = idParamSchema)</code></pre>
+
+<div class="note ok">
+  <span class="lbl">Điểm thiết kế tốt</span>
+  <ul style="margin-bottom:0">
+    <li><code>ValidationResult&lt;T&gt;</code> là <b>discriminated union</b> → caller viết <code>if (!check.success) return check.response;</code>, TypeScript narrow type tự động.</li>
+    <li><code>validateBody</code> bọc <code>req.json()</code> trong try/catch → JSON hỏng trả 400 thay vì throw 500.</li>
+    <li><code>formatZodErrors</code> dot-join path (<code>"items.0.qty"</code>), fallback <code>"_root"</code> cho lỗi cấp object.</li>
+    <li>Thông báo lỗi bằng tiếng Việt, đồng nhất với phần còn lại của hệ thống.</li>
+  </ul>
+</div>
+
+<p><b>Format response chuẩn:</b></p>
+<pre><code>{
+  "success": false,
+  "errors": [{ "field": "clientEmail", "message": "Email không hợp lệ." }],
+  "message": "Validation failed"
+}</code></pre>
+
+<h3>6.3 Schema nổi bật — <code>updateRfqSchema</code></h3>
+<p>Schema có giá trị bảo mật cao nhất, giải quyết trực tiếp lỗ hổng <b>mass assignment</b> tại <code>PATCH /api/rfq/[id]</code>:</p>
+<pre><code>// SECURITY: allow-list 17 trường scalar an toàn.
+// Mọi trường khác (id, rfqCode, clientId, createdById, approvedById,
+// relations, timestamps, BigInt) bị Zod strip tự động.
+export const updateRfqSchema = z.object({
+  status: orderStatusSchema,
+  opportunityName: optionalStringSchema,
+  supplierName: optionalStringSchema,
+  // ... 14 trường khác
+}).partial()
+  .refine(data =&gt; Object.keys(data).length &gt; 0, {
+    message: "Không có trường nào để cập nhật."
+  });</code></pre>
+
+<p>Test đã chứng minh cơ chế hoạt động:</p>
+<pre><code>it("strips unknown / dangerous fields (mass-assignment protection)", () =&gt; {
+  const result = updateRfqSchema.safeParse({
+    status: "RFO_SENT_TO_SUPPLIER",
+    id: "attacker-controlled-id",
+    createdById: "someone-else",
+    totalRevenueVnd: "999999999999999999999",
+  });
+  expect(result.data).not.toHaveProperty("id");
+  expect(result.data).not.toHaveProperty("createdById");
+});</code></pre>
+
+<h3>6.4 <span class="b b-red">🔴</span> Trạng thái tích hợp: 0/43 routes</h3>
+<p>Kiểm chứng bằng grep trên toàn bộ <code>src/</code>:</p>
+<pre><code>Pattern: from "@/lib/validation" | from "@/lib/schemas"
+Kết quả: 2 matches — cả hai đều nằm trong comment của chính validation.ts</code></pre>
+
+<p><b>Không một API route nào đang dùng lớp validation này.</b> Mã hiện tại của route ưu tiên cao nhất:</p>
+<pre><code>// src/app/api/rfq/[id]/route.ts — PATCH
+const body = await req.json();
+const updated = await prisma.rFQ.update({
+  where: { id: params.id },
+  data: body,        // ⚠️ toàn bộ body đi thẳng vào Prisma
+});</code></pre>
+
+<div class="tw"><table>
+<thead><tr><th style="width:32%">Route</th><th style="width:24%">Schema đã viết</th><th class="ctr" style="width:12%">Đã wire</th><th>Validation hiện tại</th></tr></thead>
+<tbody>
+<tr><td><code>PATCH /api/rfq/[id]</code></td><td><code>updateRfqSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td><b>Không có</b> — body → Prisma</td></tr>
+<tr><td><code>POST /api/rfq/create-manual</code></td><td><code>createRfqManualSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td><code>if (!clientName || !clientEmail)</code></td></tr>
+<tr><td><code>POST /api/rfq/save-supplier-quote</code></td><td><code>saveSupplierQuoteSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td><code>if ((!rfqCode &amp;&amp; !rfqId) || !rows)</code></td></tr>
+<tr><td><code>POST /api/rfq/save-customer-po</code></td><td><code>saveCustomerPoSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td>Kiểm tra thủ công</td></tr>
+<tr><td><code>POST /api/clients</code></td><td><code>createClientSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td><code>if (!name || !companyName || !email)</code></td></tr>
+<tr><td><code>PUT /api/clients/[id]</code></td><td><code>updateClientSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td>Kiểm tra thủ công</td></tr>
+<tr><td><code>POST /api/tasks</code></td><td><code>createTaskSchema</code></td><td class="ctr"><span class="b b-red">❌</span></td><td><b>Không có</b> — <code>body.title</code> dùng trực tiếp</td></tr>
+</tbody></table></div>
+
+<p>File <code>user.schemas.ts</code> tự ghi nhận điều này trong comment đầu file: <i>"these routes are not yet wired to validateBody() (out of scope for this pass)"</i>.</p>
+
+<h3>6.5 <span class="b b-amb">⚠</span> Enum trùng lặp thủ công</h3>
+<p><code>common.schemas.ts</code> khai báo lại 3 enum của Prisma bằng tay. Ngoài ra còn <b>2 nơi khác</b> hardcode cùng danh sách status (<code>api/rfq/route.ts</code>, <code>api/rfq/[id]/status/route.ts</code>), cộng thêm <code>(dashboard)/rfq/page.tsx</code> phía client.</p>
+<div class="note warn">
+  <p><b>4 nguồn sự thật cho cùng một enum.</b> Khi thêm status mới vào <code>schema.prisma</code>, phải sửa đồng thời 4 chỗ, không có cơ chế nào bắt lỗi nếu quên.</p>
+</div>
+
+<!-- ============ 7 ============ -->
+<h2 class="sec pb" id="s7">7. Hạ tầng Testing</h2>
+
+<h3>7.1 Thống kê</h3>
+<div class="tw"><table>
+<thead><tr><th>File</th><th class="num">Describes</th><th class="num">Test cases</th><th class="num">Dòng</th></tr></thead>
+<tbody>
+<tr><td><code>__tests__/cbu-engine.test.ts</code></td><td class="num">10</td><td class="num">10</td><td class="num">360</td></tr>
+<tr><td><code>__tests__/schemas/rfq.schemas.test.ts</code></td><td class="num">4</td><td class="num">19</td><td class="num">147</td></tr>
+<tr><td><code>__tests__/utils/validation.test.ts</code></td><td class="num">5</td><td class="num">15</td><td class="num">148</td></tr>
+<tr><td><code>__tests__/schemas/client.schemas.test.ts</code></td><td class="num">2</td><td class="num">8</td><td class="num">51</td></tr>
+<tr><td><b>Tổng</b></td><td class="num"><b>21</b></td><td class="num"><b>52</b></td><td class="num"><b>706</b></td></tr>
+</tbody></table></div>
+
+<h3>7.2 <span class="b b-red">🔴</span> Kết quả chạy thực tế</h3>
+<pre><code>$ npm test
+
+FAIL __tests__/schemas/client.schemas.test.ts
+  ● Cannot find module '@/lib/schemas' from '__tests__/schemas/client.schemas.test.ts'
+FAIL __tests__/schemas/rfq.schemas.test.ts
+  ● Cannot find module '@/lib/schemas' from '__tests__/schemas/rfq.schemas.test.ts'
+FAIL __tests__/utils/validation.test.ts
+  ● Cannot find module '@/lib/validation' from '__tests__/utils/validation.test.ts'
+
+Test Suites: 3 failed, 1 passed, 4 total
+Tests:       10 passed, 10 total
+Time:        7.505 s</code></pre>
+
+<p><b>Nguyên nhân:</b> <code>jest.config.js</code> không có <code>moduleNameMapper</code>, trong khi 3 test file mới import qua alias <code>@/</code>. Chỉ <code>cbu-engine.test.ts</code> chạy được vì dùng đường dẫn tương đối.</p>
+
+<div class="note ok">
+  <span class="lbl">Cách sửa — thêm 4 dòng</span>
+<pre style="margin:2mm 0 0"><code>moduleNameMapper: {
+  '^@/lib/(.*)$': ['&lt;rootDir&gt;/src/lib/$1', '&lt;rootDir&gt;/lib/$1'],
+  '^@/(.*)$': '&lt;rootDir&gt;/src/$1',
+},</code></pre>
+  <p style="margin-top:2mm">Sau khi sửa, 42 test case còn lại sẽ chạy. <b>TypeScript đã compile sạch</b> — đây thuần túy là lỗi cấu hình Jest, không phải lỗi code.</p>
+</div>
+
+<h3>7.3 Chất lượng test</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:50%">Điểm mạnh</th><th>Điểm yếu</th></tr></thead>
+<tbody>
+<tr><td>
+<ul style="margin:0">
+<li><code>validation.test.ts</code> test cả happy path lẫn edge case thực tế (JSON hỏng <code>"{not-valid-json"</code> → 400 chứ không throw)</li>
+<li><code>rfq.schemas.test.ts</code> có test bảo mật rõ ràng cho mass-assignment</li>
+<li>Test dùng <code>NextRequest</code> thật, không mock → sát runtime</li>
+</ul>
+</td><td>
+<ul style="margin:0">
+<li><b><code>cbu-engine.test.ts</code> có assertion bị làm yếu</b> — giá trị Excel (Unit Cost <code>5.32182186535253</code>, DDP <code>7.10</code>) chỉ nằm trong <b>comment</b>, không assert</li>
+<li>Còn ghi chú bug chưa xử lý: <code>// THIS IS THE BUG: The allocation formula is wrong!</code></li>
+<li><b>Không có test</b> cho <code>task.schemas</code>, <code>user.schemas</code>, API routes, CIPL, component</li>
+<li><code>jest-mock-extended</code> đã cài nhưng chưa dùng</li>
+</ul>
+</td></tr>
+</tbody></table></div>
+
+<!-- ============ 8 ============ -->
+<h2 class="sec pb" id="s8">8. CBU Pricing Engine</h2>
+
+<p>File: <code>lib/cbu-engine.ts</code> (611 dòng, 1 bản duy nhất). Engine chạy <b>phía client</b> trong <code>cbu-calc/page.tsx</code>; route <code>calculate-cbu</code> chỉ lưu kết quả đã tính.</p>
+
+<h3>8.1 Chuỗi tính giá</h3>
+<pre><code>preMargin  = material + bankFee + logistics + insurance + duty + custom
+ddpUsd     = ROUNDUP( preMargin / (1 − m − q·(1+c)) , 2 )
+commission = q · ddpUsd
+cit        = c · commission
+unitCost   = preMargin + commission + cit
+margin%    = (ddpUsd − unitCost) / ddpUsd</code></pre>
+<p>Trong đó <code>m</code> = margin, <code>q</code> = commission rate, <code>c</code> = CIT rate.</p>
+
+<div class="note ok">
+  <span class="lbl">Lý do dùng closed form (trích comment trong code)</span>
+  <p><i>"Commission is charged ON the selling price and is ALSO a cost component, so cost → price → commission → cost is circular. Solving for ddpUsd algebraically removes the loop: no iteration, no manual back-solving."</i></p>
+  <p style="margin-top:2mm">Đây là điểm thiết kế xuất sắc — giải phương trình đại số thay vì lặp hội tụ, cho kết quả xác định và nhanh.</p>
+</div>
+
+<h3>8.2 Ba chế độ định giá</h3>
+<div class="tw"><table>
+<thead><tr><th>Mode</th><th>Điều kiện</th><th>Công thức mẫu số</th></tr></thead>
+<tbody>
+<tr><td><b>PRICE_INPUT</b></td><td><code>cbuMode === "PRICE_INPUT"</code></td><td>Không tính — lấy <code>targetDdpPriceUsd</code></td></tr>
+<tr><td><b>Margin override ($/unit)</b></td><td><code>marginOverrideUsd &gt; 0</code></td><td><code>1 − q·(1+c)</code></td></tr>
+<tr><td><b>Margin %</b></td><td>mặc định</td><td><code>1 − m − q·(1+c)</code></td></tr>
+</tbody></table></div>
+
+<h3>8.3 Các pool chi phí</h3>
+<div class="tw"><table>
+<thead><tr><th>Pool</th><th style="width:50%">Công thức</th><th>Cơ sở phân bổ</th></tr></thead>
+<tbody>
+<tr><td>Freight</td><td><code>freightCost</code> (nếu &gt; 0) hoặc <code>freightFixed + rate × chargeableWeightKg</code></td><td>—</td></tr>
+<tr><td>Logistics</td><td><code>freight + clearance + inland + docFee</code></td><td>Trọng lượng</td></tr>
+<tr><td>Insurance</td><td><code>MAX((material + freight) × insured% × rate, min)</code></td><td>Trọng lượng</td></tr>
+<tr><td>Bank fee</td><td><code>remittance + receive + other</code></td><td>Giá trị vật tư</td></tr>
+<tr><td>Financing</td><td><code>material × %financed × (interest × days/daysPerYear)</code></td><td>Giá trị vật tư</td></tr>
+<tr><td>Duty</td><td><code>(material + logistics) × duty%</code></td><td>Theo dòng</td></tr>
+</tbody></table></div>
+<p><b>Miễn phí ngân hàng:</b> Remittance = 0 nếu <code>goodsOrigin === "local"</code>; Receive = 0 nếu <code>destinationCountry === "VN"</code>.</p>
+
+<h3>8.4 Margin danh nghĩa vs hiệu dụng</h3>
+<pre><code>nominalMarginPct = (totalRevenueUsd − totalCostUsd) / totalRevenueUsd × 100
+
+revenueAtBookingRate    = totalRevenueVnd / bookingExchangeRate
+effectiveGrossProfitUsd = revenueAtBookingRate − totalCostUsd
+effectiveMarginPct      = effectiveGrossProfitUsd / revenueAtBookingRate × 100</code></pre>
+<p>Comment giải thích: <i>"Effective margin captures the VND round-up uplift and the FX spread — this is the number that actually lands in the P&amp;L."</i> Tức margin hiệu dụng phản ánh lợi nhuận thực sau khi làm tròn VND lên bội số 10.000 và chênh lệch tỷ giá booking.</p>
+
+<h3>8.5 <span class="b b-red">🔴</span> Vấn đề 1: hàm <code>pct()</code> nhập nhằng</h3>
+<p>Header file khai báo quy ước: <i>"Every <code>*Percent</code> field is 0-100 (25 means 25%), never 0.25."</i> Nhưng <code>pct()</code> lại tự động phát hiện:</p>
+<pre><code>function pct(v: unknown): number {
+  const val = n(v);
+  return val &lt;= 1 ? val : val / 100;   // ≤1 → fraction, &gt;1 → percent
+}</code></pre>
+
+<div class="tw"><table>
+<thead><tr><th>Input</th><th><code>pct()</code> trả về</th><th>Diễn giải</th></tr></thead>
+<tbody>
+<tr><td><code>1</code> (ý là 1%)</td><td><code>1</code></td><td><b>100%</b> <span class="b b-red">sai</span></td></tr>
+<tr><td><code>0.5</code> (ý là 0,5%)</td><td><code>0.5</code></td><td><b>50%</b> <span class="b b-red">sai</span></td></tr>
+<tr><td><code>25</code></td><td><code>0.25</code></td><td>25% <span class="b b-grn">đúng</span></td></tr>
+<tr><td><code>0.03</code></td><td><code>0.03</code></td><td>3% <span class="b b-grn">đúng</span></td></tr>
+</tbody></table></div>
+
+<div class="note crit">
+  <span class="lbl">Xung đột thực tế trong codebase</span>
+  <ul style="margin-bottom:0">
+    <li><code>schema.prisma</code> default <code>remittanceRatePercent = 0.2</code> → <code>pct(0.2)</code> = <b>20%</b>, nhưng ý định là <b>0,2%</b> → <b>sai 100 lần</b></li>
+    <li>Test truyền <code>0.002</code> với comment <i>"rates as fractions (0.002 = 0.2%)"</i> → đúng ý định</li>
+    <li><code>insuranceRatePercent</code> default <code>0.01</code> → <code>pct()</code> đọc thành <b>1%</b></li>
+  </ul>
+</div>
+
+<h3>8.6 <span class="b b-red">🔴</span> Vấn đề 2: công thức phân bổ logistics</h3>
+<pre><code>const weightPerUnit    = qty &gt; 0 ? item.netWeightLbs / qty : 0;
+const logisticsPerUnit = totalLogisticsUsd * (weightPerUnit / totalWeightLbs);</code></pre>
+<p>Comment khẳng định: <i>"This gives exact allocation where SUM(logisticsPerUnit × qty) = totalLogisticsUsd"</i>. <b>Đẳng thức này không đúng.</b> Vì <code>totalWeightLbs = Σ(netWeightLbs × qty)</code> còn tử số là <code>netWeightLbs / qty</code>:</p>
+<pre><code>Σ(logisticsPerUnit × qty) = totalLogistics × Σ(netWeightLbs) / Σ(netWeightLbs × qty)</code></pre>
+<p>Chỉ bằng <code>totalLogistics</code> khi <b>mọi <code>qty</code> đều bằng 1</b>.</p>
+
+<div class="note crit">
+  <span class="lbl">Minh hoạ độ lệch (chính test file ghi nhận)</span>
+  <p>Một item, pool 4.000 USD, 320 đơn vị:</p>
+  <ul style="margin-bottom:0">
+    <li>Phân bổ đúng: <code>4000 / 320</code> = <b>12,50 USD/đơn vị</b></li>
+    <li>Engine trả về: <b>≈ 0,039 USD/đơn vị</b> — lệch khoảng <b>320 lần</b></li>
+  </ul>
+  <p style="margin-top:2mm">Đây là lỗi ảnh hưởng trực tiếp tới giá bán. Cần ưu tiên xử lý cao nhất.</p>
+</div>
+
+<h3>8.7 Cảnh báo engine phát ra</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:4%">#</th><th style="width:30%">Điều kiện</th><th>Thông điệp</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><code>totalWeightLbs ≤ 0</code> và có item</td><td>"Tổng trọng lượng = 0 nên chi phí logistics không phân bổ được cho dòng nào."</td></tr>
+<tr><td>2</td><td>destination ≠ VN, <code>receiveBaseUsd ≤ 0</code></td><td>"receiveBaseUsd chưa nhập — phí nhận ngoại tệ đang rơi về mức tối thiểu…"</td></tr>
+<tr><td>3</td><td>Mẫu số ≤ EPS</td><td>"Dòng X: margin Y% + commission Z% vượt 100% — không tính được giá bán, đã trả về giá vốn."</td></tr>
+</tbody></table></div>
+
+<h3>8.8 An toàn số học</h3>
+<div class="note ok">
+  <ul style="margin-bottom:0">
+    <li>Mọi giá trị từ DB đi qua <code>n()</code> (đảm bảo finite) hoặc <code>g()</code> (fallback khi null/""/NaN)</li>
+    <li>Không phép chia nào thiếu zero-guard</li>
+    <li><code>roundUp()</code> dùng <code>EPS = 1e-9</code> để tránh float dust — khớp hành vi <code>ROUNDUP</code> của Excel</li>
+    <li><code>qty</code>, <code>supplierUnitPrice</code>, <code>netWeightLbs</code> đều clamp <code>Math.max(0, …)</code></li>
+  </ul>
+</div>
+
+<!-- ============ 9 ============ -->
+<h2 class="sec pb" id="s9">9. AI Integration Layer</h2>
+
+<h3>9.1 Bốn module Gemini</h3>
+<div class="tw"><table>
+<thead><tr><th>Module</th><th>Model</th><th>Nguồn API key</th><th>Nguồn prompt</th></tr></thead>
+<tbody>
+<tr><td><code>lib/gemini-inquiry.ts</code></td><td><code>gemini-2.5-pro</code></td><td>DB → env</td><td><code>AiConfig.inquiryPrompt</code> → default</td></tr>
+<tr><td><code>lib/gemini-quote.ts</code></td><td><code>gemini-2.5-pro</code></td><td>DB → env</td><td><code>AiConfig.quotePrompt</code> → default</td></tr>
+<tr><td><code>lib/gemini-po.ts</code></td><td><code>gemini-2.5-pro</code></td><td>DB → env</td><td>Chỉ default</td></tr>
+<tr><td><code>lib/gemini-cipl.ts</code> <span class="b b-grn">mới</span></td><td><b><code>gemini-2.5-flash</code></b></td><td>Tham số truyền vào → env</td><td>Chỉ default</td></tr>
+</tbody></table></div>
+
+<h3>9.2 Mẫu xử lý chung</h3>
+<pre><code>// 1. Gọi model với inlineData (PDF/ảnh) hoặc text (Excel → CSV)
+// 2. Bóc markdown fence
+const cleaned = rawText.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+// 3. JSON.parse trong try/catch, throw lỗi kèm 200-300 ký tự đầu</code></pre>
+
+<div class="note warn">
+  <span class="lbl">Hạn chế chung</span>
+  <ul style="margin-bottom:0">
+    <li>Không dùng <code>responseMimeType: "application/json"</code> của Gemini → hợp đồng JSON chỉ được đảm bảo bằng <i>lời văn prompt</i></li>
+    <li><b>Không retry</b> khi parse lỗi</li>
+    <li><b>Không validate schema</b> kết quả AI — đây chính là nơi Zod sẽ có giá trị cao nhất nhưng chưa được áp dụng</li>
+    <li>Không giới hạn kích thước file đầu vào</li>
+  </ul>
+</div>
+
+<h3>9.3 Xử lý đầu vào đa định dạng</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:28%">Loại</th><th>Xử lý</th></tr></thead>
+<tbody>
+<tr><td>Excel (<code>.xlsx/.xls/.csv</code>)</td><td><code>xlsx.read</code> → <code>sheet_to_csv</code> → gửi dạng text</td></tr>
+<tr><td>PDF / ảnh</td><td><code>inlineData</code> base64</td></tr>
+<tr><td>Khác</td><td>UTF-8 text, cắt còn 5.000–10.000 ký tự</td></tr>
+</tbody></table></div>
+
+<h3>9.4 Catalog matching</h3>
+<p><code>lib/catalog-matcher.ts</code> — <code>matchStandardPartNumber()</code>: tìm <code>MasterPart</code> theo <code>description contains</code> (insensitive), nếu không thấy tìm theo <code>partNumber equals</code>, trả <code>null</code> nếu không khớp.</p>
+<div class="note warn">
+  <p>Dự án đã cài <code>string-similarity</code> nhưng module này <b>không dùng fuzzy scoring</b> — chỉ so khớp chuỗi con. Còn dư địa cải thiện độ chính xác.</p>
+</div>
+
+<!-- ============ 10 ============ -->
+<h2 class="sec pb" id="s10">10. Tính năng CIPL (mới)</h2>
+
+<h3>10.1 Luồng nghiệp vụ</h3>
+<pre class="ascii">┌──────────────┐   ┌──────────────────┐   ┌─────────────┐   ┌──────────────┐
+│ Upload PDF   │──&gt;│ POST /api/cipl/  │──&gt;│ Gemini      │──&gt;│ Trả JSON     │
+│ (modal tab)  │   │      extract     │   │ 2.5-flash   │   │ (chưa lưu)   │
+└──────────────┘   └──────────────────┘   └─────────────┘   └──────────────┘
+                                                                    │
+                    ┌───────────────────────────────────────────────┘
+                    ▼
+┌──────────────┐   ┌──────────────────┐   ┌──────────────────────────────┐
+│ User review  │──&gt;│ POST /api/cipl/  │──&gt;│ CiplRecord + CiplItem[]      │
+│ &amp; chỉnh sửa  │   │      save        │   │ (tạo bản mới, giữ lịch sử)   │
+└──────────────┘   └──────────────────┘   └──────────────────────────────┘
+                                                         │
+                    ┌────────────────────────────────────┘
+                    ▼
+┌────────────────────┐   ┌────────────────────┐   ┌──────────────────┐
+│ /rfq/[id]/cipl     │──&gt;│ POST /api/rfq/     │──&gt;│ APITemplate      │
+│ (edit inline)      │   │ generate-document  │   │ CIPL_PDF         │
+└────────────────────┘   └────────────────────┘   └──────────────────┘</pre>
+
+<div class="note ok">
+  <p><b>Thiết kế hai bước (extract → review → save) là lựa chọn đúng đắn</b> cho chứng từ hải quan: AI không ghi thẳng vào DB, người dùng luôn kiểm duyệt trước.</p>
+</div>
+
+<h3>10.2 Ba API routes</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:24%">Route</th><th style="width:10%">Method</th><th>Chức năng</th></tr></thead>
+<tbody>
+<tr><td><code>/api/cipl/extract</code></td><td>POST</td><td>Nhận multipart (<code>file</code>, <code>rfqId</code>, <code>rfqCode</code>), kiểm tra đuôi <code>.pdf</code>, resolve <code>rfqId</code> từ <code>rfqCode</code>, gọi Gemini, <b>trả về không lưu</b>. <code>maxDuration = 60</code></td></tr>
+<tr><td><code>/api/cipl/save</code></td><td>POST</td><td>Nhận <code>{rfqId, data, fileName}</code>, verify RFQ tồn tại, <code>ciplRecord.create</code> với nested <code>items.create</code>, map snake_case → camelCase</td></tr>
+<tr><td><code>/api/cipl/[rfqId]</code></td><td>GET</td><td><code>findFirst</code> orderBy <code>createdAt desc</code>, items orderBy <code>lineNo asc</code></td></tr>
+</tbody></table></div>
+
+<h3>10.3 Module <code>lib/gemini-cipl.ts</code></h3>
+<ul>
+<li>Model <code>gemini-2.5-flash</code> — nhanh/rẻ hơn <code>2.5-pro</code>, hợp lý cho bóc tách chứng từ có cấu trúc rõ</li>
+<li>Prompt dài, cố định schema JSON 18 trường header + mảng items 10 trường</li>
+<li>Tên trường <b>snake_case</b>, khớp 1:1 với field name của template APITemplate CIPL</li>
+<li>Guard sau parse: <code>if (!Array.isArray(parsed.items)) parsed.items = [];</code></li>
+</ul>
+
+<h3>10.4 UI <code>/rfq/[id]/cipl</code></h3>
+<p>Trang client 380 dòng: load song song <code>/api/rfq/{id}</code> và <code>/api/cipl/{rfqId}</code>; 404 → empty state hướng dẫn <i>"Xử lý File → 📋 Extract CIPL"</i>; form header + bảng 11 cột chỉnh sửa inline; mọi thay đổi → <code>setPdfUrl(null)</code> buộc tạo lại PDF; preview bằng <code>&lt;iframe&gt;</code>, tải về bằng blob.</p>
+
+<div class="note warn">
+  <span class="lbl">Ghi chú</span>
+  <ul style="margin-bottom:0">
+    <li><b>CIPL chưa có trong sidebar</b> — chỉ vào được qua <code>GenerateFileModal</code> hoặc URL trực tiếp</li>
+    <li><code>sourceFileUrl</code> lưu <b>tên file</b>, không phải URL thật → không truy vết được file gốc</li>
+    <li><code>/api/cipl/extract</code> gọi <code>prisma.aiConfig.findFirst()</code> <b>không có</b> <code>where: {name:"core"}</code>, khác 3 module Gemini còn lại</li>
+  </ul>
+</div>
+
+<!-- ============ 11 ============ -->
+<h2 class="sec pb" id="s11">11. Document Generation Pipeline</h2>
+
+<h3>11.1 Các loại tài liệu</h3>
+<p><code>VALID_DOC_TYPES</code> khai báo 5 loại, nhưng chỉ có <b>3 nhánh payload</b>:</p>
+<div class="tw"><table>
+<thead><tr><th>docType</th><th>Template ENV</th><th class="ctr">Nhánh riêng</th></tr></thead>
+<tbody>
+<tr><td><code>QUOTATION_CLIENT_PDF</code></td><td><code>APITEMPLATE_QUOTATION_TEMPLATE_ID</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>MVPO_SUPPLIER_PDF</code></td><td><code>APITEMPLATE_MVPO_TEMPLATE_ID</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>CIPL_PDF</code> <span class="b b-grn">mới</span></td><td><code>APITEMPLATE_CIPL_TEMPLATE_ID</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>COMMERCIAL_INVOICE_PDF</code></td><td><i>dùng quotation</i></td><td class="ctr"><span class="b b-amb">❌</span></td></tr>
+<tr><td><code>CERTIFICATE_COC_COO_PDF</code></td><td><i>dùng quotation</i></td><td class="ctr"><span class="b b-amb">❌</span></td></tr>
+</tbody></table></div>
+
+<h3>11.2 Pipeline</h3>
+<pre><code>session check → validate rfqCode/docType → prisma.rFQ.findUnique
+  → sanitise APITEMPLATE_API_KEY (.replace(/['"]/g,"").trim())
+  → branch payload theo docType
+  → POST https://rest.apitemplate.io/v2/create-pdf?template_id=...
+  → fetch download_url → Buffer
+  → Supabase upload: bucket "documents", path rfq/{rfqCode}/{fileName}
+  → prisma.document.create({ type: docType, fileUrl })</code></pre>
+
+<h3>11.3 <span class="b b-amb">⚠</span> Fallback base64 nguy hiểm</h3>
+<p>Khi upload Supabase lỗi, code <b>không báo lỗi</b> mà nhúng toàn bộ PDF thành data-URI lưu vào cột <code>fileUrl</code>:</p>
+<pre><code>fileUrl = `data:application/pdf;base64,${base64}`;</code></pre>
+<div class="note crit">
+  <p>Ghi chuỗi hàng MB vào Postgres một cách âm thầm. Vì <code>SUPABASE_SERVICE_ROLE_KEY</code> <b>không có trong <code>.env</code></b> local, nhánh fallback này <b>luôn được kích hoạt khi dev</b>.</p>
+</div>
+
+<h3>11.4 <span class="b b-amb">⚠</span> Lỗi đơn giá trong payload quotation</h3>
+<pre><code>unit_price:   Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0),  // ⚠️ chia thừa
+amount:       Number(item.ddpPriceUsd ?? 0),                                 // ⚠️ đây là đơn giá
+total_amount: ddpPriceUsd * qty                                              // ✅ đúng</code></pre>
+<p><code>ddpPriceUsd</code> trong engine <b>đã là giá mỗi đơn vị</b>. Chia thêm cho <code>qty</code> làm sai <code>unit_price</code>; <code>amount</code> lại nhận đơn giá thay vì thành tiền. Ba cột không nhất quán với nhau.</p>
+
+<h3>11.5 Split CI/PL</h3>
+<p><code>/api/pdf/split-cipl</code> tách file scan gộp thành CIPL và COO/COC bằng 2 chiến lược: <b>(1) size</b> — phát hiện trang đổi kích thước &gt; 10pt; <b>(2) OCR</b> — <code>pdf2pic</code> render → <code>tesseract.js</code> → fuzzy match 11 anchor keyword, ngưỡng 0,85.</p>
+<div class="note warn">
+  <p>Chiến lược OCR so sánh <code>stringSimilarity</code> giữa <b>toàn bộ text của trang</b> với một từ khoá ngắn → điểm số gần như không bao giờ đạt 0,85. Nhánh OCR <b>thực tế hầu như không bao giờ kích hoạt</b>.</p>
+</div>
+<p>Code cố ý không dùng <code>copyPages</code> mà load file 2 lần rồi <code>removePage()</code> ngược — comment giải thích pdf-lib không giữ tốt Form XObject của PDF scan (gây trang trắng). Đây là workaround hợp lý và được ghi chú rõ.</p>
+
+<!-- ============ 12 ============ -->
+<h2 class="sec" id="s12">12. Email &amp; Communication</h2>
+
+<h3>12.1 <span class="b b-amb">⚠</span> Ba transport song song</h3>
+<div class="tw"><table>
+<thead><tr><th>Transport</th><th>File</th><th>Nguồn key</th><th>From address</th></tr></thead>
+<tbody>
+<tr><td>MS Graph REST</td><td><code>src/lib/ms-graph.ts</code></td><td>ENV (<code>MS_GRAPH_*</code> ‖ <code>AZURE_*</code>)</td><td><code>MS_GRAPH_FROM_EMAIL</code></td></tr>
+<tr><td>Nodemailer → Resend SMTP</td><td><code>lib/email.ts</code></td><td><b>DB</b> (<code>AiConfig.resendApiKey</code>)</td><td><code>onboarding@resend.dev</code> <span class="b b-amb">sandbox</span></td></tr>
+<tr><td>Resend SDK</td><td><code>send-rfo/route.ts</code></td><td>ENV (<code>RESEND_API_KEY</code>)</td><td><code>onboarding@resend.dev</code> <span class="b b-amb">sandbox</span></td></tr>
+</tbody></table></div>
+<p>Ba cơ chế, hai nguồn key khác nhau, hai chỗ dùng địa chỉ sandbox chưa verify domain. Cần hợp nhất.</p>
+
+<h3>12.2 MS Graph (đường chính)</h3>
+<ul>
+<li>Token: client credentials flow → <code>login.microsoftonline.com/{tenant}/oauth2/v2.0/token</code>, scope <code>.default</code></li>
+<li>Gửi: <code>POST /v1.0/users/{fromEmail}/sendMail</code>, <code>saveToSentItems: "true"</code></li>
+<li>Attachment: <code>#microsoft.graph.fileAttachment</code> base64</li>
+<li>Hỗ trợ song song 2 bộ tên biến môi trường (<code>MS_GRAPH_*</code> và <code>AZURE_*</code>)</li>
+</ul>
+<p>Consumers: <code>email/test-ms</code>, <code>rfq/[id]/send-quote</code>, <code>rfq/send-dispatch</code>.</p>
+
+<!-- ============ 13 ============ -->
+<h2 class="sec pb" id="s13">13. API Endpoints</h2>
+
+<h3>13.1 Phân bố 43 routes</h3>
+<div class="tw"><table>
+<thead><tr><th>Nhóm</th><th class="num">Số lượng</th><th>Prefix</th></tr></thead>
+<tbody>
+<tr><td>RFQ</td><td class="num">24</td><td><code>/api/rfq/*</code></td></tr>
+<tr><td>Database</td><td class="num">4</td><td><code>/api/database/*</code></td></tr>
+<tr><td>CIPL <span class="b b-grn">mới</span></td><td class="num">3</td><td><code>/api/cipl/*</code></td></tr>
+<tr><td>Clients</td><td class="num">2</td><td><code>/api/clients/*</code></td></tr>
+<tr><td>Tasks</td><td class="num">2</td><td><code>/api/tasks/*</code></td></tr>
+<tr><td>Email</td><td class="num">2</td><td><code>/api/email/*</code></td></tr>
+<tr><td>Khác</td><td class="num">6</td><td><code>users</code>, <code>ai-config</code>, <code>agent</code>, <code>suppliers</code>, <code>download-pdf</code>, <code>pdf/split-cipl</code>, <code>auth</code></td></tr>
+</tbody></table></div>
+
+<h3>13.2 Routes chính</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:28%">Route</th><th style="width:16%">Methods</th><th>Mô tả</th><th class="ctr" style="width:8%">Zod</th></tr></thead>
+<tbody>
+<tr><td><code>/api/rfq</code></td><td>GET</td><td>Danh sách RFQ, filter status, <code>take: 100</code></td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/[id]</code></td><td>GET, DELETE, PATCH</td><td>CRUD; GET sanitise BigInt → Number</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/[id]/status</code></td><td>PATCH</td><td>Chuyển trạng thái, set <code>approvedById</code></td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/[id]/calculate-cbu</code></td><td>POST</td><td>Lưu kết quả CBU (<code>$transaction</code>)</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/[id]/items</code></td><td>PATCH</td><td>Cập nhật hàng loạt items</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/create-manual</code></td><td>POST</td><td>Tạo RFQ thủ công + <code>generateRfoId()</code></td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/rfq/generate-document</code></td><td>POST</td><td>Sinh PDF 5 loại</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/cipl/extract</code></td><td>POST</td><td>Bóc tách CIPL bằng AI</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/cipl/save</code></td><td>POST</td><td>Lưu CIPL</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/cipl/[rfqId]</code></td><td>GET</td><td>Lấy CIPL mới nhất</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/users</code></td><td>GET, POST, PATCH, PUT</td><td>Quản lý user (ADMIN)</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/pdf/split-cipl</code></td><td>POST</td><td>Tách PDF <span class="b b-red">no auth</span></td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>/api/download-pdf</code></td><td>GET</td><td>Proxy tải PDF <span class="b b-red">no auth</span></td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+</tbody></table></div>
+
+<!-- ============ 14 ============ -->
+<h2 class="sec" id="s14">14. Bảo mật &amp; Phân quyền</h2>
+
+<h3>14.1 Cơ chế xác thực</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:22%">Lớp</th><th>Cơ chế</th></tr></thead>
+<tbody>
+<tr><td><b>Middleware</b></td><td><code>withAuth</code> bảo vệ <code>/overview</code>, <code>/rfq</code>, <code>/clients</code>, <code>/system-users</code>, <code>/settings</code></td></tr>
+<tr><td><b>Layout</b></td><td><code>(dashboard)/layout.tsx</code> → <code>getServerSession</code> → redirect <code>/login</code></td></tr>
+<tr><td><b>API routes</b></td><td>Từng route tự gọi <code>getServerSession(authOptions)</code></td></tr>
+<tr><td><b>Role guard</b></td><td><code>/system-users</code>, <code>/settings</code> chỉ ADMIN (middleware redirect)</td></tr>
+</tbody></table></div>
+<p><b>Auth config:</b> NextAuth Credentials + bcrypt, JWT strategy, <code>maxAge</code> 8 giờ, kiểm tra <code>user.isActive</code>.</p>
+
+<h3>14.2 <span class="b b-red">🔴</span> Các vấn đề bảo mật</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:4%">#</th><th style="width:44%">Vấn đề</th><th style="width:34%">File</th><th>Mức độ</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>Mass assignment</b> — <code>body</code> → <code>prisma.rFQ.update()</code> không lọc</td><td><code>api/rfq/[id]/route.ts:117-121</code></td><td><span class="b b-red">Cao</span></td></tr>
+<tr><td>2</td><td><b>Open proxy / SSRF</b> — nhận <code>?url=</code> bất kỳ, fetch và trả về, không auth, không allow-list</td><td><code>api/download-pdf/route.ts</code></td><td><span class="b b-red">Cao</span></td></tr>
+<tr><td>3</td><td><b>Không auth</b> — route xử lý file nặng (OCR, 90s) mở công khai</td><td><code>api/pdf/split-cipl/route.ts</code></td><td><span class="b b-red">Cao</span></td></tr>
+<tr><td>4</td><td><b>Header injection</b> — <code>filename</code> nội suy thẳng vào <code>Content-Disposition</code></td><td><code>api/download-pdf/route.ts:32</code></td><td><span class="b b-amb">TB</span></td></tr>
+<tr><td>5</td><td><b>Rò rỉ secret qua response</b> — <code>Giá trị hiện tại: API_KEY=${apiKey}</code></td><td><code>api/rfq/[id]/generate-pdf</code></td><td><span class="b b-amb">TB</span></td></tr>
+<tr><td>6</td><td><b>Không rate limiting</b> trên route AI (tốn phí Gemini)</td><td>Toàn bộ <code>parse-*</code></td><td><span class="b b-amb">TB</span></td></tr>
+<tr><td>7</td><td>Seed password mặc định <code>Admin@123</code> trong repo</td><td><code>prisma/seed.ts:7</code></td><td><span class="b b-yel">Thấp</span></td></tr>
+</tbody></table></div>
+
+<div class="note warn">
+  <span class="lbl">Lưu ý lịch sử</span>
+  <p>Repo từng bị chặn push do lộ Azure AD secret trong commit <code>7d2c270</code> (file <code>api_accesstoken (2).bot</code>). Đã xử lý ở commit <code>0b02859</code> và <code>.gitignore</code> nay có <code>*.bot</code>.</p>
+</div>
+
+<h3>14.3 Biến môi trường</h3>
+<p><b>20 biến được tham chiếu trong code. <code>.env</code> hiện có 15.</b></p>
+<div class="tw"><table>
+<thead><tr><th style="width:44%">Thiếu trong <code>.env</code></th><th>Hệ quả</th></tr></thead>
+<tbody>
+<tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td><span class="b b-red">Nghiêm trọng</span> Upload Supabase luôn fail → fallback base64 vào DB</td></tr>
+<tr><td><code>MS_GRAPH_TENANT_ID</code> / <code>_CLIENT_ID</code> / <code>_CLIENT_SECRET</code></td><td>Có fallback sang <code>AZURE_*</code> nên vẫn chạy</td></tr>
+<tr><td><code>MS_GRAPH_FROM_EMAIL</code></td><td>Có fallback sang <code>MS_GRAPH_MAILBOX</code></td></tr>
+</tbody></table></div>
+
+<!-- ============ 15 ============ -->
+<h2 class="sec pb" id="s15">15. Điểm mạnh</h2>
+<div class="tw"><table>
+<thead><tr><th style="width:4%">#</th><th style="width:32%">Điểm mạnh</th><th>Bằng chứng</th></tr></thead>
+<tbody>
+<tr><td>1</td><td><b>CBU engine thiết kế đại số vững</b></td><td>Closed-form phá vòng lặp circular, không iteration; <code>roundUp</code> khớp Excel với EPS guard</td></tr>
+<tr><td>2</td><td><b>Kỷ luật an toàn số học</b></td><td>Mọi giá trị qua <code>n()</code>/<code>g()</code>, không phép chia thiếu zero-guard, clamp <code>Math.max(0,…)</code></td></tr>
+<tr><td>3</td><td><b>Phân biệt margin danh nghĩa/hiệu dụng</b></td><td>Phản ánh đúng lợi nhuận sau round-up VND và FX spread</td></tr>
+<tr><td>4</td><td><b>Lớp Zod thiết kế chuẩn</b></td><td>Discriminated union, allow-list chống mass-assignment, thông báo tiếng Việt</td></tr>
+<tr><td>5</td><td><b>Luồng CIPL hai bước an toàn</b></td><td>AI không ghi thẳng DB; người dùng review trước khi lưu</td></tr>
+<tr><td>6</td><td><b>Xử lý đa định dạng đầu vào</b></td><td>Excel → CSV, PDF/ảnh → inlineData, fallback text</td></tr>
+<tr><td>7</td><td><b>BigInt sanitisation</b></td><td><code>api/rfq/[id]</code> convert BigInt → Number tránh <code>JSON.stringify</code> throw</td></tr>
+<tr><td>8</td><td><b>Connection pooling có kiểm soát</b></td><td><code>pg.Pool</code> max 5, cache trên <code>globalThis</code>, tránh EMAXCONNSESSION</td></tr>
+<tr><td>9</td><td><b>Comment giải thích "tại sao"</b></td><td>Nhiều workaround được ghi rõ lý do (vd: không dùng <code>copyPages</code>)</td></tr>
+<tr><td>10</td><td><b>Test có ý thức bảo mật</b></td><td>Có hẳn test case cho mass-assignment protection</td></tr>
+</tbody></table></div>
+
+<!-- ============ 16 ============ -->
+<h2 class="sec" id="s16">16. Điểm yếu &amp; Nợ kỹ thuật</h2>
+
+<h3>16.1 Bảng tổng hợp theo mức ưu tiên</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:4%">#</th><th style="width:36%">Vấn đề</th><th style="width:16%">Mức độ</th><th style="width:10%">Effort</th><th>Ảnh hưởng</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Công thức phân bổ logistics sai (~320×)</td><td><span class="b b-red">Nghiêm trọng</span></td><td>4h</td><td>Sai giá bán</td></tr>
+<tr><td>2</td><td><code>pct()</code> nhập nhằng 1% vs 100%</td><td><span class="b b-red">Nghiêm trọng</span></td><td>4h</td><td>Sai chi phí</td></tr>
+<tr><td>3</td><td>Zod chưa wire vào route nào (0/43)</td><td><span class="b b-red">Cao</span></td><td>8h</td><td>Bảo mật + DX</td></tr>
+<tr><td>4</td><td>3/4 test suite fail (thiếu <code>moduleNameMapper</code>)</td><td><span class="b b-red">Cao</span></td><td>15p</td><td>CI/CD</td></tr>
+<tr><td>5</td><td><code>download-pdf</code> là open proxy, không auth</td><td><span class="b b-red">Cao</span></td><td>2h</td><td>SSRF</td></tr>
+<tr><td>6</td><td><code>split-cipl</code> không auth</td><td><span class="b b-red">Cao</span></td><td>30p</td><td>Lạm dụng tài nguyên</td></tr>
+<tr><td>7</td><td>Migration drift — 7 models thiếu migration</td><td><span class="b b-amb">TB</span></td><td>2h</td><td>Deploy mới lỗi</td></tr>
+<tr><td>8</td><td>Hai thư mục <code>lib/</code> + alias xung đột</td><td><span class="b b-amb">TB</span></td><td>4h</td><td>Dead code, nhầm lẫn</td></tr>
+<tr><td>9</td><td>Thiếu index trên mọi FK</td><td><span class="b b-amb">TB</span></td><td>1h</td><td>Hiệu năng</td></tr>
+<tr><td>10</td><td>Ba email transport song song</td><td><span class="b b-amb">TB</span></td><td>4h</td><td>Khó bảo trì</td></tr>
+<tr><td>11</td><td>Lỗi <code>unit_price</code>/<code>amount</code> trong quotation PDF</td><td><span class="b b-amb">TB</span></td><td>1h</td><td>Sai chứng từ</td></tr>
+<tr><td>12</td><td>Fallback base64 ghi MB vào Postgres</td><td><span class="b b-amb">TB</span></td><td>2h</td><td>Phình DB</td></tr>
+<tr><td>13</td><td>Enum lặp ở 4 nơi</td><td><span class="b b-yel">Thấp</span></td><td>2h</td><td>Dễ lệch</td></tr>
+<tr><td>14</td><td>AI response không validate schema</td><td><span class="b b-yel">Thấp</span></td><td>4h</td><td>Lỗi runtime</td></tr>
+<tr><td>15</td><td>Nhánh OCR của split-cipl không bao giờ chạy</td><td><span class="b b-yel">Thấp</span></td><td>3h</td><td>Tính năng chết</td></tr>
+<tr><td>16</td><td>Không rate limiting</td><td><span class="b b-yel">Thấp</span></td><td>4h</td><td>Chi phí AI</td></tr>
+<tr><td>17</td><td><code>generateRfoId</code> không transaction, vỡ ở AC9999</td><td><span class="b b-yel">Thấp</span></td><td>2h</td><td>Trùng mã</td></tr>
+<tr><td>18</td><td>Không test component/API route</td><td><span class="b b-yel">Thấp</span></td><td>16h</td><td>Coverage</td></tr>
+</tbody></table></div>
+
+<h3>16.2 Ba vấn đề cần xử lý ngay</h3>
+<div class="note crit">
+  <span class="lbl">① Phân bổ logistics — <code>lib/cbu-engine.ts:438-443</code></span>
+  <p>Đây là lỗi tính tiền, ảnh hưởng mọi báo giá có <code>qty &gt; 1</code>. Cần đối chiếu lại với file Excel gốc <code>CBU-AC0084_DDP_VN_MARGIN_INPUT.xlsx</code> để xác định công thức đúng, rồi viết test assert <b>giá trị Excel cụ thể</b> thay vì <code>toBeGreaterThan(0)</code>.</p>
+</div>
+<div class="note crit">
+  <span class="lbl">② Hàm <code>pct()</code> — <code>lib/cbu-engine.ts:233-236</code></span>
+  <p>Đề xuất: bỏ auto-detect, ép một quy ước duy nhất (0–100), rồi chuẩn hoá toàn bộ default trong <code>schema.prisma</code>.</p>
+</div>
+<div class="note">
+  <span class="lbl">③ Wire Zod</span>
+  <p>15 phút sửa <code>jest.config.js</code> + 8 giờ gắn 7 route. Toàn bộ schema đã sẵn sàng, chỉ còn áp dụng.</p>
+</div>
+
+<!-- ============ 17 ============ -->
+<h2 class="sec pb" id="s17">17. Định hướng công việc tiếp theo</h2>
+
+<h3>17.1 Sprint 1 — Đóng nợ kỹ thuật (1 tuần)</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:12%">Ngày</th><th style="width:52%">Công việc</th><th>Kết quả mong đợi</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Sửa <code>jest.config.js</code> + chạy lại 52 test</td><td>52/52 pass</td></tr>
+<tr><td>1</td><td>Thêm auth cho <code>split-cipl</code>, <code>download-pdf</code> + allow-list domain</td><td>Đóng SSRF</td></tr>
+<tr><td>2–3</td><td>Điều tra &amp; sửa công thức logistics, viết test đối chiếu Excel</td><td>Assert giá trị thật</td></tr>
+<tr><td>3</td><td>Chuẩn hoá <code>pct()</code> về 1 quy ước, sửa default trong schema</td><td>Hết nhập nhằng</td></tr>
+<tr><td>4–5</td><td>Wire Zod vào 7 route ưu tiên</td><td>7/43 routes validated</td></tr>
+<tr><td>5</td><td>Tạo migration cho 7 models thiếu</td><td><code>migrate deploy</code> sạch</td></tr>
+</tbody></table></div>
+
+<h3>17.2 Sprint 2 — Củng cố nền tảng (1 tuần)</h3>
+<ul>
+<li>Thêm <code>@@index</code> cho toàn bộ FK</li>
+<li>Hợp nhất hai thư mục <code>lib/</code>, xoá dead code, bỏ alias webpack xung đột</li>
+<li>Thống nhất một email transport (khuyến nghị: MS Graph), verify domain thật</li>
+<li>Sinh enum Zod từ Prisma (<code>z.nativeEnum(OrderStatus)</code>) thay vì khai báo tay</li>
+<li>Sửa <code>unit_price</code>/<code>amount</code> trong payload quotation</li>
+<li>Bỏ fallback base64, thay bằng lỗi rõ ràng</li>
+</ul>
+
+<h3>17.3 Sprint 3 — Mở rộng test (1 tuần)</h3>
+<ul>
+<li>Integration test cho API routes dùng <code>jest-mock-extended</code> (đã cài sẵn)</li>
+<li>Cài <code>@testing-library/react</code> + <code>jest-environment-jsdom</code>, mở rộng <code>testMatch</code> sang <code>.tsx</code></li>
+<li>Test cho <code>task.schemas.ts</code>, <code>user.schemas.ts</code>, module CIPL</li>
+<li>Thiết lập CI chạy <code>npm test</code> + <code>tsc --noEmit</code> + <code>lint</code> trên mỗi PR</li>
+</ul>
+
+<h3>17.4 Sprint 4+ — Tính năng</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:32%">Hạng mục</th><th>Mô tả</th></tr></thead>
+<tbody>
+<tr><td>Validate AI output bằng Zod</td><td>Áp <code>safeParse</code> lên kết quả Gemini trước khi dùng</td></tr>
+<tr><td>Rate limiting</td><td>Giới hạn route <code>parse-*</code> theo user/IP</td></tr>
+<tr><td>COC/COO template riêng</td><td>Hiện đang dùng nhầm template quotation</td></tr>
+<tr><td>CIPL vào sidebar</td><td>Bổ sung điều hướng chính thức</td></tr>
+<tr><td>Dashboard analytics</td><td>Mở rộng KPI hiện có (revenue, margin, pipeline)</td></tr>
+<tr><td>Audit logging</td><td>Ghi vết thay đổi dữ liệu</td></tr>
+<tr><td>AI Agent orchestration</td><td>Hiện <code>/api/agent</code> vẫn là placeholder</td></tr>
+</tbody></table></div>
+
+<h3>17.5 Lộ trình phiên bản</h3>
+<pre class="ascii">v0.2  ├─ Sprint 1 + 2: đóng nợ kỹ thuật, ổn định nền tảng
+      └─ Mục tiêu: 0 lỗi nghiêm trọng, Zod phủ 100% route ghi dữ liệu
+
+v0.3  ├─ Sprint 3: test coverage + CI/CD
+      └─ Mục tiêu: coverage ≥ 60%, pipeline tự động
+
+v0.4  ├─ COC/COO, rate limiting, audit log
+      └─ Mục tiêu: hoàn thiện bộ chứng từ hải quan
+
+v1.0  ├─ AI Agent orchestration, multi-tenant
+      └─ Mục tiêu: sẵn sàng vận hành quy mô lớn</pre>
+
+<!-- ============ 18 ============ -->
+<h2 class="sec pb" id="s18">18. Phụ lục</h2>
+
+<h3>A. Bảng biến môi trường</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:34%">Biến</th><th>Dùng ở</th><th class="ctr" style="width:14%">Có trong <code>.env</code></th></tr></thead>
+<tbody>
+<tr><td><code>DATABASE_URL</code></td><td><code>lib/prisma.ts</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>NEXTAUTH_SECRET</code></td><td><code>lib/auth.ts</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>NEXTAUTH_URL</code></td><td><code>src/lib/ms-graph.ts</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>GEMINI_API_KEY</code></td><td>4 module gemini + 2 route</td><td class="ctr">✅</td></tr>
+<tr><td><code>NEXT_PUBLIC_SUPABASE_URL</code></td><td>supabase client/server + 2 route PDF</td><td class="ctr">✅</td></tr>
+<tr><td><code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code></td><td>supabase client/server</td><td class="ctr">✅</td></tr>
+<tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td>2 route PDF</td><td class="ctr"><span class="b b-red">❌</span></td></tr>
+<tr><td><code>APITEMPLATE_API_KEY</code></td><td>2 route PDF</td><td class="ctr">✅</td></tr>
+<tr><td><code>APITEMPLATE_QUOTATION_TEMPLATE_ID</code></td><td>2 route PDF</td><td class="ctr">✅</td></tr>
+<tr><td><code>APITEMPLATE_MVPO_TEMPLATE_ID</code></td><td><code>generate-document</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>APITEMPLATE_CIPL_TEMPLATE_ID</code></td><td><code>generate-document</code></td><td class="ctr">✅</td></tr>
+<tr><td><code>AZURE_TENANT_ID</code> / <code>_CLIENT_ID</code> / <code>_CLIENT_SECRET</code></td><td>ms-graph (cả 2 bản)</td><td class="ctr">✅</td></tr>
+<tr><td><code>MS_GRAPH_MAILBOX</code></td><td>ms-graph</td><td class="ctr">✅</td></tr>
+<tr><td><code>MS_GRAPH_TENANT_ID</code> / <code>_CLIENT_ID</code> / <code>_CLIENT_SECRET</code></td><td><code>src/lib/ms-graph.ts</code></td><td class="ctr"><span class="b b-amb">fallback</span></td></tr>
+<tr><td><code>MS_GRAPH_FROM_EMAIL</code></td><td><code>src/lib/ms-graph.ts</code></td><td class="ctr"><span class="b b-amb">fallback</span></td></tr>
+<tr><td><code>RESEND_API_KEY</code></td><td><code>send-rfo</code>, <code>ai-config</code></td><td class="ctr">✅</td></tr>
+</tbody></table></div>
+
+<h3>B. File tham chiếu nhanh</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:44%">File</th><th>Vai trò</th></tr></thead>
+<tbody>
+<tr><td><code>lib/cbu-engine.ts</code></td><td>Engine tính giá CBU (611 dòng)</td></tr>
+<tr><td><code>src/lib/validation.ts</code></td><td>Helper Zod validation</td></tr>
+<tr><td><code>src/lib/schemas/*.ts</code></td><td>6 file schema theo domain</td></tr>
+<tr><td><code>lib/gemini-cipl.ts</code></td><td>Bóc tách CIPL (Gemini 2.5 Flash)</td></tr>
+<tr><td><code>src/app/api/rfq/generate-document/route.ts</code></td><td>Sinh PDF 5 loại</td></tr>
+<tr><td><code>src/app/(dashboard)/rfq/[id]/cbu-calc/page.tsx</code></td><td>UI tính CBU</td></tr>
+<tr><td><code>src/app/(dashboard)/rfq/[id]/cipl/page.tsx</code></td><td>UI chỉnh sửa CIPL</td></tr>
+<tr><td><code>middleware.ts</code></td><td>Bảo vệ route + role guard</td></tr>
+<tr><td><code>prisma/schema.prisma</code></td><td>11 models, 3 enums</td></tr>
+<tr><td><code>jest.config.js</code></td><td>Cấu hình test (cần thêm <code>moduleNameMapper</code>)</td></tr>
+</tbody></table></div>
+
+<h3>C. Lệnh thường dùng</h3>
+<pre><code>npm run dev              # Dev server
+npm run build            # Build production (8GB heap)
+npm test                 # Chạy test
+npx tsc --noEmit         # Kiểm tra type
+npm run lint             # ESLint
+npx prisma generate      # Sinh Prisma client
+npx prisma migrate dev   # Tạo migration
+npx prisma db push       # Đồng bộ schema (đang dùng — gây drift)
+npx tsx prisma/seed.ts   # Seed admin</code></pre>
+
+<h3>D. Trạng thái kiểm chứng</h3>
+<div class="tw"><table>
+<thead><tr><th style="width:24%">Kiểm tra</th><th style="width:34%">Lệnh</th><th>Kết quả</th></tr></thead>
+<tbody>
+<tr><td>TypeScript</td><td><code>npx tsc --noEmit</code></td><td><span class="b b-grn">✅ 0 lỗi</span></td></tr>
+<tr><td>Test suite</td><td><code>npm test</code></td><td><span class="b b-amb">⚠ 1/4 suite pass (10/52 test)</span></td></tr>
+<tr><td>Zod integration</td><td>grep <code>@/lib/validation</code></td><td><span class="b b-amb">⚠ 0/43 routes</span></td></tr>
+<tr><td>Migration</td><td>đếm folder <code>prisma/migrations</code></td><td><span class="b b-amb">⚠ 1 migration / 11 models</span></td></tr>
+</tbody></table></div>
+
+<p class="foot">Báo cáo được lập trên cơ sở phân tích trực tiếp mã nguồn ngày 11/09/2026.<br>Mọi số liệu đều có thể tái kiểm chứng bằng các lệnh liệt kê ở Phụ lục D.</p>
+
+</div>
+</body>
+</html>

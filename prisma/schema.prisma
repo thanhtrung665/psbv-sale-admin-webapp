@@ -128,6 +128,7 @@ model RFQ {
   
   items             RFQItem[]
   documents         Document[]
+  ciplRecords       CiplRecord[]
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 }
@@ -236,3 +237,65 @@ model Supplier {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+// ─── CIPL (Commercial Invoice & Packing List) ───────────────────────────────
+
+/// Stores extracted CIPL data from a supplier's shipping document
+model CiplRecord {
+  id              String     @id @default(uuid())
+  rfqId           String
+  rfq             RFQ        @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  // Invoice Header
+  invoiceNo       String?    // invoice_no
+  invoiceDate     String?    // invoice_date (stored as string e.g. "30-Jul-2026")
+  poNo            String?    // po_no
+  poDate          String?    // po_date
+
+  // Shipping Terms
+  incoterm        String?    // incoterm e.g. "FCA LOUSIANA, USA"
+  mot             String?    // mode of transport e.g. "Air Freight"
+  pol             String?    // port of loading
+  pod             String?    // port of discharge
+
+  // Consignee
+  consigneeName   String?    // consignee_name
+  consigneeAddress String?   // consignee_address
+  consigneeAttn   String?    // consignee_attn
+  consigneeEmail  String?    // consignee_email
+  consigneeTel    String?    // consignee_tel
+
+  // Totals & Packaging
+  totalAmount     String?    // total_amount (stored as formatted string e.g. "1,116.00")
+  totalWeightLbs  String?    // total_weight_lbs
+  numberOfBox     String?    // number_of_box e.g. "1 BOX"
+  boxDimension    String?    // box_dimension e.g. "1 BOX - 12\" X 9\" X 6\""
+  shippingMark    String?    // shipping_mark_product
+
+  // Source file tracking
+  sourceFileUrl   String?    // URL of the original CIPL PDF uploaded
+
+  items           CiplItem[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+/// Individual line items within a CiplRecord
+model CiplItem {
+  id             String     @id @default(uuid())
+  ciplRecordId   String
+  ciplRecord     CiplRecord @relation(fields: [ciplRecordId], references: [id], onDelete: Cascade)
+
+  lineNo         Int
+  partNo         String     // part_no
+  description    String?    // description
+  hsCode         String?    // hs_code
+  quantity       String?    // quantity (string to preserve format)
+  countryOrigin  String?    // country_origin
+  uom            String?    // uom
+  unitPrice      String?    // unit_price (string to preserve format)
+  extPrice       String?    // ext_price (extended/total price)
+  batchNo        String?    // batch_no e.g. "BATCH: TF"
+  netWeight      String?    // net_weight in lbs e.g. "92.16"
+}
+

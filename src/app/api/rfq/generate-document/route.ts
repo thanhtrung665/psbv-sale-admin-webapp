@@ -8,6 +8,7 @@ const VALID_DOC_TYPES = [
   "MVPO_SUPPLIER_PDF",
   "COMMERCIAL_INVOICE_PDF",
   "CERTIFICATE_COC_COO_PDF",
+  "CIPL_PDF",
 ] as const;
 
 type DocType = (typeof VALID_DOC_TYPES)[number];
@@ -122,6 +123,68 @@ export async function POST(req: NextRequest) {
           }),
         };
       }
+    } else if (docType === "CIPL_PDF") {
+      // ── CIPL: Commercial Invoice & Packing List ────────────────────────────
+      const rawCiplTemplateId = process.env.APITEMPLATE_CIPL_TEMPLATE_ID || "";
+      templateId = rawCiplTemplateId.replace(/['"]/g, "").trim();
+      if (!templateId) {
+        return NextResponse.json({
+          success: false,
+          message: "[ENV ERROR] Thiếu APITEMPLATE_CIPL_TEMPLATE_ID trong biến môi trường.",
+        }, { status: 500 });
+      }
+
+      // If frontend provides overrides, use them directly
+      if (overrides && typeof overrides === "object" && Object.keys(overrides).length > 0) {
+        payload = overrides;
+      } else {
+        // Load latest CiplRecord from DB
+        const ciplRecord = await prisma.ciplRecord.findFirst({
+          where: { rfqId: rfq.id },
+          orderBy: { createdAt: "desc" },
+          include: { items: { orderBy: { lineNo: "asc" } } },
+        });
+
+        if (!ciplRecord) {
+          return NextResponse.json({
+            success: false,
+            message: "Chưa có dữ liệu CIPL cho đơn hàng này. Vui lòng bóc tách CIPL trước.",
+          }, { status: 422 });
+        }
+
+        payload = {
+          invoice_no: ciplRecord.invoiceNo || "",
+          invoice_date: ciplRecord.invoiceDate || "",
+          po_no: ciplRecord.poNo || rfq.poNumber || "",
+          po_date: ciplRecord.poDate || "",
+          incoterm: ciplRecord.incoterm || rfq.incoTerm || "",
+          mot: ciplRecord.mot || "",
+          pol: ciplRecord.pol || "",
+          pod: ciplRecord.pod || "",
+          consignee_name: ciplRecord.consigneeName || "",
+          consignee_address: ciplRecord.consigneeAddress || "",
+          consignee_attn: ciplRecord.consigneeAttn || "",
+          consignee_email: ciplRecord.consigneeEmail || "",
+          consignee_tel: ciplRecord.consigneeTel || "",
+          items: (ciplRecord.items || []).map((item) => ({
+            part_no: item.partNo || "",
+            description: item.description || "",
+            hs_code: item.hsCode || "",
+            quantity: item.quantity || "",
+            country_origin: item.countryOrigin || "",
+            uom: item.uom || "",
+            unit_price: item.unitPrice || "",
+            ext_price: item.extPrice || "",
+            batch_no: item.batchNo || "",
+            net_weight: item.netWeight || "",
+          })),
+          total_amount: ciplRecord.totalAmount || "",
+          total_weight_lbs: ciplRecord.totalWeightLbs || "",
+          number_of_box: ciplRecord.numberOfBox || "",
+          box_dimension: ciplRecord.boxDimension || "",
+          shipping_mark_product: ciplRecord.shippingMark || "",
+        };
+      }
     } else {
       // ── Quotation (default) ────────────────────────────────────────────────
       const rawTemplateId = process.env.APITEMPLATE_QUOTATION_TEMPLATE_ID || "";
@@ -222,6 +285,7 @@ export async function POST(req: NextRequest) {
     if (docType === "MVPO_SUPPLIER_PDF") fileTypeSuffix = "MVPO";
     if (docType === "COMMERCIAL_INVOICE_PDF") fileTypeSuffix = "CommercialInvoice";
     if (docType === "CERTIFICATE_COC_COO_PDF") fileTypeSuffix = "COC_COO";
+    if (docType === "CIPL_PDF") fileTypeSuffix = "CIPL";
 
     const fileName = `${rfqCode}_${fileTypeSuffix}_${Date.now()}.pdf`;
 

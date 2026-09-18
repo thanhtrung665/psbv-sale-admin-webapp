@@ -15,8 +15,7 @@ import {
 const DOC_TYPES = [
   { id: "QUOTATION_CLIENT_PDF",   label: "File Quotation",   icon: FileText,     active: true  },
   { id: "MVPO_SUPPLIER_PDF",      label: "Đặt hàng MVPO",    icon: ShoppingCart, active: true  },
-  { id: "COMMERCIAL_INVOICE_PDF", label: "File PS",           icon: FileText,     active: false },
-  { id: "CERTIFICATE_COC_COO_PDF", label: "File CI",          icon: FileText,     active: false },
+  { id: "CIPL_PDF",               label: "File CIPL",         icon: FileText,     active: true  },
 ] as const;
 
 type DocTypeId = (typeof DOC_TYPES)[number]["id"];
@@ -50,6 +49,8 @@ export function GenerateFileModal() {
           // Route to dedicated page per document type
           if (selectedDocType === "MVPO_SUPPLIER_PDF") {
             router.push(`/rfq/${match.id}/mvpo`);
+          } else if (selectedDocType === "CIPL_PDF") {
+            router.push(`/rfq/${match.id}/cipl`);
           } else {
             // Default: Quotation preview
             router.push(`/rfq/${match.id}/quote-preview`);

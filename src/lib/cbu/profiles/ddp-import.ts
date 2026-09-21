@@ -125,6 +125,7 @@ export function calculateDdpImport(rawLines: CbuLineInput[], p: CbuParams): CbuR
       totalRevenueUsd: ddpPriceUsd * l.qty,
       totalRevenueVnd: ddpPriceVnd * l.qty,
       totalMarginUsd: marginPerUnitUsd * l.qty,
+      pricingFailed: Boolean(priced.warning),
       warnings: lineWarnings,
     };
   });

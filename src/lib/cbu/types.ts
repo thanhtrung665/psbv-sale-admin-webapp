@@ -136,6 +136,8 @@ export interface CbuLineResult {
   totalRevenueUsd: number;
   totalRevenueVnd: number;
   totalMarginUsd: number;
+  /** True when no selling price could be derived (no price typed / margin + commission ≥ 100%). */
+  pricingFailed: boolean;
   warnings: string[];
 }
 

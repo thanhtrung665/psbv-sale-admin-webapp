@@ -65,7 +65,10 @@ export async function GET(
         dutyPercent: item.dutyPercent ?? 0,
         commissionPercent: item.commissionPercent ?? 0,
         citPercent: item.citPercent ?? 0,
-        marginPercent: item.marginPercent ?? 0,
+        // NULL = "no override, use the target margin". Coercing it to 0 turned every reopened line into a
+        // 0% margin override (CBU v2 SPEC §11.2 F6) — keep it null.
+        marginPercent: item.marginPercent ?? null,
+        marginOverrideUsd: item.marginOverrideUsd ?? null,
         unitCostUsd: item.unitCostUsd ?? 0,
         ddpPriceUsd: item.ddpPriceUsd ?? 0,
         marginPerUnitUsd: item.marginPerUnitUsd ?? 0,

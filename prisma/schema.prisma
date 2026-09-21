@@ -88,8 +88,8 @@ model RFQ {
   freightFixed      Float?       @default(0)
   freightRatePerKg  Float?       @default(0)
   chargeableWeightKg Float?      @default(0)
-  clearanceCost     Float?       @default(150)
-  inlandCost        Float?       @default(100)
+  clearanceCost     Float?       @default(0)
+  inlandCost        Float?       @default(0)
   docFee            Float?       @default(0)
 
   // E. Bảo hiểm
@@ -121,6 +121,15 @@ model RFQ {
   
   // Custom Columns Config: Array of { id, name, type }
   customColumns     Json?
+
+  // CBU v2 (SPEC §11.8). All percentages are percent numbers (3 = 3%).
+  cbuProfile          String?    @default("DDP_IMPORT")   // DDP_IMPORT | FCA_DAP (FCA_DAP arrives in phase C4)
+  cbuMode             String?    @default("MARGIN_INPUT") // MARGIN_INPUT | PRICE_INPUT
+  targetMarginPercent Float?     @default(25)           // NOT null on purpose: the legacy page reads null as 0%
+  commissionRate      Float?     @default(3)              // % of the selling price
+  citOnCommission     Float?     @default(20)             // % of the commission amount
+  cbuConfig           Json?                               // { schemaVersion, chosenScenarioId, scenarios[] }
+  cbuCalculatedAt     DateTime?                           // last server-side recompute + save
   
   // Người xử lý/Duyệt
   createdById       String?
@@ -161,7 +170,10 @@ model RFQItem {
   commissionAmount  Float?   @default(0)
   citPercent        Float?   @default(20)
   citAmount         Float?   @default(0)
-  marginPercent     Float?   @default(25)
+  // Margin % OVERRIDE for this line. NULL = use the order-wide target (no default on purpose — SPEC §11.2 F6).
+  marginPercent     Float?
+  // Margin $/unit override (> 0 wins over marginPercent). NULL/0 = not used.
+  marginOverrideUsd Float?
   
   unitCostUsd       Float?
   ddpPriceUsd       Float?

@@ -406,7 +406,7 @@ Sửa đúng công thức theo workbook đã chuẩn hoá, lưu/đọc đầy đ
 
 ## 11. CBU Module v2 — Đặc tả cập nhật (Logic + Giao diện)
 
-> **Trạng thái (21/09/2026):** ✅ **Phase C0–C2 đã xong về mã nguồn** — engine v2 ở `src/lib/cbu/` khớp Excel từng dòng; lớp lưu/đọc + API v2 ở `src/lib/cbu/db/` và `src/app/api/rfq/[id]/cbu/`; 182 test pass, `next build` thành công. ⚠️ **Migration SQL (2 bước) đã viết và kiểm chứng trên Postgres nhúng nhưng CHƯA áp lên DB thật** — thứ tự bắt buộc: backup → bước 1 → deploy code → bước 2 (xem §11.8). ⏳ C3–C5 (UI, Baker Hughes, hạ nguồn) chưa làm; trang `cbu-calc` cũ vẫn dùng, nay lưu qua server. Theo dõi thực thi: `PROGRESS.md` §6.
+> **Trạng thái (21/09/2026):** ✅ **Phase C0–C2 đã xong về mã nguồn** — engine v2 ở `src/lib/cbu/` khớp Excel từng dòng; lớp lưu/đọc + API v2 ở `src/lib/cbu/db/` và `src/app/api/rfq/[id]/cbu/`; 182 test pass, `next build` thành công. ⚠️ **Migration SQL (2 bước) đã viết và kiểm chứng trên Postgres nhúng nhưng CHƯA áp lên DB thật** — thứ tự bắt buộc: backup → bước 1 → deploy code → bước 2 (xem §11.8). 🔶 **C3 mới xong một phần ("lát cắt 1")**: giao diện mới là mặc định ở `/rfq/[id]/cbu-calc` (trang cũ ở `?legacy=1`); **kịch bản Air/Sea + so sánh chưa làm**. ⏳ C4–C5 (Baker Hughes, hạ nguồn) chưa làm. Theo dõi thực thi: `PROGRESS.md` §6.
 > **Nguồn sự thật nghiệp vụ:** 4 file markdown trong `documents/CBU_docx/` (đội nghiệp vụ đã phân tích, chỉnh sửa và chuyển từ Excel). `CBU_ANALYSIS_REPORT.md` (27/08) **đã lỗi thời** — xem §11.2.
 > **Đã kiểm chứng:** công thức ở §11.4 được chạy thử bằng một prototype và tái tạo **khớp đến từng dòng** các số trong file markdown Hoàng Sơn (AIR: cost 24,576.98 · revenue $32,793.20 · 890,800,000 VND; SEA: 21,477.91 · $28,652.40 · 778,800,000 VND).
 
@@ -668,6 +668,8 @@ Kèm script chỉ-đọc `scripts/cbu-audit.ts`: tính lại mọi RFQ đã ở 
 | Trạng thái | Skeleton khi tải, trạng thái rỗng khi chưa có dòng hàng (link về bước Quote), lỗi mạng có nút thử lại |
 
 **Truy cập & tương thích:** nhãn `<label>` cho mọi ô; KPI dùng `aria-live="polite"`; tương phản AA; ô nhập cao tối thiểu 32px; điều hướng bàn phím đầy đủ.
+
+**Đã triển khai ở C3 (lát cắt 1, 21/09/2026)** — `src/components/cbu/` + `src/lib/cbu/ui/`: header dính (RFQ, khách, Incoterm, thanh toán, nguồn→đích, trạng thái, "Chưa lưu"), chọn chế độ (segmented), KPI (doanh thu ₫/$, giá vốn, margin có màu, trọng lượng), chip Đối soát, 4 mục tham số thu gọn được (Cơ bản · Vận chuyển mở sẵn; Bảo hiểm/ngân hàng/vốn · Nâng cao thu gọn với nhãn *Mặc định / Đã sửa N* và nút khôi phục), bảng dòng hàng (nhóm cột Nhập liệu / Chi phí / Kết quả; Enter, ↑↓ chuyển dòng; dán nhiều ô từ Excel; cột chi phí và ghi đè margin bật/tắt; hàng mở rộng hiện thanh cấu trúc giá), footer dính (Hoàn tác · Lưu nháp · Hoàn tất), hộp thoại xác nhận có kiểm tra trước bằng cùng quy tắc của server, chặn rời trang khi chưa lưu. Tính toán tức thì ở client bằng đúng engine; server tính lại khi lưu. **Khác với thiết kế ban đầu:** "ngăn kéo Cấu trúc giá" → *hàng mở rộng tại chỗ* (giữ ngữ cảnh, đơn giản, dễ truy cập). **Chưa làm:** kịch bản Air/Sea + so sánh, tooltip công thức trên tiêu đề cột, dọn `bookingExchangeRate` khỏi DB/UI cũ.
 
 **Thành phần** (`src/components/cbu/`)
 

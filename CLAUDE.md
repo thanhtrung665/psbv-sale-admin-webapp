@@ -107,7 +107,7 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 
 ## CBU Module (đang tái cấu trúc — CBU v2)
 
-**Trạng thái (21/09/2026):** Phase C0–C2 **xong về mã nguồn** — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; 182 test pass. **Migration CBU (2 bước) chưa áp lên DB thật** (xem "Cảnh báo migration"). C3–C5 chưa làm (UI cũ vẫn dùng). Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+**Trạng thái (21/09/2026):** Phase C0–C2 **xong về mã nguồn** — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; 182 test pass. **Migration CBU (2 bước) chưa áp lên DB thật** (xem "Cảnh báo migration"). C3 xong "lát cắt 1": giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là mặc định, trang cũ ở `?legacy=1`; **chưa có kịch bản Air/Sea**. C4–C5 chưa làm. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
 
 ### Nguồn sự thật nghiệp vụ
 `documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
@@ -132,6 +132,8 @@ DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`.
 npm test                          # 9 suite / 182 test phải xanh
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
 npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
+npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
+node scripts/e2e-cbu-sandbox.cjs       # 23 kiểm tra API end-to-end trên sandbox (đổi dữ liệu sandbox)
 npx jest __tests__/cbu            # chỉ test CBU (golden AC0084 + adapter)
 node scripts/gen-cbu-fixture.mjs  # sinh lại fixture từ file md (không sửa tay fixture)
 npx tsc --noEmit                  # phải 0 lỗi

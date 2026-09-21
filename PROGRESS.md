@@ -152,7 +152,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 ## 6. CBU Module v2 — Tính lại logic & dựng lại giao diện
 
-**Cập nhật:** 21/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C1 xong · ✅ C2 xong về mã nguồn, ⏳ chờ áp migration lên DB thật · ⏳ C3–C5 chưa làm
+**Cập nhật:** 21/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C1 xong · ✅ C2 xong về mã nguồn, ⏳ chờ áp migration lên DB thật · 🔶 C3 xong "lát cắt 1" (giao diện mới; còn kịch bản Air/Sea) · ⏳ C4–C5 chưa làm
 
 ### 6.1 Việc đã làm (chỉ phân tích + tài liệu)
 
@@ -230,12 +230,18 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - Tham số nền ở cột phẳng RFQ, `cbuConfig` chỉ giữ kịch bản + ghi đè (không sao chép hai nơi) — khác chút với SPEC bản đầu, đã cập nhật §11.3.
 - `receiveVatFactor` (1.00) và số chữ số làm tròn USD là hằng số chính sách — không lưu, client không sửa được.
 
-#### Phase C3 · Dựng lại UI (5d)
+#### Phase C3 · Dựng lại UI (5d) — 🔶 lát cắt 1 xong 21/09 (chưa có kịch bản Air/Sea)
 
-- [ ] Workspace + components (SPEC §11.9), Tabs/Tooltip/Collapsible/Sheet dựng trên `@base-ui/react`
-- [ ] Mode switch, kịch bản Air/Sea + so sánh, chip Đối soát, ngăn kéo Cấu trúc giá, dán nhiều dòng từ Excel
-- [ ] Giữ `?legacy=1` một bản phát hành
-- [ ] Nghiệm thu: RFQ mới ra giá với ≤ 8 ô nhập; mở lại RFQ thấy đúng; không cuộn lồng; a11y ≥ 90
+- [x] Trang mới là mặc định ở `/rfq/[id]/cbu-calc`; trang cũ chuyển thành `legacy-page.tsx`, mở bằng `?legacy=1` (link "Giao diện cũ" ở header). Modal "Input Price" (`?type=price`) vẫn khởi tạo chế độ nhập giá cho sheet chưa từng tính
+- [x] Logic thuần của UI, có test: `src/lib/cbu/ui/draft.ts` (phân tích số "4,37"/"1,234.5"/"$"/"%", bản nháp dạng chuỗi, kiểm tra biên khớp Zod của server, chuyển sang engine/save, nhãn Mặc định/Đã sửa, dán từ Excel) và `format.ts`
+- [x] Component: `src/components/cbu/` — `cbu-workspace`, `workspace-bar` (header + chọn chế độ + KPI + chip Đối soát), `params-panel` + `param-section`, `items-table`, `num-cell`, `finalize-dialog`
+- [x] `finalizeBlockers` tách thành module thuần `src/lib/cbu/finalize.ts`: server (quyết định) và giao diện (kiểm tra trước) dùng chung một quy tắc; `sheet.rfq.clientName` được thêm vào GET
+- [x] Kiểm chứng: 233 test pass (thêm 50 ở 2 suite mới: logic draft/format và render component); `tsc` 0 lỗi; `next build` thành công; `GET /rfq/[id]/cbu-calc` cả mới lẫn `?legacy=1` render 200 trên sandbox
+- [x] **Sandbox cục bộ** `npx tsx scripts/dev-cbu-sandbox.ts`: PGlite (Postgres nhúng) + toàn bộ schema + đăng nhập + 2 RFQ dựng từ AC0084, chạy `next dev` với `DATABASE_URL` **ép về localhost** (không thể chạm Supabase). `node scripts/e2e-cbu-sandbox.cjs` chạy 23 kiểm tra API end-to-end trên đó (đăng nhập, 401/400/404, lưu → tải lại, cổng finalize 422, alias cũ bỏ qua số giả mạo) — **tất cả pass** → hoàn thành mục "thử tay end-to-end" ở mức API
+- [ ] **Xem trực quan trong trình duyệt** — chưa làm: đăng nhập cần nhập mật khẩu, tôi không tự nhập trong trình duyệt. Cần người dùng đăng nhập vào sandbox (`sandbox@psbv.local` / `sandbox123` tại http://localhost:3100/login) rồi mới chụp/kiểm tra được bố cục, phản hồi khi gõ, responsive
+- [ ] Kịch bản Air/Sea + so sánh (cần `cbuConfig.scenarios` + engine chạy theo kịch bản + API nhận kịch bản)
+- [ ] Tooltip công thức trên tiêu đề cột; a11y ≥ 90 (Lighthouse) chưa đo; test tương tác bằng React Testing Library (Sprint 3)
+- [ ] Nghiệm thu: RFQ mới ra giá với ≤ 8 ô nhập; mở lại RFQ thấy đúng; không cuộn lồng — *chờ xem trực quan*
 
 #### Phase C4 · Profile `FCA_DAP` — Baker Hughes (3d)
 

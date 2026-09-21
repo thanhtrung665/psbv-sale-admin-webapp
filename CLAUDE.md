@@ -66,8 +66,11 @@ src/
 └── lib/
     ├── ms-graph.ts      # MS Graph API client
     ├── email-builder.ts  # Email HTML templates
-    ├── cbu-engine.ts    # CBU calculation (client-side)
+    ├── cbu/             # CBU engine v2 (SPEC §11.8): calculateCbu(), pools, pricing, checks, profiles/
     └── utils.ts         # Utilities (cn() helper)
+
+lib/                     # ⚠️ thư mục gốc, KHÔNG phải src/lib (webpack alias @/lib trỏ vào đây)
+└── cbu-engine.ts        # shim: re-export adapter cũ calculateCBU() từ src/lib/cbu/legacy.ts
 ```
 
 ---
@@ -99,6 +102,38 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 5. **CBU_PENDING_ADMIN**: Chờ Sale Admin tính CBU
 6. **QUOTATION_DRAFTED**: Đã sinh PDF Quotation nháp
 7. **QUOTED_TO_CLIENT**: Đã gửi báo giá cho khách
+
+---
+
+## CBU Module (đang tái cấu trúc — CBU v2)
+
+**Trạng thái (21/09/2026):** Phase C0–C1 **xong** — engine v2 khớp Excel từng dòng (112 test pass). C2–C5 chưa làm: trang `cbu-calc` còn lỗi lưu/đọc (không lưu `cbuMode`/margin/hoa hồng; mở lại RFQ → margin 0%) và UI cũ. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+
+### Nguồn sự thật nghiệp vụ
+`documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
+- `CBU_Margin_Input/…AC0084_DDP_VN_MARGIN_INPUT.md` · `CBU_DDPPrice_Input/…PRICE_INPUT.md` — profile `DDP_IMPORT` (Hoàng Sơn, Air/Sea)
+- `CBU_BakerHughes_MarginnInput/…` · `CBU_BakerHughes_PriceInput/…` — profile `FCA_DAP` (Baker Hughes, FCA/DAP, Payment/Net 60)
+- `CBU_ANALYSIS_REPORT.md` — **LỖI THỜI (27/08), đừng làm theo**: 3 "lỗi" nó nêu không phải lỗi, bản sửa logistics của nó chưa đúng.
+
+### Quy tắc bắt buộc khi đụng vào CBU
+1. **Đơn vị %**: mọi `…Percent` / `…Rate` / `…Pct` là số phần trăm (3 = 3%). Engine chia 100 (`pctToFrac`). **Không** khôi phục kiểu auto-detect "≤ 1 là phân số" (`pct()` cũ — đó là lỗi P0-6).
+2. **Trọng lượng chuẩn** của engine v2 = tổng trọng lượng của dòng (lb) = `RFQItem.extWeightLbs` (`totalWeightLb`). Trọng lượng/đơn vị = `ext ÷ qty`. Riêng adapter cũ, `netWeightLbs` = **một đơn vị** (đúng nghĩa DB) — đừng trộn hai nghĩa (đó là lỗi P0-5).
+3. **Công thức lõi** (đã kiểm chứng khớp Excel — SPEC §11.4): pool logistics = freight + thông quan + nội địa + **insurance**, phân bổ theo trọng lượng; bank fee = phí NH phân bổ theo Material + chi phí vốn; `Duty = (Material + Logistics) × %Duty`; `DDP = ROUNDUP(base ÷ (1 − margin − q·(1+c)), 2)`; Commission/CIT tính **sau** khi có giá bán.
+4. **Chi phí theo lô hàng mặc định = 0**; chỉ tham số chính sách (biểu phí NH, bảo hiểm, days/year, lb→kg, bước làm tròn VND) mới có mặc định, và đặt ở **một** file.
+5. **Server là nguồn quyết định giá**: API tính lại từ input; không ghi số client gửi lên.
+6. **Mỗi phiên tính phải qua các check** C1–C4 (SPEC §11.4); finalize bị chặn khi check lỗi.
+7. **Golden test lấy số từ file md**, không sửa fixture cho khớp code. Bug này từng bị che vì hai lỗi triệt tiêu ở mức tổng — luôn so **từng dòng**, không chỉ tổng.
+
+### Cảnh báo migration
+DB đang **lệch migration** (chỉ 1 migration cho 11 model). **Không chạy `npx prisma migrate dev`** khi chưa xử lý — Prisma sẽ đề nghị reset và xoá dữ liệu. Xem SPEC §11.8.
+
+### Lệnh hữu ích
+```bash
+npm test                          # 5 suite / 112 test phải xanh
+npx jest __tests__/cbu            # chỉ test CBU (golden AC0084 + adapter)
+node scripts/gen-cbu-fixture.mjs  # sinh lại fixture từ file md (không sửa tay fixture)
+npx tsc --noEmit                  # phải 0 lỗi
+```
 
 ---
 
@@ -195,8 +230,9 @@ RESEND_API_KEY
 3. Dùng `cn()` từ `@/lib/utils` cho className
 
 ### Modify CBU calculation
-- CBU engine nằm trong `src/lib/cbu-engine.ts` (client-side)
-- Công thức tính toán trong `src/app/(dashboard)/rfq/[id]/cbu-calc/page.tsx`
+- **Đọc mục "CBU Module" bên dưới trước.** Đổi công thức = sửa golden test trước, rồi mới sửa engine.
+- Engine v2: `src/lib/cbu/` — dùng `import { calculateCbu } from "@/lib/cbu"`. `lib/cbu-engine.ts` (gốc) chỉ là shim của adapter cũ `calculateCBU()`; **không dùng cho code mới**, sẽ bị xoá ở Phase C5.
+- Trang `cbu-calc/page.tsx` **chỉ hiển thị và gọi engine** — không chứa công thức.
 
 ### Add new email template
 - Email builder trong `src/lib/email-builder.ts`

@@ -210,15 +210,17 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 #### Phase C2 · Lưu/đọc & API (2d) — ✅ mã nguồn xong 21/09 · ⏳ chờ áp DB
 
-- [x] Migration **SQL tay, idempotent** `prisma/migrations/20260921120000_cbu_v2/` (7 cột RFQ + `marginOverrideUsd` + bỏ default `marginPercent` + backfill 0/25→NULL có bảng sao lưu + mặc định `clearanceCost`/`inlandCost` = 0). Đối chiếu `prisma migrate diff`; kiểm chứng `node scripts/verify-cbu-migration.mjs` trên Postgres nhúng (chỉ có `init`, chạy 2 lần, backfill đúng). Lần chạy đầu **bắt được một lỗi thật**: `clearanceCost`/`inlandCost` không có trong `init` nên `ALTER COLUMN` hỏng → đã sửa bằng `ADD COLUMN IF NOT EXISTS` trước
+- [x] Migration **SQL tay, idempotent, tách 2 bước**: `prisma/migrations/20260921120000_cbu_v2/` (bước 1 — chỉ thêm cột/default, an toàn với code cũ) và `20260921120100_cbu_v2_margin_cleanup/` (bước 2 — sao lưu + bỏ default + backfill 0/25→NULL, **chỉ sau khi deploy code**). Đối chiếu `prisma migrate diff`; kiểm chứng `node scripts/verify-cbu-migration.mjs` trên Postgres nhúng (chỉ có `init`, mỗi bước chạy 2 lần; sau bước 1 dữ liệu `marginPercent` không đổi). Hai phát hiện khi kiểm chứng: (1) `clearanceCost`/`inlandCost` không có trong `init` nên `ALTER COLUMN` hỏng → thêm `ADD COLUMN IF NOT EXISTS` trước; (2) **backfill trước khi deploy sẽ làm code cũ hiển thị override 0%** (GET cũ ép null→0) → phải tách bước 2
 - [x] `src/lib/schemas/cbu.schemas.ts` (Zod) + `GET/PUT /api/rfq/[id]/cbu` + `POST …/cbu/finalize`; server tính lại, bỏ qua số client
 - [x] `calculate-cbu` thành alias (đọc body cũ, bỏ qua kết quả client); `GET /api/rfq/[id]` không còn ép `marginPercent ?? 0` (nguyên nhân thứ hai của F6)
 - [x] `scripts/cbu-audit.ts` (chỉ đọc, CSV chênh lệch giá; lõi thuần có test)
 - [x] Test: mapping (26) · service với DB giả trên dữ liệu AC0084 (17) · Zod (21) · audit (6). Đã thử **phá cố ý** hai điểm (null→0, bỏ `extWeightLbs`) → test bắt được (6 và 8 test fail). `next build` thành công, 3 route có mặt
 - [x] Nghiệm thu bằng DB giả: lưu→tải giống hệt (kể cả `marginPercent = null`); body cũ với tổng/giá bị giả mạo vẫn lưu đúng số Excel; finalize bị chặn (422, không ghi gì) khi thiếu trọng lượng
-- [ ] **Backup DB rồi áp migration lên DB thật — cần người có quyền DB** (SPEC §11.8: áp migration **trước** khi deploy code, nếu không mọi truy vấn `RFQ` lỗi)
-- [ ] Chạy `npx tsx scripts/cbu-audit.ts --out audit.csv` trên DB thật (chạy được cả trước lẫn sau migration) và đưa CSV cho quản lý PSBV → Q8
-- [ ] Thử tay end-to-end trên môi trường có DB: mở RFQ → lưu nháp → tải lại → finalize (chưa làm được vì không có DB/phiên đăng nhập; các route chỉ được kiểm chứng ở mức service + build)
+- [x] **Sao lưu** (21/09): xuất `RFQ` (35 dòng) + `RFQItem` (166 dòng) ra JSON cục bộ, ngoài repo. Xác nhận DB thật khớp **đúng** schema cũ (chỉ thiếu các cột mới) và `_prisma_migrations` tồn tại, chỉ ghi `init`
+- [ ] **Áp bước 1 lên DB thật — BỊ CHẶN, cần anh cho phép.** Hệ thống từ chối lệnh ghi vào DB dùng chung (Supabase) khi chưa có quyền rõ ràng; tôi không tìm đường vòng. Anh có thể tự áp: dán `prisma/migrations/20260921120000_cbu_v2/migration.sql` vào Supabase SQL editor, rồi `npx prisma migrate resolve --applied 20260921120000_cbu_v2`. Hoặc cấp quyền cho tôi chạy (script đã sẵn, có kiểm tra số dòng trước/sau)
+- [ ] Deploy code trên nhánh `feat/cbu-v2-engine`, **rồi** áp bước 2 (`20260921120100_cbu_v2_margin_cleanup`)
+- [x] **Audit trên DB thật** (21/09, chỉ đọc, không ghi gì) — xem 6.4. `scripts/cbu-audit.ts` từng lỗi vì `tsx` không nạp `.env` (đã sửa)
+- [ ] Thử tay end-to-end trên môi trường có DB + đăng nhập: mở RFQ → lưu nháp → tải lại → finalize (chưa làm được; các route mới chỉ được kiểm chứng ở mức service với DB giả + `next build`)
 
 **Quyết định kỹ thuật ở C2 (cần biết khi review):**
 
@@ -245,7 +247,16 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] Sửa payload Quotation PDF (`unit_price` = `ddpPriceUsd`, `amount` = × qty) theo kịch bản đã chọn
 - [ ] Xoá trang legacy + code cũ; đọc lại tài liệu
 
-### 6.4 Chờ quyết định nghiệp vụ (SPEC §11.12)
+### 6.4 Kết quả audit giá đã lưu trên DB thật (21/09/2026, chỉ đọc)
+
+`npx tsx scripts/cbu-audit.ts` — so giá đã lưu với engine v2 cho RFQ ở trạng thái `QUOTATION_DRAFTED`/`QUOTED_TO_CLIENT`. **Đây là ước lượng**: bản cũ không lưu hoa hồng/CIT/margin mục tiêu nên dựng lại từ mặc định (3 / 20 / 25).
+
+- **Không có RFQ nào ở `QUOTED_TO_CLIENT`** trong 35 RFQ hiện có — cả 6 RFQ có giá đều mới là nháp (`QUOTATION_DRAFTED`). Nghĩa là **chưa có báo giá nào đã gửi khách bị ảnh hưởng** (Q8 nhẹ hơn dự tính).
+- **AC0007 (9 dòng): engine v2 tái tạo đúng từng dòng** (lệch 0.00, tổng $43,580.30 = $43,580.30) — bằng chứng trên dữ liệu thật rằng v2 khớp kết quả đúng của bản cũ trước khi bị hỏng.
+- **AC0005 (15 dòng): F6 đã xảy ra thật.** Dòng 2–9 được lưu với `marginPercent = 0` và hoa hồng/CIT = 0 (giá ≈ giá vốn, margin thực 0.0%); dòng 1 là 15%, dòng 10–15 là 25% với hoa hồng 3%/CIT 20% — tức lưu ở nhiều thời điểm/phiên bản mã khác nhau. Ba dòng ~$10.2k (dòng 7–9) bán đúng giá vốn. Đọc `0` là "không override" (mặc định) → v2 cao hơn ~40% (tổng $43,804 so với $31,375 đã lưu); coi `0` là override thật (`--keep-margins`) → lệch tối đa 4.15%. **Cần người phụ trách xác nhận margin mong muốn cho AC0005 trước khi gửi Quotation này.**
+- **AC0004, AC0006, AC0008, AC0015 (18 dòng): không có giá gốc nào được lưu** dù trạng thái là `QUOTATION_DRAFTED` (tổng doanh thu 0) — dữ liệu chưa hoàn chỉnh, không so sánh được.
+
+### 6.5 Chờ quyết định nghiệp vụ (SPEC §11.12)
 
 Không chặn C1–C3 vì đã có mặc định tạm; cần trả lời trước khi chốt C4/C5:
 
@@ -256,7 +267,7 @@ Không chặn C1–C3 vì đã có mặc định tạm; cần trả lời trư�
 - [ ] **Q5–Q7** Bỏ `bookingExchangeRate`/effective margin · mặc định thông quan/nội địa về 0 · Baker dùng tham số chung (lb→kg 0.4536)
 - [ ] **Q8** RFQ đã `QUOTED_TO_CLIENT` có giá lệch: giữ giá đã báo hay báo lại? *(quyết định thương mại — cấp quản lý PSBV)*
 
-### 6.5 Lưu ý phối hợp với các sprint khác
+### 6.6 Lưu ý phối hợp với các sprint khác
 
 - C0 trùng P1-1, C1 trùng P0-5/P0-6, C2 dùng Zod của Sprint 1 và cần "migration cho 7 model thiếu" hoàn tất **trước** khi áp migration CBU, C5 trùng P2-5. Nên làm **cùng một nhịp** với Sprint 0/1 thay vì tách riêng.
 - Engine mới đặt ở `src/lib/cbu/` để không phụ thuộc việc hợp nhất `lib/` và `src/lib/` (Sprint 2).

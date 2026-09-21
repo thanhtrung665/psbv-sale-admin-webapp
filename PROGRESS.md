@@ -1,6 +1,6 @@
 # PROGRESS.md — Tiến độ dự án PSBV Sales Agent Platform
 
-**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C1 đã hoàn thành** (engine v2 + golden test, 112 test pass)
+**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C2 đã hoàn thành về mã nguồn** (engine v2, lưu/đọc + API, migration SQL tay đã kiểm chứng; 182 test pass) — **migration chưa áp lên DB thật**
 **Cơ sở đối soát:** `SPEC.md`, `CLAUDE.md`, `TECHNICAL_REPORT_V2.md`, `SECURITY_AND_REMEDIATION.md` (cả 3 báo cáo lập ngày 11/09/2026) so với mã nguồn thực tế tại thời điểm hôm nay.
 **Phương pháp:** Đọc trực tiếp source code + chạy lại các lệnh kiểm chứng (`npm test`, `npx tsc --noEmit`, `git log`, grep) — không suy đoán.
 
@@ -104,7 +104,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] P0-3 Wire `updateRfqSchema` (đã viết sẵn, test sẵn) vào `PATCH /api/rfq/[id]`
 - [x] P1-1 Sửa `jest.config.js` (thêm `moduleNameMapper`) — *xong 21/09 (CBU C0)*: 4/4 suite chạy được
 - [x] P0-5 *(phần engine — xong 21/09, CBU C1)* Đối chiếu Excel gốc (`CBU-AC0084_DDP_VN_MARGIN_INPUT.xlsx`), sửa công thức phân bổ logistics/insurance → **thực hiện trong CBU v2 Phase C1** (§6, SPEC §11.11); fixture lấy từ file md, không sửa fixture cho khớp code
-- [x] P0-6 *(phần engine — xong 21/09, CBU C1)* Sửa `pct()` bỏ auto-detect → `pctToFrac = v/100`. ⚠️ Giá đã lưu trong DB và các lỗi lưu/đọc (F5–F7) **vẫn còn** — chưa nghiệm thu trọn vẹn P0-5/P0-6 cho đến khi xong C2
+- [x] P0-6 *(phần engine — xong 21/09, CBU C1)* Sửa `pct()` bỏ auto-detect → `pctToFrac = v/100`. Lỗi lưu/đọc F5–F7 đã sửa ở C2 (mã nguồn). ⚠️ **Còn lại để nghiệm thu trọn vẹn:** áp migration lên DB thật, và rà **giá đã lưu/đã gửi khách** bằng `scripts/cbu-audit.ts` (Q8 — quyết định thương mại)
 - [ ] Chạy đối chiếu các RFQ đã gửi khách để phát hiện sai lệch giá do P0-5/P0-6 (**quyết định thương mại cần cấp quản lý**, không phải việc kỹ thuật thuần)
 - [ ] Nghiệm thu: `npm test` 52/52 pass, `npx tsc --noEmit` 0 lỗi
 
@@ -152,7 +152,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 ## 6. CBU Module v2 — Tính lại logic & dựng lại giao diện
 
-**Cập nhật:** 21/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C1 xong · ⏳ C2–C5 chưa làm
+**Cập nhật:** 21/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C1 xong · ✅ C2 xong về mã nguồn, ⏳ chờ áp migration lên DB thật · ⏳ C3–C5 chưa làm
 
 ### 6.1 Việc đã làm (chỉ phân tích + tài liệu)
 
@@ -208,12 +208,25 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 **⚠️ Thay đổi hành vi nhìn thấy được:** vì trang `cbu-calc` hiện gọi engine mới, khi triển khai giá DDP hiển thị sẽ **thay đổi** (trở nên đúng, ví dụ dòng 1 AC0084: 7.49 → 7.10). Cần thông báo cho Sale Admin trước khi deploy. Các RFQ đã lưu giữ nguyên giá cũ cho đến khi mở lại và lưu.
 
-#### Phase C2 · Lưu/đọc & API (2d)
+#### Phase C2 · Lưu/đọc & API (2d) — ✅ mã nguồn xong 21/09 · ⏳ chờ áp DB
 
-- [ ] Backup DB; migration: 5 cột RFQ + `cbuConfig` + `marginOverrideUsd` + bỏ `@default(25)` của `marginPercent` (⚠️ đọc cảnh báo migration ở SPEC §11.8 — không chạy `migrate dev` trên DB lệch)
-- [ ] `cbu.schemas.ts` (Zod) + `GET/PUT /api/rfq/[id]/cbu` + `POST …/cbu/finalize`; server tính lại, bỏ qua số client
-- [ ] `calculate-cbu` thành alias; `scripts/cbu-audit.ts` (chỉ đọc, xuất CSV chênh lệch giá)
-- [ ] Nghiệm thu: round-trip lưu→tải giống hệt (kể cả `marginPercent = null`); gửi tổng sai vẫn lưu đúng
+- [x] Migration **SQL tay, idempotent** `prisma/migrations/20260921120000_cbu_v2/` (7 cột RFQ + `marginOverrideUsd` + bỏ default `marginPercent` + backfill 0/25→NULL có bảng sao lưu + mặc định `clearanceCost`/`inlandCost` = 0). Đối chiếu `prisma migrate diff`; kiểm chứng `node scripts/verify-cbu-migration.mjs` trên Postgres nhúng (chỉ có `init`, chạy 2 lần, backfill đúng). Lần chạy đầu **bắt được một lỗi thật**: `clearanceCost`/`inlandCost` không có trong `init` nên `ALTER COLUMN` hỏng → đã sửa bằng `ADD COLUMN IF NOT EXISTS` trước
+- [x] `src/lib/schemas/cbu.schemas.ts` (Zod) + `GET/PUT /api/rfq/[id]/cbu` + `POST …/cbu/finalize`; server tính lại, bỏ qua số client
+- [x] `calculate-cbu` thành alias (đọc body cũ, bỏ qua kết quả client); `GET /api/rfq/[id]` không còn ép `marginPercent ?? 0` (nguyên nhân thứ hai của F6)
+- [x] `scripts/cbu-audit.ts` (chỉ đọc, CSV chênh lệch giá; lõi thuần có test)
+- [x] Test: mapping (26) · service với DB giả trên dữ liệu AC0084 (17) · Zod (21) · audit (6). Đã thử **phá cố ý** hai điểm (null→0, bỏ `extWeightLbs`) → test bắt được (6 và 8 test fail). `next build` thành công, 3 route có mặt
+- [x] Nghiệm thu bằng DB giả: lưu→tải giống hệt (kể cả `marginPercent = null`); body cũ với tổng/giá bị giả mạo vẫn lưu đúng số Excel; finalize bị chặn (422, không ghi gì) khi thiếu trọng lượng
+- [ ] **Backup DB rồi áp migration lên DB thật — cần người có quyền DB** (SPEC §11.8: áp migration **trước** khi deploy code, nếu không mọi truy vấn `RFQ` lỗi)
+- [ ] Chạy `npx tsx scripts/cbu-audit.ts --out audit.csv` trên DB thật (chạy được cả trước lẫn sau migration) và đưa CSV cho quản lý PSBV → Q8
+- [ ] Thử tay end-to-end trên môi trường có DB: mở RFQ → lưu nháp → tải lại → finalize (chưa làm được vì không có DB/phiên đăng nhập; các route chỉ được kiểm chứng ở mức service + build)
+
+**Quyết định kỹ thuật ở C2 (cần biết khi review):**
+
+- Backfill `marginPercent IN (0, 25)` → NULL cho **mọi** RFQ (không theo trạng thái như SPEC bản đầu): RFQ đã `QUOTATION_DRAFTED` cũng mang 0 do lỗi và sẽ mở lại thành margin 0%. Ngoại lệ: một override 0% thật trong quá khứ sẽ mất (khôi phục được từ `_cbu_v2_margin_backup`).
+- `targetMarginPercent` mặc định **25** thay vì null (trang cũ đọc null thành 0%).
+- Lưu nháp **không hạ** trạng thái `QUOTED_TO_CLIENT` (bản cũ hạ mọi trạng thái); RFQ `QUOTATION_DRAFTED` vẫn quay về `CBU_PENDING_ADMIN`.
+- Tham số nền ở cột phẳng RFQ, `cbuConfig` chỉ giữ kịch bản + ghi đè (không sao chép hai nơi) — khác chút với SPEC bản đầu, đã cập nhật §11.3.
+- `receiveVatFactor` (1.00) và số chữ số làm tròn USD là hằng số chính sách — không lưu, client không sửa được.
 
 #### Phase C3 · Dựng lại UI (5d)
 

@@ -406,7 +406,7 @@ Sửa đúng công thức theo workbook đã chuẩn hoá, lưu/đọc đầy đ
 
 ## 11. CBU Module v2 — Đặc tả cập nhật (Logic + Giao diện)
 
-> **Trạng thái (21/09/2026):** ✅ **Phase C0–C1 đã xong** — engine v2 ở `src/lib/cbu/`, khớp Excel từng dòng, 112 test pass. ⏳ C2–C5 (lưu/đọc & API, UI, Baker Hughes, hạ nguồn) **chưa làm**; trang `cbu-calc` hiện gọi engine mới qua adapter nhưng vẫn còn các lỗi F5–F7, F10. Theo dõi thực thi: `PROGRESS.md` §6.
+> **Trạng thái (21/09/2026):** ✅ **Phase C0–C2 đã xong về mã nguồn** — engine v2 ở `src/lib/cbu/` khớp Excel từng dòng; lớp lưu/đọc + API v2 ở `src/lib/cbu/db/` và `src/app/api/rfq/[id]/cbu/`; 182 test pass, `next build` thành công. ⚠️ **Migration SQL đã viết và kiểm chứng trên Postgres nhúng nhưng CHƯA áp lên DB thật** — phải áp **trước** khi deploy code (xem §11.8). ⏳ C3–C5 (UI, Baker Hughes, hạ nguồn) chưa làm; trang `cbu-calc` cũ vẫn dùng, nay lưu qua server. Theo dõi thực thi: `PROGRESS.md` §6.
 > **Nguồn sự thật nghiệp vụ:** 4 file markdown trong `documents/CBU_docx/` (đội nghiệp vụ đã phân tích, chỉnh sửa và chuyển từ Excel). `CBU_ANALYSIS_REPORT.md` (27/08) **đã lỗi thời** — xem §11.2.
 > **Đã kiểm chứng:** công thức ở §11.4 được chạy thử bằng một prototype và tái tạo **khớp đến từng dòng** các số trong file markdown Hoàng Sơn (AIR: cost 24,576.98 · revenue $32,793.20 · 890,800,000 VND; SEA: 21,477.91 · $28,652.40 · 778,800,000 VND).
 
@@ -442,6 +442,8 @@ Kiểm chứng bằng cách nạp 16 dòng AIR của AC0084 vào `lib/cbu-engine
 | F11 | **VAT factor dùng chung**: engine cũ nhân 1.1 cho cả phí *receive*; md ghi remittance = **1.10**, receive = **1.00** (đã sửa ở C1: hai tham số riêng `remitVatFactor`, `receiveVatFactor`) | Đọc md §7 | 🟡 |
 | F10 | **UI**: card `max-h-[90vh]` lồng scroll trong page; ~25 ô nhập ở 3 panel hiển thị cùng lúc; 3 bảng tóm tắt căn bằng hack `pt-[45px]` / `pt-[124px]`; cột màu cầu vồng (xanh/tím/lục/xám); nhãn Anh–Việt lẫn lộn; 900 dòng trong 1 file | Đọc `cbu-calc/page.tsx` | 🟡 |
 
+**Trạng thái sửa (21/09/2026):** F1–F4, F11 ✅ engine (C1) · F5, F6, F7 ✅ mã nguồn (C2; cần áp migration để có hiệu lực trên DB thật) · F8 ✅ engine không còn dùng, dọn khỏi UI/DB ở C3 · F9 → C3 (Air/Sea) và C4 (Baker Hughes) · F10 → C3.
+
 **Đính chính `CBU_ANALYSIS_REPORT.md`:** ba "lỗi" nó nêu **không phải lỗi**: (§3.1) *Insurance tính 2 lần* — không, insurance nằm trong pool cùng driver trọng lượng, khớp Excel; (§3.3) *Financing tính 2 lần* — không, `totalFinancingCostUsd` chỉ là số hiển thị, không cộng vào cost; (§3.4) *Commission/CIT ở PRICE_INPUT* — đúng theo md. Bản sửa "logistics allocation" ngày 27/08 (dùng `weight_per_unit ÷ totalWeight`) **cũng chưa đúng** vì `totalWeight` vẫn tính theo nghĩa còn lại (F1).
 
 ### 11.3 Hai profile CBU và mô hình kịch bản
@@ -459,7 +461,7 @@ Một **CBU sheet** = 1 profile + 1 mode + tham số chung + **N kịch bản** 
 | Ghi đè theo dòng | Margin % và Margin $/unit (ưu tiên $) | Margin % |
 | Việc dùng chung | pool bank fee · chi phí vốn · làm tròn · CHECK · server recompute | |
 
-Kịch bản lưu dạng `{ id, label, mot?, overrides: {…}, isChosen }`. Chỉ 1 kịch bản `isChosen` được đẩy xuống Quotation (dual-write vào cột phẳng cũ để không vỡ code hạ nguồn). UI so sánh kịch bản: §11.9.
+Kịch bản lưu dạng `{ id, label, mot?, overrides: {…} }` trong `RFQ.cbuConfig`, cùng `chosenScenarioId`. **Tham số nền nằm ở các cột phẳng của `RFQ`** (một nguồn duy nhất, không sao chép); kịch bản chỉ chứa phần *ghi đè* so với nền. Kịch bản được chọn là kịch bản được tính vào các cột kết quả (tổng, giá từng dòng) mà Quotation đọc. C2 chỉ ghi kịch bản ngầm định `default` (không ghi đè gì); C3 thêm Air/Sea. UI so sánh kịch bản: §11.9.
 
 ### 11.4 Công thức chuẩn — `DDP_IMPORT` (đã kiểm chứng với md)
 
@@ -579,12 +581,17 @@ Engine là hàm **thuần**, chỉ import tương đối (không `@/`) để ch�
 
 | Model | Thay đổi | Ghi chú |
 |-------|----------|---------|
-| `RFQ` | `cbuProfile String? @default("DDP_IMPORT")`, `cbuMode String? @default("MARGIN_INPUT")`, `targetMarginPercent Float?`, `commissionRate Float? @default(3)`, `citOnCommission Float? @default(20)` | Sửa F5 |
-| `RFQ` | `cbuConfig Json?` (`schemaVersion`, `scenarios[]`, `chosenScenarioId`, tham số ghi đè), `cbuCalculatedAt DateTime?` | Nguồn chính của cấu hình v2; cột phẳng cũ chỉ được **dual-write** từ kịch bản được chọn |
-| `RFQItem` | `marginOverrideUsd Float?`; **bỏ `@default(25)` của `marginPercent`** (null = dùng Target) | Sửa F6. Backfill: đặt NULL cho các dòng thuộc RFQ chưa vượt `QUOTATION_DRAFTED` |
+| `RFQ` | `cbuProfile String? @default("DDP_IMPORT")`, `cbuMode String? @default("MARGIN_INPUT")`, `targetMarginPercent Float? @default(25)`, `commissionRate Float? @default(3)`, `citOnCommission Float? @default(20)` | Sửa F5. `targetMarginPercent` **mặc định 25, không để null**: trang cũ đọc `safeNum(null, 25)` thành 0 (vì `Number(null) = 0`) làm giá về margin 0% |
+| `RFQ` | `cbuConfig Json?` (`schemaVersion`, `chosenScenarioId`, `scenarios[]` với `overrides`), `cbuCalculatedAt DateTime?` | Chỉ giữ kịch bản + ghi đè; tham số nền ở cột phẳng (xem §11.3) |
+| `RFQ` | đổi mặc định `clearanceCost`, `inlandCost` từ 150/100 → **0**; `exchangeRate` 25500 → 26500 (khớp schema) | Q6 (mặc định tạm). Chỉ ảnh hưởng RFQ tạo mới; giá trị đã lưu giữ nguyên |
+| `RFQItem` | `marginOverrideUsd Float?`; **bỏ `@default(25)` của `marginPercent`** (null = dùng Target) | Sửa F6. **Backfill:** `marginPercent IN (0, 25)` → NULL (hai giá trị này chỉ là dấu vết của default cũ và `?? 0`, không mang thông tin); giá trị khác giữ nguyên. Bảng sao lưu `_cbu_v2_margin_backup` được tạo trước khi sửa. *(Điều chỉnh so với bản đầu: không dùng điều kiện theo trạng thái RFQ, vì RFQ đã `QUOTATION_DRAFTED` cũng mang giá trị 0 do lỗi và sẽ mở lại thành margin 0%.)* |
 | `RFQItem` | dùng `extWeightLbs` làm trọng lượng chuẩn (không thêm cột) | §11.6-2 |
 
-> ⚠️ **Cảnh báo migration:** `PROGRESS.md` ghi DB đang **lệch migration** (chỉ 1 migration cho 11 model). **Không chạy `prisma migrate dev` trên DB đó** — Prisma sẽ đề nghị *reset* và xoá dữ liệu. Làm trước hạng mục "sinh migration cho 7 model thiếu" (Sprint 1), hoặc tự viết migration SQL bằng `prisma migrate diff` rồi `migrate resolve`. Backup DB trước khi áp dụng.
+> ⚠️ **Cảnh báo migration:** DB đang **lệch migration ở cả mức cột** (ví dụ `init` không có `clearanceCost`, `docFee`, `customColumns`…; `exchangeRate` mặc định 25500 còn schema là 26500). **Không chạy `prisma migrate dev`** — Prisma sẽ đề nghị *reset* và xoá dữ liệu.
+>
+> **Cách đã chọn (đã làm ở C2): migration SQL viết tay, idempotent** — `prisma/migrations/20260921120000_cbu_v2/migration.sql`, chỉ đụng `RFQ` và `RFQItem`, dùng `ADD COLUMN IF NOT EXISTS` / `DROP DEFAULT` / `CREATE TABLE IF NOT EXISTS` nên chạy đúng dù DB ở trạng thái lệch nào, và chạy lại nhiều lần không hại. Đối chiếu bằng `prisma migrate diff` (phần đổi schema khớp từng câu lệnh) và **kiểm chứng bằng `node scripts/verify-cbu-migration.mjs`** (Postgres nhúng, không đụng DB thật: chỉ trên `init`, chạy 2 lần, backfill đúng, có sao lưu).
+>
+> **Thứ tự triển khai bắt buộc:** (1) backup DB → (2) áp migration → (3) mới deploy code. Nếu deploy code trước, mọi truy vấn `RFQ` sẽ lỗi vì Prisma client chọn các cột chưa tồn tại. Cách áp: dán file vào Supabase SQL editor (chạy một lần cả khối) hoặc `npx prisma db execute --file …`; rồi `npx prisma migrate resolve --applied 20260921120000_cbu_v2` **chỉ khi** bảng `_prisma_migrations` tồn tại. Cuối file có khối ROLLBACK thủ công (khôi phục từ bảng sao lưu).
 
 **API v2** (mọi route: `getServerSession` + role `ADMIN`/`SALE_ADMIN`, body qua Zod)
 
@@ -593,7 +600,16 @@ Engine là hàm **thuần**, chỉ import tương đối (không `@/`) để ch�
 | `GET /api/rfq/[id]/cbu` | Trả meta RFQ, dòng hàng (đã chuẩn hoá trọng lượng), cấu hình đã merge với mặc định, kết quả lưu gần nhất |
 | `PUT /api/rfq/[id]/cbu` | Lưu nháp: chỉ nhận **input**; server chạy engine, ghi kết quả + `checks`; status → `CBU_PENDING_ADMIN` |
 | `POST /api/rfq/[id]/cbu/finalize` | Như PUT + điều kiện: mọi check OK, mọi dòng có giá > 0 và trọng lượng > 0; status → `QUOTATION_DRAFTED`; đẩy kịch bản `isChosen` xuống cột phẳng |
-| `POST /api/rfq/[id]/calculate-cbu` | **Deprecated alias** sang handler v2 trong 1 release |
+| `POST /api/rfq/[id]/calculate-cbu` | **Deprecated alias** cho trang cũ: đọc body cũ, **bỏ qua mọi kết quả/tổng client gửi**, chuyển sang input v2 rồi qua cùng service (server tính lại). Lỗi 422 được gộp vào `error` để trang cũ hiển thị được |
+
+**Đã triển khai (C2):** `src/lib/cbu/db/{mapping,service,legacy-body,audit,errors,http}.ts`, `src/lib/schemas/cbu.schemas.ts` (Zod: mọi % là số phần trăm, margin < 100%, khoá lặp bị từ chối, khoá thừa bị loại bỏ), 3 route. Chi tiết hành vi:
+
+- **GET** trả `sheet`: thông tin RFQ, tham số đã hợp nhất mặc định, từng dòng (trọng lượng **tổng dòng**, override), `result` **tính lại mới** từ input đã lưu, và `saved` (số đã lưu trong DB, để so lệch).
+- **PUT (nháp) / finalize:** nhận **chỉ input**; đọc dòng hàng từ DB (chống sửa dòng không thuộc RFQ → 400), áp chỉnh sửa, chạy engine, ghi trong một transaction; rồi đọc lại DB để trả đúng thứ mà lần tải sau sẽ thấy.
+- **Trạng thái:** nháp → `CBU_PENDING_ADMIN` (kể cả RFQ đang `QUOTATION_DRAFTED`, vì Quotation nháp không còn khớp số); finalize → `QUOTATION_DRAFTED`; **`QUOTED_TO_CLIENT` không bao giờ bị hạ** (giá đã gửi là lịch sử; response kèm ghi chú). *Đây là quyết định của tôi khi làm C2 — bản cũ hạ mọi trạng thái về `CBU_PENDING_ADMIN`.*
+- **Cổng finalize (422 + danh sách lý do, không ghi gì):** có ít nhất một dòng; mọi check C1–C4 đạt; mỗi dòng có giá bán hợp lệ, giá gốc > 0 và trọng lượng > 0.
+- Trọng lượng lưu: `extWeightLbs` = tổng dòng (chuẩn), `netWeightLbs` = `ext ÷ qty`.
+- **Audit:** `scripts/cbu-audit.ts` (chỉ đọc; lõi thuần ở `db/audit.ts` có test) xuất CSV giá đã lưu so với giá v2; dùng `omit` nên chạy được **trước** khi áp migration. Là *ước lượng* (bản cũ không lưu hoa hồng/CIT/margin mục tiêu nên dựng lại từ mặc định) — xem chú thích đầu file.
 
 Kèm script chỉ-đọc `scripts/cbu-audit.ts`: tính lại mọi RFQ đã ở `QUOTATION_DRAFTED`/`QUOTED_TO_CLIENT` bằng engine v2 và xuất CSV chênh lệch giá — phục vụ quyết định thương mại về các báo giá đã gửi (Sprint 0 của `PROGRESS.md`).
 
@@ -681,7 +697,7 @@ Thứ tự **C1 trước UI**: giá sai đang đi ra khách hàng, còn giao di�
 |-------|----------|:---------:|---------------------|
 | **C0 · Chuẩn bị** | Sửa `jest.config.js`; commit 4 file md + cập nhật tài liệu; dựng fixtures từ md; đánh dấu `CBU_ANALYSIS_REPORT.md` lỗi thời | 0.5d | `npm test` chạy được; fixtures nạp được |
 | **C1 · Engine đúng** *(TDD)* | Viết golden test **trước** (phải fail); dựng `src/lib/cbu/`: `pctToFrac`, trọng lượng chuẩn, pool, duty base gồm insurance, bỏ `docFee` mặc định, bỏ `bookingExchangeRate`/`effectiveMargin`, `checks`; giữ adapter `calculateCBU()` | 2d | Golden AIR/SEA/PRICE_INPUT pass; hồi quy F1–F4 pass; `tsc --noEmit` 0 lỗi. *Tương ứng P0-5, P0-6* |
-| **C2 · Lưu/đọc & API** | Migration (5 cột RFQ + `cbuConfig` + `marginOverrideUsd` + bỏ default 25); Zod; route v2 + server recompute; alias `calculate-cbu`; `scripts/cbu-audit.ts` | 2d | Round-trip đúng; gửi tổng sai vẫn lưu đúng; audit script chạy trên DB dev |
+| **C2 · Lưu/đọc & API** ✅ *code xong 21/09* | Migration SQL tay (5 cột RFQ + `cbuConfig` + `marginOverrideUsd` + bỏ default 25 + backfill); Zod; route v2 + server recompute; alias `calculate-cbu`; `scripts/cbu-audit.ts` | 2d | Round-trip đúng *(đã kiểm chứng bằng DB giả)*; gửi tổng sai vẫn lưu đúng *(đã kiểm chứng)*; audit script chạy trên DB dev *(**chưa** — cần DB)* |
 | **C3 · Dựng lại UI** | Workspace + components §11.9; kịch bản Air/Sea + so sánh; `?legacy=1` | 5d | Kiểm tay: nhập một RFQ mới ≤ 8 ô trước khi ra giá; mở lại RFQ đã lưu thấy đúng; không còn cuộn lồng; Lighthouse a11y ≥ 90 |
 | **C4 · Profile `FCA_DAP`** | Engine profile Baker Hughes; kịch bản Payment/Net 60; UI FCA/DAP; bỏ chặn nhóm "Nước ngoài" | 3d | Golden `ac0481` pass; DAP = FCA + cước tay; cảnh báo chênh cước |
 | **C5 · Hạ nguồn & hoàn thiện** | Sửa payload Quotation PDF (`unit_price` = `ddpPriceUsd` per unit, `amount` = × qty) dùng kịch bản đã chọn *(tương ứng P2-5)*; đọc lại tài liệu; dọn code cũ | 2d | PDF khớp UI; xoá trang legacy |

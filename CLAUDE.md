@@ -107,7 +107,7 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 
 ## CBU Module (đang tái cấu trúc — CBU v2)
 
-**Trạng thái (21/09/2026):** Phase C0–C1 **xong** — engine v2 khớp Excel từng dòng (112 test pass). C2–C5 chưa làm: trang `cbu-calc` còn lỗi lưu/đọc (không lưu `cbuMode`/margin/hoa hồng; mở lại RFQ → margin 0%) và UI cũ. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+**Trạng thái (21/09/2026):** Phase C0–C2 **xong về mã nguồn** — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; 182 test pass. **Migration `20260921120000_cbu_v2` chưa áp lên DB thật** — áp trước khi deploy code (xem "Cảnh báo migration"). C3–C5 chưa làm (UI cũ vẫn dùng). Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
 
 ### Nguồn sự thật nghiệp vụ
 `documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
@@ -120,16 +120,18 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 2. **Trọng lượng chuẩn** của engine v2 = tổng trọng lượng của dòng (lb) = `RFQItem.extWeightLbs` (`totalWeightLb`). Trọng lượng/đơn vị = `ext ÷ qty`. Riêng adapter cũ, `netWeightLbs` = **một đơn vị** (đúng nghĩa DB) — đừng trộn hai nghĩa (đó là lỗi P0-5).
 3. **Công thức lõi** (đã kiểm chứng khớp Excel — SPEC §11.4): pool logistics = freight + thông quan + nội địa + **insurance**, phân bổ theo trọng lượng; bank fee = phí NH phân bổ theo Material + chi phí vốn; `Duty = (Material + Logistics) × %Duty`; `DDP = ROUNDUP(base ÷ (1 − margin − q·(1+c)), 2)`; Commission/CIT tính **sau** khi có giá bán.
 4. **Chi phí theo lô hàng mặc định = 0**; chỉ tham số chính sách (biểu phí NH, bảo hiểm, days/year, lb→kg, bước làm tròn VND) mới có mặc định, và đặt ở **một** file.
-5. **Server là nguồn quyết định giá**: API tính lại từ input; không ghi số client gửi lên.
+5. **Server là nguồn quyết định giá**: API tính lại từ input; không ghi số client gửi lên. Đã thực hiện ở `src/lib/cbu/db/service.ts` — route chỉ validate (Zod) rồi gọi service; đừng thêm đường ghi giá/tổng trực tiếp từ body.
 6. **Mỗi phiên tính phải qua các check** C1–C4 (SPEC §11.4); finalize bị chặn khi check lỗi.
 7. **Golden test lấy số từ file md**, không sửa fixture cho khớp code. Bug này từng bị che vì hai lỗi triệt tiêu ở mức tổng — luôn so **từng dòng**, không chỉ tổng.
 
 ### Cảnh báo migration
-DB đang **lệch migration** (chỉ 1 migration cho 11 model). **Không chạy `npx prisma migrate dev`** khi chưa xử lý — Prisma sẽ đề nghị reset và xoá dữ liệu. Xem SPEC §11.8.
+DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`. **Không chạy `npx prisma migrate dev`** — Prisma sẽ đề nghị reset và xoá dữ liệu. Migration CBU được viết **SQL tay, idempotent** (`prisma/migrations/20260921120000_cbu_v2/migration.sql`); kiểm chứng bằng `node scripts/verify-cbu-migration.mjs` (Postgres nhúng, không đụng DB thật). Thứ tự bắt buộc: **backup → áp migration → mới deploy code** (deploy trước thì mọi truy vấn `RFQ` lỗi). Migration Prisma mới cho phần CBU cũng nên viết tay và có script kiểm chứng tương tự. Xem SPEC §11.8.
 
 ### Lệnh hữu ích
 ```bash
-npm test                          # 5 suite / 112 test phải xanh
+npm test                          # 9 suite / 182 test phải xanh
+node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
+npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
 npx jest __tests__/cbu            # chỉ test CBU (golden AC0084 + adapter)
 node scripts/gen-cbu-fixture.mjs  # sinh lại fixture từ file md (không sửa tay fixture)
 npx tsc --noEmit                  # phải 0 lỗi

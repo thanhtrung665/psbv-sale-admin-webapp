@@ -51,6 +51,7 @@ export interface CbuSheet {
     incoTerm: string | null;
     paymentTerm: string | null;
     supplierName: string | null;
+    clientName: string | null;
   };
   profile: string;
   mode: CbuMode;
@@ -75,7 +76,7 @@ export interface CbuSaveOutcome {
   notes: string[];
 }
 
-const itemsInclude = { items: { orderBy: { lineNo: "asc" as const } } };
+const itemsInclude = { items: { orderBy: { lineNo: "asc" as const } }, client: true };
 
 async function readRfq(db: CbuDb, rfqId: string) {
   const rfq = await db.rFQ.findUnique({ where: { id: rfqId }, include: itemsInclude });
@@ -94,6 +95,7 @@ function toSheet(rfq: RfqWithItems, params: CbuParams, lines: CbuLineInput[], re
       incoTerm: rfq.incoTerm ?? null,
       paymentTerm: rfq.paymentTerm ?? null,
       supplierName: rfq.supplierName ?? null,
+      clientName: rfq.client?.companyName ?? rfq.client?.name ?? null,
     },
     profile: rfq.cbuProfile ?? "DDP_IMPORT",
     mode: params.mode,

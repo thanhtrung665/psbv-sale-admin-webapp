@@ -327,20 +327,4 @@ export function nextStatus(current: string, action: CbuAction): { status: string
   return { status: action === "finalize" ? "QUOTATION_DRAFTED" : "CBU_PENDING_ADMIN" };
 }
 
-/** Reasons a CBU cannot be finalized (empty = OK). SPEC §11.8: checks OK, every line priced and weighed. */
-export function finalizeBlockers(lines: CbuLineInput[], result: CbuResult): string[] {
-  const reasons: string[] = [];
-  if (lines.length === 0) return ["Chưa có dòng hàng nào để tính CBU."];
-
-  for (const c of result.checks) {
-    if (!c.ok) reasons.push(`Đối soát ${c.id} lệch (${c.label}): ${c.delta}`);
-  }
-  result.lines.forEach((l, i) => {
-    const input = lines[i];
-    const label = `Dòng ${l.lineNo}`;
-    if (l.pricingFailed || l.ddpPriceUsd <= 0) reasons.push(`${label}: chưa có giá bán hợp lệ.`);
-    if (n(input?.materialUsd) <= 0) reasons.push(`${label}: chưa có giá gốc (Material Cost).`);
-    if (l.qty > 0 && n(input?.totalWeightLb) <= 0) reasons.push(`${label}: thiếu trọng lượng.`);
-  });
-  return reasons;
-}
+export { finalizeBlockers } from "../finalize";

@@ -13,6 +13,7 @@ module.exports = {
         allowSyntheticDefaultImports: true,
         module: 'commonjs',
         moduleResolution: 'node',
+        jsx: 'react-jsx', // lets component render tests (react-dom/server) compile .tsx
       },
     }],
   },

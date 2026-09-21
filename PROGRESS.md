@@ -186,7 +186,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 #### Phase C0 · Chuẩn bị (0.5d) — ✅ xong 21/09
 
 - [x] Sửa `jest.config.js` (`moduleNameMapper` cho `@/`, src trước rồi root — khớp tsconfig) — cũng là P1-1 của Sprint 0
-- [ ] Commit 4 file md + tài liệu đã cập nhật + code C0–C1 *(chưa commit — chờ anh duyệt)*
+- [x] Commit 4 file md + tài liệu + code C0–C1 — nhánh `feat/cbu-v2-engine` (2 commit: `80d3587` code, `3c15e3f` docs); **chưa push, chưa merge vào `main`**
 - [x] Fixture `__tests__/cbu/fixtures/ac0084.ts` **sinh bằng script** `scripts/gen-cbu-fixture.mjs` từ md (không gõ tay)
 - [ ] Fixture `ac0481.ts` (Baker Hughes) — dời sang Phase C4 cùng engine profile FCA_DAP
 

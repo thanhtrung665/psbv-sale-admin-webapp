@@ -94,7 +94,7 @@ describe("Air + Sea", () => {
       expect(sc.result.lines[0].dutyUsd).toBeGreaterThan(0);
       expect(sc.result.lines[1].marginPct).toBeGreaterThanOrEqual(30 - 1e-9);
     }
-    expect(out.sheet.scenarios[1].logistics).toMatchObject({ clearanceUsd: air.clearanceUsd, inlandUsd: air.inlandUsd, freightFixedUsd: 800 });
+    expect(out.sheet.scenarios[1].params.logistics).toMatchObject({ clearanceUsd: air.clearanceUsd, inlandUsd: air.inlandUsd, freightFixedUsd: 800 });
   });
 
   it("the CHOSEN scenario decides the saved item prices and RFQ totals (what the Quotation reads)", async () => {

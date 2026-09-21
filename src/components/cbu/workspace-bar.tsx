@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { ArrowLeftIcon, CircleCheckIcon, TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { CbuCheck, CbuMode, CbuResult } from "@/lib/cbu/types";
+import type { CbuCheck, CbuMode, CbuProfile, CbuResult, QuoteBasis } from "@/lib/cbu/types";
 import { fmtNum, fmtPct, fmtUsd, fmtVnd, marginTone, type MarginTone } from "@/lib/cbu/ui/format";
 
 const STATUS_LABEL: Record<string, string> = {
@@ -44,6 +44,57 @@ export function ModeSwitch({ mode, onChange, disabled }: { mode: CbuMode; onChan
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+// ─── Model (profile) and quote basis ─────────────────────────────────────────
+
+export function ProfileSwitch({ profile, onChange, disabled }: { profile: CbuProfile; onChange: (p: CbuProfile) => void; disabled?: boolean }) {
+  const opts: { value: CbuProfile; label: string; hint: string }[] = [
+    { value: "DDP_IMPORT", label: "DDP nhập khẩu", hint: "Mô hình Hoàng Sơn: logistics, thuế nhập khẩu, hoa hồng, giá DDP USD/VND" },
+    { value: "FCA_DAP", label: "FCA / DAP", hint: "Mô hình Baker Hughes: giá FCA và giá DAP, điều khoản thanh toán (Payment with Order / Net 60)" },
+  ];
+  return (
+    <div role="radiogroup" aria-label="Mô hình CBU" className="inline-flex rounded-lg bg-slate-100 p-0.5">
+      {opts.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={profile === o.value}
+          title={o.hint}
+          disabled={disabled}
+          onClick={() => profile !== o.value && onChange(o.value)}
+          className={cn("rounded-md px-3 py-1.5 text-xs font-medium transition-colors", profile === o.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800", disabled && "opacity-50")}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function BasisSwitch({ basis, onChange, disabled }: { basis: QuoteBasis; onChange: (b: QuoteBasis) => void; disabled?: boolean }) {
+  return (
+    <div role="radiogroup" aria-label="Báo giá theo" className="inline-flex items-center gap-2 text-xs text-slate-500">
+      <span>Quotation theo</span>
+      <span className="inline-flex rounded-lg bg-slate-100 p-0.5">
+        {(["FCA", "DAP"] as const).map((b) => (
+          <button
+            key={b}
+            type="button"
+            role="radio"
+            aria-checked={basis === b}
+            disabled={disabled}
+            title={b === "FCA" ? "Unit Cost và Sales Price lưu trên từng dòng = Block FCA" : "Unit Cost và Sales Price lưu trên từng dòng = Block DAP; tổng RFQ cộng Freight (quoted)"}
+            onClick={() => basis !== b && onChange(b)}
+            className={cn("rounded-md px-3 py-1 font-medium transition-colors", basis === b ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-800", disabled && "opacity-50")}
+          >
+            {b}
+          </button>
+        ))}
+      </span>
     </div>
   );
 }
@@ -117,13 +168,19 @@ interface BarProps {
   /** Set when the sheet has several scenarios: which one the KPIs and the table show. */
   scenarioLabel?: string;
   scenarioChosen?: boolean;
+  /** CBU model. FCA_DAP shows the FCA and DAP offers instead of VND revenue and weight. */
+  profile?: CbuProfile;
 }
 
-export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, rfqId, scenarioLabel, scenarioChosen }: BarProps) {
+export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, rfqId, scenarioLabel, scenarioChosen, profile = "DDP_IMPORT" }: BarProps) {
   const t = result.totals;
   const hasRevenue = t.revenueUsd > 0;
   const tone = marginTone(t.marginPct, hasRevenue, targetMarginPct);
   const chip = "rounded-md bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600";
+  // FCA_DAP: the FCA block's own totals (the primary totals follow the quote basis)
+  const fcaRevenue = result.lines.reduce((s, l) => s + (l.fca?.totalRevenueUsd ?? 0), 0);
+  const fcaCost = result.lines.reduce((s, l) => s + (l.fca?.totalCostUsd ?? 0), 0);
+  const fcaMargin = fcaRevenue > 0 ? ((fcaRevenue - fcaCost) / fcaRevenue) * 100 : 0;
 
   return (
     <header className="sticky top-0 z-30 -mx-6 -mt-6 border-b border-slate-200 bg-slate-50/95 px-6 pb-3 pt-4 backdrop-blur md:-mx-8 md:-mt-8 md:px-8 md:pt-6">
@@ -161,10 +218,21 @@ export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, statu
             Đang xem: {scenarioLabel}{scenarioChosen ? " ✓ dùng cho Quotation" : ""}
           </span>
         )}
-        <Kpi label="Doanh thu" value={<>{fmtVnd(t.revenueVnd)} <span className="text-xs font-normal text-slate-400">₫</span></>} sub={fmtUsd(t.revenueUsd)} />
-        <Kpi label="Giá vốn" value={fmtUsd(t.costUsd)} sub={`Hàng ${fmtUsd(t.materialUsd)}`} />
-        <Kpi label="Margin" value={hasRevenue ? fmtPct(t.marginPct) : "—"} sub={hasRevenue ? `Lãi ${fmtUsd(t.marginUsd)}` : undefined} tone={TONE_TEXT[tone]} />
-        <Kpi label="Trọng lượng" value={`${fmtNum(t.weightKg, 1)} kg`} sub={`${fmtNum(t.qty, 0)} đơn vị`} />
+        {profile === "FCA_DAP" && result.dap ? (
+          <>
+            <Kpi label="Incoterm 1 — FCA" value={fmtUsd(fcaRevenue)} sub={`Total Cost ${fmtUsd(fcaCost)}`} />
+            <Kpi label="Incoterm 2 — DAP" value={fmtUsd(result.dap.totalUsd)} sub={`Sales Price × Q'ty ${fmtUsd(result.dap.goodsRevenueUsd)} + Freight ${fmtUsd(result.dap.freightUsd)}`} />
+            <Kpi label="% Margin (FCA)" value={fcaRevenue > 0 ? fmtPct(fcaMargin) : "—"} sub={result.dap.goodsRevenueUsd > 0 ? `DAP ${fmtPct(result.dap.marginPct)}` : undefined} tone={TONE_TEXT[marginTone(fcaMargin, fcaRevenue > 0, targetMarginPct)]} />
+            <Kpi label="TOTAL BANK FEE" value={fmtUsd(result.pools.bankTotalUsd)} sub={`Q'ty ${fmtNum(t.qty, 0)}`} />
+          </>
+        ) : (
+          <>
+            <Kpi label="Total Revenue (VND)" value={<>{fmtVnd(t.revenueVnd)} <span className="text-xs font-normal text-slate-400">₫</span></>} sub={`Revenue in USD ${fmtUsd(t.revenueUsd)}`} />
+            <Kpi label="Total Cost (USD)" value={fmtUsd(t.costUsd)} sub={`Material Cost ${fmtUsd(t.materialUsd)}`} />
+            <Kpi label="Nominal Margin %" value={hasRevenue ? fmtPct(t.marginPct) : "—"} sub={hasRevenue ? `Total Margin ${fmtUsd(t.marginUsd)}` : undefined} tone={TONE_TEXT[tone]} />
+            <Kpi label="Total Weight (kg)" value={`${fmtNum(t.weightKg, 1)} kg`} sub={`Q'ty ${fmtNum(t.qty, 0)}`} />
+          </>
+        )}
         <div className="ml-auto self-center"><ChecksBadge checks={result.checks} invalidInputs={invalidInputs} /></div>
       </div>
     </header>

@@ -406,7 +406,7 @@ Sửa đúng công thức theo workbook đã chuẩn hoá, lưu/đọc đầy đ
 
 ## 11. CBU Module v2 — Đặc tả cập nhật (Logic + Giao diện)
 
-> **Trạng thái (22/09/2026):** ✅ **Phase C0–C2 xong** và **C3 xong cả kịch bản Air/Sea + so sánh** (giao diện mới là mặc định ở `/rfq/[id]/cbu-calc`, trang cũ ở `?legacy=1`). Engine v2 ở `src/lib/cbu/` khớp Excel từng dòng; lưu/đọc + API v2 ở `src/lib/cbu/db/`; 265 test pass, `next build` thành công. **Migration bước 1 ĐÃ áp lên DB Supabase thật** (22/09, có sao lưu; chỉ thêm cột/default, dữ liệu không đổi); **bước 2 (backfill `marginPercent`) CHƯA áp — chỉ áp sau khi deploy code mới** (xem §11.8). ⏳ C4–C5 (Baker Hughes, hạ nguồn) chưa làm.
+> **Trạng thái (22/09/2026):** ✅ **Phase C0–C2 xong** và **C3 xong cả kịch bản Air/Sea + so sánh** và **C4 xong (Baker Hughes / `FCA_DAP`)** (giao diện mới là mặc định ở `/rfq/[id]/cbu-calc`, trang cũ ở `?legacy=1`). Engine v2 ở `src/lib/cbu/` khớp Excel từng dòng (cả hai profile); lưu/đọc + API v2 ở `src/lib/cbu/db/`; 327 test pass, `tsc` 0 lỗi, 48 kiểm tra e2e trên sandbox đều đạt. **Migration bước 1 ĐÃ áp lên DB Supabase thật** (22/09, có sao lưu; chỉ thêm cột/default, dữ liệu không đổi); **bước 2 (backfill `marginPercent`) CHƯA áp — chỉ áp sau khi deploy code mới** (xem §11.8). ⏳ C5 (hạ nguồn: payload Quotation PDF, xoá code cũ) chưa làm.
 > **Nguồn sự thật nghiệp vụ:** 4 file markdown trong `documents/CBU_docx/` (đội nghiệp vụ đã phân tích, chỉnh sửa và chuyển từ Excel). `CBU_ANALYSIS_REPORT.md` (27/08) **đã lỗi thời** — xem §11.2.
 > **Đã kiểm chứng:** công thức ở §11.4 được chạy thử bằng một prototype và tái tạo **khớp đến từng dòng** các số trong file markdown Hoàng Sơn (AIR: cost 24,576.98 · revenue $32,793.20 · 890,800,000 VND; SEA: 21,477.91 · $28,652.40 · 778,800,000 VND).
 
@@ -537,7 +537,16 @@ freightRef  = pool freight (sheet Logistic) — chỉ tham khảo; cảnh báo n
 ```
 
 Thống nhất chi phí vốn giữa hai profile: `financing = material × pctFinanced × interest × days ÷ daysPerYear` (DDP: 50%·15%·15 ngày/360; Baker Net 60: 100%·15%·45 ngày/360).
-Số kiểm chứng Baker: FCA unit cost 108.33 → giá **131** (total 3,930, margin 680); Net 60: unit cost 110.31 → giá **133** (total 3,990) + cước 1,100 = DAP **5,090**.
+Số kiểm chứng Baker: FCA unit cost 108.33 → giá **131** (total 3,930, margin 680); Net 60: unit cost 110.31 → giá **133** (total 3,990) + cước 1,100 = DAP **5,090**; Payment with Order: DAP 131 → 3,930 + cước 1,800 = **5,730**.
+
+**Đã triển khai (C4, 22/09/2026)** — `src/lib/cbu/profiles/fca-dap.ts`, golden `__tests__/cbu/fca-dap.golden.test.ts` (số lấy từ md Baker, fixture `ac0481.ts`):
+- Mỗi dòng có **hai khối giá trên cùng giá vốn**: FCA (`financial = phí NH phân bổ theo material`, **không** có lãi tín dụng) và DAP (`FCA + material × pctFinanced × lãi × ngày ÷ daysPerYear`). `price = ROUNDUP(unitCost ÷ (1 − margin), 0)` (làm tròn USD nguyên); PRICE_INPUT nhập cả giá FCA lẫn giá DAP theo từng kịch bản.
+- **Kịch bản = điều khoản thanh toán** (Payment with Order: 0%/0 ngày · Net 60: 100%/45 ngày, lãi 15%). Trục kịch bản của Baker là `pctFinanced`, `interestPct`, `financingDays` và cước; các tham số còn lại (biểu phí NH, margin mục tiêu, nước đích) dùng chung.
+- **Chào giá DAP = Σ qty × giá DAP + một khoản cước trọn gói** (Excel G16 = G15 + P16). Tái dùng hai trường cước của mô hình chung: `logistics.freightAllInUsd` = **cước báo giá** (cộng vào tổng), `logistics.freightFixedUsd` = **cước theo bảng Logistic** (chỉ đối chiếu). Khác nhau ⇒ **cảnh báo** (Net 60: 1,100 vs 1,800 ⇒ chênh $700), không làm hỏng check.
+- Không có thuế nhập khẩu, hoa hồng, CIT, bảo hiểm, phân bổ logistics theo trọng lượng ⇒ trọng lượng không bắt buộc, các trường này ẩn khỏi UI; `fx` và bước làm tròn VND vẫn nhập được vì tổng VND của RFQ phụ thuộc chúng.
+- **Cơ sở báo giá `quoteBasis` (FCA | DAP)** lưu trong `cbuConfig`; mặc định suy từ Incoterm của RFQ (`DAP`/`DDP` ⇒ DAP, còn lại FCA). Quyết định khối giá nào được lưu vào `RFQItem.ddpPriceUsd` và tổng RFQ (cơ sở DAP: tổng **đã gồm** cước trọn gói). Kịch bản được chọn quyết định như ở DDP.
+- Profile lưu ở `RFQ.cbuProfile`; `profileFromRfq` đọc cột này. Chuyển mô hình trong giao diện có bước xác nhận vì nó **đặt lại** tham số/kịch bản về mặc định của mô hình mới (dòng hàng và giá gốc giữ nguyên). Vào từ modal "Nước ngoài" với sheet chưa từng tính ⇒ tự chuyển sang Baker.
+- Mặc định Baker (`PROFILE_DEFAULTS.FCA_DAP`): margin mục tiêu 17%, làm tròn USD 0 chữ số, hoa hồng/CIT 0, nước đích MY, phí nhận tiền min $35, lãi 15%; vì phí nhận tiền chưa chốt (Q4) nên `bank.receiveBaseUsd` vẫn **nhập tay**.
 
 ### 11.6 Quy ước bắt buộc (áp dụng cho code mới)
 
@@ -578,7 +587,7 @@ src/lib/cbu/
   index.ts              # calculateCbu(lines, params) — API mới
 lib/cbu-engine.ts       # re-export mỏng của legacy.ts → xoá khi hợp nhất lib/ (Sprint 2)
 # Trạng thái C1: đã có types, math, defaults, params, pools, pricing, checks, profiles/ddp-import, index, legacy.
-# Chưa có: profiles/fca-dap (C4), src/lib/schemas/cbu.schemas.ts (C2), src/components/cbu/ (C3).
+# (cây thư mục dưới đây là thiết kế ban đầu; profiles/fca-dap, schemas và components/cbu đã có từ C2–C4.)
 src/lib/schemas/cbu.schemas.ts   # Zod cho GET/PUT/finalize
 src/components/cbu/     # xem §11.9
 ```
@@ -713,7 +722,7 @@ Thứ tự **C1 trước UI**: giá sai đang đi ra khách hàng, còn giao di�
 | **C1 · Engine đúng** *(TDD)* | Viết golden test **trước** (phải fail); dựng `src/lib/cbu/`: `pctToFrac`, trọng lượng chuẩn, pool, duty base gồm insurance, bỏ `docFee` mặc định, bỏ `bookingExchangeRate`/`effectiveMargin`, `checks`; giữ adapter `calculateCBU()` | 2d | Golden AIR/SEA/PRICE_INPUT pass; hồi quy F1–F4 pass; `tsc --noEmit` 0 lỗi. *Tương ứng P0-5, P0-6* |
 | **C2 · Lưu/đọc & API** ✅ *code xong 21/09* | Migration SQL tay (5 cột RFQ + `cbuConfig` + `marginOverrideUsd` + bỏ default 25 + backfill); Zod; route v2 + server recompute; alias `calculate-cbu`; `scripts/cbu-audit.ts` | 2d | Round-trip đúng *(đã kiểm chứng bằng DB giả)*; gửi tổng sai vẫn lưu đúng *(đã kiểm chứng)*; audit script chạy trên DB dev *(**chưa** — cần DB)* |
 | **C3 · Dựng lại UI** | Workspace + components §11.9; kịch bản Air/Sea + so sánh; `?legacy=1` | 5d | Kiểm tay: nhập một RFQ mới ≤ 8 ô trước khi ra giá; mở lại RFQ đã lưu thấy đúng; không còn cuộn lồng; Lighthouse a11y ≥ 90 |
-| **C4 · Profile `FCA_DAP`** | Engine profile Baker Hughes; kịch bản Payment/Net 60; UI FCA/DAP; bỏ chặn nhóm "Nước ngoài" | 3d | Golden `ac0481` pass; DAP = FCA + cước tay; cảnh báo chênh cước |
+| **C4 · Profile `FCA_DAP`** ✅ *xong 22/09* | Engine profile Baker Hughes; kịch bản Payment/Net 60; UI FCA/DAP; bỏ chặn nhóm "Nước ngoài" | 3d | Golden `ac0481` pass; DAP = FCA + cước tay; cảnh báo chênh cước — ✅ *xong 22/09* (29 golden + 23 test tích hợp + 10 test render + 15 kiểm tra e2e) |
 | **C5 · Hạ nguồn & hoàn thiện** | Sửa payload Quotation PDF (`unit_price` = `ddpPriceUsd` per unit, `amount` = × qty) dùng kịch bản đã chọn *(tương ứng P2-5)*; đọc lại tài liệu; dọn code cũ | 2d | PDF khớp UI; xoá trang legacy |
 
 **Rủi ro & giảm thiểu:** (1) *Giá lịch sử đã gửi khách lệch* → chạy `cbu-audit.ts` trước C2, quyết định thương mại do quản lý PSBV; (2) *Migration trên DB lệch* → cảnh báo §11.8; (3) *Người dùng quen bảng cũ* → `?legacy=1` + giữ thuật ngữ Excel trong tooltip; (4) *Hai thư mục `lib/` và `src/lib/`* → engine mới đặt ở `src/lib/cbu/`, shim ở `lib/` đến khi hợp nhất (Sprint 2).

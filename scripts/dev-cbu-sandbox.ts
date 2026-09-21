@@ -12,7 +12,8 @@
  *     database in .env (a process env var wins over .env files).
  *
  * Login: sandbox@psbv.local / sandbox123. Seeded RFQs: AC0084-SANDBOX (clean, Excel numbers) and
- * DEMO-CHECKS (a line without weight, a margin override, a missing material cost — to see warnings).
+ * DEMO-CHECKS (a line without weight, a margin override, a missing material cost — to see warnings) and
+ * AC0481-SANDBOX (Baker Hughes, FCA / DAP: open it via the "Nước ngoài" option, or switch the model on the page).
  */
 import { execFileSync, spawn } from "node:child_process";
 import bcrypt from "bcryptjs";
@@ -39,7 +40,7 @@ async function main() {
 
   await seed(db);
   console.log(`\nSandbox database ready: ${DATABASE_URL}`);
-  console.log("Login: sandbox@psbv.local / sandbox123   ·   RFQs: AC0084-SANDBOX, DEMO-CHECKS\n");
+  console.log("Login: sandbox@psbv.local / sandbox123   ·   RFQs: AC0084-SANDBOX, DEMO-CHECKS, AC0481-SANDBOX (Baker)\n");
 
   if (dbOnly) return; // keep the event loop alive through the socket server
 
@@ -77,6 +78,16 @@ async function seed(db: PGlite) {
   const rfqArgs = (id: string, code: string) => [id, code, P.fx, P.vndRoundingStep, P.lbToKg, air.freightFixedUsd, air.freightRatePerKg, air.chargeableKg, air.clearanceUsd, air.inlandUsd];
   await db.query(rfqSql, rfqArgs("r1", "AC0084-SANDBOX"));
   await db.query(rfqSql, rfqArgs("r2", "DEMO-CHECKS"));
+
+  // AC0481-SANDBOX: Baker Hughes (FCA / DAP) — starts as a plain RFQ (DDP defaults) so the flow "switch model → save" is exercised.
+  await db.query(
+    `INSERT INTO "RFQ" ("id","rfqCode","clientId","status","supplierName","incoTerm","paymentTerm","exchangeRate","vndRoundingStep","updatedAt")
+     VALUES ('r3','AC0481-SANDBOX','c1','SUPPLIER_QUOTED','Baker Hughes','FCA Houston','Net 60 days',25500,10000, now())`
+  );
+  await db.query(
+    `INSERT INTO "RFQItem" ("id","rfqId","lineNo","rawPartNumber","rawDescription","qty","uom","supplier","supplierUnitPrice","extWeightLbs","dutyPercent","marginPercent")
+     VALUES ('r3-l1','r3',1,'480131200','1R MODEL F STD. SERVICE DRILL PIPE FLOAT VALVE',30,'PCS','Baker Hughes',105.5,43.2,0,NULL)`
+  );
 
   const itemSql = `INSERT INTO "RFQItem" ("id","rfqId","lineNo","rawPartNumber","rawDescription","qty","uom","supplier","supplierUnitPrice","extWeightLbs","dutyPercent","marginPercent")
     VALUES ($1,$2,$3,$4,$5,$6,'PCS','Keystone',$7,$8,$9,$10)`;

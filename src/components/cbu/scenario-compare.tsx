@@ -3,7 +3,7 @@
 import * as React from "react";
 import { CheckIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { CbuResult } from "@/lib/cbu/types";
+import type { CbuProfile, CbuResult } from "@/lib/cbu/types";
 import type { DraftScenario } from "@/lib/cbu/ui/draft";
 import { fmtPct, fmtUsd, fmtVnd, marginTone, type MarginTone } from "@/lib/cbu/ui/format";
 
@@ -13,6 +13,8 @@ interface Props {
   chosenId: string;
   activeId: string;
   targetMarginPct: number;
+  /** FCA_DAP compares payment terms: FCA offer, DAP offer, freight — instead of logistics pool and VND. */
+  profile?: CbuProfile;
   disabled?: boolean;
   onChoose: (id: string) => void;
   onView: (id: string) => void;
@@ -21,20 +23,44 @@ interface Props {
 const TONE_TEXT: Record<MarginTone, string> = { good: "text-emerald-600", thin: "text-amber-600", loss: "text-red-600", none: "text-slate-400" };
 
 /** Side by side: what each logistics option costs and earns, and which one goes into the Quotation. */
-export function ScenarioCompare({ scenarios, results, chosenId, activeId, targetMarginPct, disabled, onChoose, onView }: Props) {
+export function ScenarioCompare({ scenarios, results, chosenId, activeId, targetMarginPct, profile = "DDP_IMPORT", disabled, onChoose, onView }: Props) {
   const chosen = results[chosenId];
-  const rows: { key: string; label: string; cell: (r: CbuResult) => React.ReactNode }[] = [
-    { key: "pool", label: "Pool logistics", cell: (r) => fmtUsd(r.pools.logisticsPoolUsd) },
-    { key: "cost", label: "Giá vốn", cell: (r) => fmtUsd(r.totals.costUsd) },
-    { key: "revUsd", label: "Doanh thu ($)", cell: (r) => fmtUsd(r.totals.revenueUsd) },
-    { key: "revVnd", label: "Doanh thu (₫)", cell: (r) => <strong className="font-semibold text-slate-900">{fmtVnd(r.totals.revenueVnd)}</strong> },
-    { key: "profit", label: "Lãi ($)", cell: (r) => fmtUsd(r.totals.marginUsd) },
+  const fcaRev = (r: CbuResult) => r.lines.reduce((s, l) => s + (l.fca?.totalRevenueUsd ?? 0), 0);
+  const fcaCost = (r: CbuResult) => r.lines.reduce((s, l) => s + (l.fca?.totalCostUsd ?? 0), 0);
+  const bakerRows: { key: string; label: string; cell: (r: CbuResult) => React.ReactNode }[] = [
+    { key: "bank", label: "TOTAL BANK FEE", cell: (r) => fmtUsd(r.pools.bankTotalUsd) },
+    { key: "fcaCost", label: "Total Cost — FCA", cell: (r) => fmtUsd(fcaCost(r)) },
+    { key: "fca", label: "Incoterm 1 — FCA", cell: (r) => fmtUsd(fcaRev(r)) },
+    { key: "dapCost", label: "Total Cost — DAP", cell: (r) => fmtUsd(r.dap?.costUsd ?? 0) },
+    { key: "dapGoods", label: "Sales Price × Q'ty (excl. freight)", cell: (r) => fmtUsd(r.dap?.goodsRevenueUsd ?? 0) },
+    { key: "freight", label: "Freight (quoted)", cell: (r) => fmtUsd(r.dap?.freightUsd ?? 0) },
+    { key: "dapTotal", label: "Incoterm 2 — DAP", cell: (r) => <strong className="font-semibold text-slate-900">{fmtUsd(r.dap?.totalUsd ?? 0)}</strong> },
     {
       key: "margin",
-      label: "Margin",
+      label: "% Margin (FCA / DAP)",
+      cell: (r) => {
+        const f = fcaRev(r) > 0 ? ((fcaRev(r) - fcaCost(r)) / fcaRev(r)) * 100 : 0;
+        return <span className="font-semibold text-slate-800">{fcaRev(r) > 0 ? fmtPct(f) : "—"} / {(r.dap?.goodsRevenueUsd ?? 0) > 0 ? fmtPct(r.dap!.marginPct) : "—"}</span>;
+      },
+    },
+  ];
+  const ddpRows: { key: string; label: string; cell: (r: CbuResult) => React.ReactNode }[] = [
+    { key: "pool", label: "Total Logistic + Insurance", cell: (r) => fmtUsd(r.pools.logisticsPoolUsd) },
+    { key: "cost", label: "Total Cost (USD)", cell: (r) => fmtUsd(r.totals.costUsd) },
+    { key: "revUsd", label: "Revenue in USD @ quote rate", cell: (r) => fmtUsd(r.totals.revenueUsd) },
+    { key: "revVnd", label: "Total Revenue (VND)", cell: (r) => <strong className="font-semibold text-slate-900">{fmtVnd(r.totals.revenueVnd)}</strong> },
+    { key: "profit", label: "Total Margin", cell: (r) => fmtUsd(r.totals.marginUsd) },
+    {
+      key: "margin",
+      label: "Nominal Margin %",
       cell: (r) => <span className={cn("font-semibold", TONE_TEXT[marginTone(r.totals.marginPct, r.totals.revenueUsd > 0, targetMarginPct)])}>{r.totals.revenueUsd > 0 ? fmtPct(r.totals.marginPct) : "—"}</span>,
     },
   ];
+
+  const rows = profile === "FCA_DAP" ? bakerRows : ddpRows;
+  // the difference row compares the figure the customer sees: VND revenue (DDP) or the DAP total (Baker)
+  const headline = (r: CbuResult) => (profile === "FCA_DAP" ? (r.dap?.totalUsd ?? 0) : r.totals.revenueVnd);
+  const fmtDelta = (d: number) => (profile === "FCA_DAP" ? fmtUsd(Math.abs(d)) : `${fmtVnd(Math.abs(d))} ₫`);
 
   return (
     <section aria-labelledby="compare-heading" className="rounded-xl border border-slate-200 bg-white">
@@ -82,12 +108,12 @@ export function ScenarioCompare({ scenarios, results, chosenId, activeId, target
               </tr>
             ))}
             <tr className="border-t border-slate-200 bg-slate-50/60">
-              <td className="px-4 py-1.5 text-xs font-medium text-slate-600">Chênh lệch doanh thu so với phương án được chọn</td>
+              <td className="px-4 py-1.5 text-xs font-medium text-slate-600">{profile === "FCA_DAP" ? "Incoterm 2 — DAP difference vs chosen scenario" : "Revenue difference vs chosen scenario (VND)"}</td>
               {scenarios.map((s) => {
-                const d = results[s.id] && chosen ? results[s.id].totals.revenueVnd - chosen.totals.revenueVnd : 0;
+                const d = results[s.id] && chosen ? headline(results[s.id]) - headline(chosen) : 0;
                 return (
                   <td key={s.id} className={cn("px-4 py-1.5 text-right font-mono text-[13px] tabular-nums", d === 0 ? "text-slate-400" : d > 0 ? "text-emerald-700" : "text-red-600")}>
-                    {s.id === chosenId ? "—" : `${d > 0 ? "+" : d < 0 ? "−" : ""}${fmtVnd(Math.abs(d))} ₫`}
+                    {s.id === chosenId ? "—" : `${d > 0 ? "+" : d < 0 ? "−" : ""}${fmtDelta(d)}`}
                   </td>
                 );
               })}

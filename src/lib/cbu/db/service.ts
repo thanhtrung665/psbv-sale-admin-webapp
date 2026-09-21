@@ -10,21 +10,23 @@ import type { PrismaClient } from "@prisma/client";
 import { calculateCbu } from "../index";
 import { finalizeBlockers } from "../finalize";
 import { resolveParams } from "../params";
-import type { CbuLineInput, CbuMode, CbuParams, CbuResult, LogisticsParams } from "../types";
+import type { CbuLineInput, CbuMode, CbuParams, CbuProfile, CbuResult, QuoteBasis } from "../types";
 import type { SaveCbuInput } from "../../schemas/cbu.schemas";
 import { blocked, notFound } from "./errors";
 import {
   buildLines,
+  defaultQuoteBasis,
   itemUpdateData,
   mergeParams,
   nextStatus,
   normalizeCbuConfig,
   paramsFromRfq,
+  profileFromRfq,
   rfqUpdateData,
   type CbuAction,
   type CbuConfig,
 } from "./mapping";
-import { pricesToPersist, resolveScenarios, scenarioLines, scenarioParams, type ScenarioState } from "./scenarios";
+import { dapPricesToPersist, pricesToPersist, resolveScenarios, scenarioLines, scenarioParams, type ScenarioState } from "./scenarios";
 
 export type CbuDb = Pick<PrismaClient, "rFQ" | "rFQItem" | "$transaction">;
 
@@ -50,10 +52,12 @@ export interface CbuSheetItem {
 export interface CbuSheetScenario {
   id: string;
   label: string;
-  /** Effective logistics of this scenario (base + overrides). */
-  logistics: LogisticsParams;
-  /** Typed DDP price per line id (PRICE_INPUT). */
+  /** Effective params of this scenario (base + overrides): logistics, and for FCA_DAP the payment terms. */
+  params: CbuParams;
+  /** Typed DDP price per line id (PRICE_INPUT); FCA_DAP: the FCA price. */
   prices: Record<string, number>;
+  /** FCA_DAP: the typed DAP price per line id. */
+  dapPrices: Record<string, number>;
   result: CbuResult;
 }
 
@@ -67,7 +71,9 @@ export interface CbuSheet {
     supplierName: string | null;
     clientName: string | null;
   };
-  profile: string;
+  profile: CbuProfile;
+  /** FCA_DAP: which price is saved on the lines / totals (`quoteBasis`). */
+  quoteBasis: QuoteBasis;
   mode: CbuMode;
   /** Base parameters = the FIRST scenario's effective params (defaults applied). */
   params: CbuParams;
@@ -109,19 +115,29 @@ interface ScenarioRun {
   result: CbuResult;
   /** Prices to persist / show for this scenario. */
   prices: Record<string, number>;
+  dapPrices: Record<string, number>;
 }
 
 function compute(rfq: RfqWithItems, input?: SaveCbuInput) {
-  const baseInput = mergeParams(paramsFromRfq(rfq), { ...(input?.params ?? {}), ...(input?.mode ? { mode: input.mode } : {}) });
+  const stored = normalizeCbuConfig(rfq.cbuConfig);
+  const profile: CbuProfile = input?.profile ?? profileFromRfq(rfq);
+  const quoteBasis: QuoteBasis = input?.quoteBasis ?? stored.quoteBasis ?? defaultQuoteBasis(rfq.incoTerm);
+  const baseInput = mergeParams(paramsFromRfq(rfq), { ...(input?.params ?? {}), ...(input?.mode ? { mode: input.mode } : {}), profile, quoteBasis });
   const baseParams = resolveParams(baseInput);
   const lines = buildLines(rfq.items, input?.items);
-  const stored = normalizeCbuConfig(rfq.cbuConfig);
   const { scenarios, chosenId } = resolveScenarios(stored, { ...input, items: input?.items }, lines);
 
   const runs: ScenarioRun[] = scenarios.map((scenario, i) => {
     const params = scenarioParams(baseInput, scenario, i);
     const sLines = scenarioLines(lines, scenario);
-    return { scenario, params, lines: sLines, result: calculateCbu(sLines, params), prices: pricesToPersist(scenario, sLines, baseParams.mode === "PRICE_INPUT") };
+    return {
+      scenario,
+      params,
+      lines: sLines,
+      result: calculateCbu(sLines, params),
+      prices: pricesToPersist(scenario, sLines, baseParams.mode === "PRICE_INPUT"),
+      dapPrices: dapPricesToPersist(scenario, sLines),
+    };
   });
   const chosen = runs.find((r) => r.scenario.id === chosenId) as ScenarioRun;
   return { baseParams, lines, runs, chosen };
@@ -139,7 +155,8 @@ function toSheet(rfq: RfqWithItems, c: ReturnType<typeof compute>): CbuSheet {
       supplierName: rfq.supplierName ?? null,
       clientName: rfq.client?.companyName ?? rfq.client?.name ?? null,
     },
-    profile: rfq.cbuProfile ?? "DDP_IMPORT",
+    profile: baseParams.profile,
+    quoteBasis: baseParams.quoteBasis,
     mode: baseParams.mode,
     params: baseParams,
     items: rfq.items.map((item, i) => ({
@@ -157,7 +174,7 @@ function toSheet(rfq: RfqWithItems, c: ReturnType<typeof compute>): CbuSheet {
       ddpPriceUsdInput: chosen.prices[item.id] ?? null,
       savedDdpPriceUsd: item.ddpPriceUsd ?? null,
     })),
-    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, logistics: r.params.logistics, prices: r.prices, result: r.result })),
+    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, params: r.params, prices: r.prices, dapPrices: r.dapPrices, result: r.result })),
     chosenScenarioId: chosen.scenario.id,
     result: chosen.result,
     saved: {
@@ -203,7 +220,8 @@ export async function saveCbuSheet(
   const config: CbuConfig = {
     schemaVersion: 1,
     chosenScenarioId: chosen.scenario.id,
-    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, overrides: r.scenario.overrides, prices: r.prices })),
+    quoteBasis: baseParams.quoteBasis,
+    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, overrides: r.scenario.overrides, prices: r.prices, dapPrices: r.dapPrices })),
   };
 
   await db.$transaction([

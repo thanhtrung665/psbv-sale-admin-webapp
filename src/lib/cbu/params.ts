@@ -1,23 +1,43 @@
 // src/lib/cbu/params.ts
 // Turns whatever the caller passes (partial, possibly garbage) into a complete, finite CbuParams.
+// Missing values take the defaults of the params' profile (CBU_DEFAULTS + PROFILE_DEFAULTS[profile]).
 
-import { CBU_DEFAULTS as D } from "./defaults";
+import { CBU_DEFAULTS, PROFILE_DEFAULTS } from "./defaults";
 import { g } from "./math";
-import type { CbuMode, CbuParams, CbuParamsInput } from "./types";
+import type { CbuMode, CbuParams, CbuParamsInput, CbuProfile, QuoteBasis } from "./types";
 
 const str = (v: unknown, fallback: string): string => {
   const s = typeof v === "string" ? v.trim() : "";
   return s === "" ? fallback : s;
 };
 
+/** The defaults of a profile: the shared ones with the profile's differences on top. */
+export function defaultsFor(profile: CbuProfile): CbuParams {
+  const o = PROFILE_DEFAULTS[profile];
+  const D = CBU_DEFAULTS;
+  return {
+    ...D,
+    ...(o as Partial<CbuParams>),
+    profile,
+    logistics: { ...D.logistics, ...(o.logistics ?? {}) },
+    insurance: { ...D.insurance, ...(o.insurance ?? {}) },
+    bank: { ...D.bank, ...(o.bank ?? {}) },
+  };
+}
+
 export function resolveParams(input: CbuParamsInput | null | undefined): CbuParams {
   const p = input ?? {};
+  const profile: CbuProfile = p.profile === "FCA_DAP" ? "FCA_DAP" : "DDP_IMPORT";
+  const D = defaultsFor(profile);
   const l = p.logistics ?? {};
   const i = p.insurance ?? {};
   const b = p.bank ?? {};
   const mode: CbuMode = p.mode === "PRICE_INPUT" ? "PRICE_INPUT" : "MARGIN_INPUT";
+  const quoteBasis: QuoteBasis = p.quoteBasis === "DAP" ? "DAP" : "FCA";
 
   return {
+    profile,
+    quoteBasis,
     mode,
     fx: g(p.fx, D.fx),
     vndRoundingStep: g(p.vndRoundingStep, D.vndRoundingStep),

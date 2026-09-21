@@ -16,8 +16,10 @@ export interface ScenarioState {
   id: string;
   label: string;
   overrides: CbuParamsInput;
-  /** undefined = legacy config: fall back to the price stored on the item. */
+  /** undefined = legacy config: fall back to the price stored on the item. (FCA_DAP: the FCA prices.) */
   prices?: Record<string, number>;
+  /** FCA_DAP: the typed DAP price per line id. */
+  dapPrices?: Record<string, number>;
 }
 
 /**
@@ -37,6 +39,7 @@ export function resolveScenarios(
       label: s.label,
       overrides: i === 0 ? {} : ((s.overrides ?? {}) as CbuParamsInput),
       prices: s.prices ?? {},
+      dapPrices: s.dapPrices ?? {},
     }));
   } else {
     list = stored.scenarios.map((s) => ({ ...s, overrides: s.overrides ?? {} }));
@@ -72,6 +75,7 @@ export function scenarioLines(lines: CbuLineInput[], s: ScenarioState): CbuLineI
   return lines.map((l) => ({
     ...l,
     ddpPriceUsdInput: s.prices ? (s.prices[l.id] ?? null) : (l.ddpPriceUsdInput ?? null),
+    dapPriceUsdInput: s.dapPrices?.[l.id] ?? null,
   }));
 }
 
@@ -81,4 +85,11 @@ export function pricesToPersist(s: ScenarioState, sLines: CbuLineInput[], priceM
   const out: Record<string, number> = {};
   for (const l of sLines) if (l.ddpPriceUsdInput != null && l.ddpPriceUsdInput > 0) out[l.id] = l.ddpPriceUsdInput;
   return out;
+}
+
+/** FCA_DAP: the typed DAP prices of a scenario. */
+export function dapPricesToPersist(s: ScenarioState, sLines: CbuLineInput[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of sLines) if (l.dapPriceUsdInput != null && l.dapPriceUsdInput > 0) out[l.id] = l.dapPriceUsdInput;
+  return s.dapPrices && Object.keys(out).length === 0 ? s.dapPrices : out;
 }

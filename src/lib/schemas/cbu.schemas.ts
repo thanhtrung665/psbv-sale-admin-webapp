@@ -15,6 +15,8 @@ const factor = z.number().finite().min(0).max(10);
 const label = z.string().trim().min(1).max(50);
 
 export const cbuModeSchema = z.enum(["MARGIN_INPUT", "PRICE_INPUT"]);
+export const cbuProfileSchema = z.enum(["DDP_IMPORT", "FCA_DAP"]);
+export const quoteBasisSchema = z.enum(["FCA", "DAP"]);
 
 const logisticsSchema = z
   .object({
@@ -91,14 +93,28 @@ export const cbuItemEditSchema = z.object({
 export const cbuScenarioSchema = z.object({
   id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/, "Mã kịch bản chỉ gồm chữ, số, - và _ (tối đa 32 ký tự)"),
   label: z.string().trim().min(1).max(40),
-  overrides: z.object({ logistics: logisticsSchema.optional() }).optional(),
+  // what may differ per scenario: logistics (Air / Sea) and the financing terms (Baker: Payment with Order / Net 60)
+  overrides: z
+    .object({
+      logistics: logisticsSchema.optional(),
+      pctFinanced: percent(100).optional(),
+      interestPct: percent(1000).optional(),
+      financingDays: z.number().finite().min(0).max(3650).optional(),
+    })
+    .optional(),
   prices: z.record(z.string().min(1).max(64), money).optional(),
+  /** FCA_DAP: the typed DAP price per line id (`prices` are the FCA prices). */
+  dapPrices: z.record(z.string().min(1).max(64), money).optional(),
 });
 
 /** Body of `PUT /api/rfq/[id]/cbu` and `POST /api/rfq/[id]/cbu/finalize`: INPUTS only. */
 export const saveCbuSchema = z
   .object({
     mode: cbuModeSchema.optional(),
+    /** Which CBU model (Hoàng Sơn DDP or Baker Hughes FCA/DAP). Omit to keep the stored one. */
+    profile: cbuProfileSchema.optional(),
+    /** FCA_DAP: which price is saved on the lines / totals. Omit to keep the stored choice. */
+    quoteBasis: quoteBasisSchema.optional(),
     params: cbuParamsSchema.optional(),
     items: z.array(cbuItemEditSchema).max(1000).optional(),
     /** Omit to keep the stored scenarios; give the full list to add / remove / rename / re-price them. */

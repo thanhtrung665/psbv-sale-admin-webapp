@@ -50,11 +50,22 @@ export function FinalizeDialog({ open, onOpenChange, result, scenarioLabel, bloc
           )}
           <dt className="text-slate-500">Số dòng hàng</dt>
           <dd className="text-right font-mono tabular-nums">{result.lines.length}</dd>
-          <dt className="text-slate-500">Doanh thu</dt>
-          <dd className="text-right font-mono tabular-nums">{fmtUsd(t.revenueUsd)} · {fmtVnd(t.revenueVnd)} ₫</dd>
-          <dt className="text-slate-500">Giá vốn</dt>
+          {result.profile === "FCA_DAP" && result.dap ? (
+            <>
+              <dt className="text-slate-500">Incoterm 1 — FCA</dt>
+              <dd className="text-right font-mono tabular-nums">{fmtUsd(result.lines.reduce((s, l) => s + (l.fca?.totalRevenueUsd ?? 0), 0))}</dd>
+              <dt className="text-slate-500">Incoterm 2 — DAP</dt>
+              <dd className="text-right font-mono tabular-nums">{fmtUsd(result.dap.totalUsd)}</dd>
+            </>
+          ) : (
+            <>
+              <dt className="text-slate-500">Total Revenue</dt>
+              <dd className="text-right font-mono tabular-nums">{fmtUsd(t.revenueUsd)} · {fmtVnd(t.revenueVnd)} ₫</dd>
+            </>
+          )}
+          <dt className="text-slate-500">Total Cost</dt>
           <dd className="text-right font-mono tabular-nums">{fmtUsd(t.costUsd)}</dd>
-          <dt className="text-slate-500">Margin</dt>
+          <dt className="text-slate-500">Nominal Margin %</dt>
           <dd className="text-right font-mono font-semibold tabular-nums">{fmtPct(t.marginPct)}</dd>
         </dl>
 

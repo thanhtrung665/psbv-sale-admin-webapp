@@ -54,37 +54,37 @@ export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct,
       <table className="w-full min-w-max border-collapse text-sm">
         <thead>
           <tr className="border-b border-slate-100 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-            <th colSpan={3} className="sticky left-0 z-10 bg-white px-3 py-1.5 text-left">Dòng hàng</th>
-            <th colSpan={inputCols} className="bg-blue-50/40 px-2 py-1.5 text-center text-blue-500">Nhập liệu</th>
-            {showCosts && <th colSpan={costCols} className="px-2 py-1.5 text-center">Chi phí / đơn vị</th>}
-            <th colSpan={resultCols + 1} className="bg-slate-50 px-2 py-1.5 text-center">Kết quả</th>
+            <th colSpan={3} className="sticky left-0 z-10 bg-white px-3 py-1.5 text-left">ITEM</th>
+            <th colSpan={inputCols} className="bg-blue-50/40 px-2 py-1.5 text-center text-blue-500">INPUT</th>
+            {showCosts && <th colSpan={costCols} className="px-2 py-1.5 text-center">COST BUILD-UP (per unit)</th>}
+            <th colSpan={resultCols + 1} className="bg-slate-50 px-2 py-1.5 text-center">COMPUTED</th>
           </tr>
           <tr className="border-b border-slate-200 bg-white">
             <th className={cn(th, "sticky left-0 z-10 w-10 bg-white text-center")}>#</th>
-            <th className={cn(th, "sticky left-10 z-10 min-w-[210px] bg-white text-left")}>Part No / Mô tả</th>
-            <th className={cn(th, "text-right")}>SL</th>
-            <th className={cn(th, "min-w-[96px] text-right")}>KL tổng (lb)</th>
-            <th className={cn(th, "min-w-[96px] text-right")}>Giá gốc ($)</th>
-            <th className={cn(th, "min-w-[72px] text-right")}>% Thuế</th>
+            <th className={cn(th, "sticky left-10 z-10 min-w-[210px] bg-white text-left")}>Part No. / Description</th>
+            <th className={cn(th, "text-right")}>Q'ty</th>
+            <th className={cn(th, "min-w-[96px] text-right")}>Total Weight (lb)</th>
+            <th className={cn(th, "min-w-[96px] text-right")}>Material Cost</th>
+            <th className={cn(th, "min-w-[72px] text-right")}>%Duty</th>
             {overrides && (
               <>
-                <th className={cn(th, "min-w-[96px] text-right")} title="Để trống = dùng margin mục tiêu">Margin riêng (%)</th>
-                <th className={cn(th, "min-w-[104px] text-right")} title="Ưu tiên cao nhất: giá bán = giá vốn + số tiền này">Lãi riêng ($/đv)</th>
+                <th className={cn(th, "min-w-[96px] text-right")} title="Để trống = dùng margin mục tiêu">Margin % override</th>
+                <th className={cn(th, "min-w-[104px] text-right")} title="Ưu tiên cao nhất: giá bán = giá vốn + số tiền này">Margin $/unit override</th>
               </>
             )}
             {showCosts && (
               <>
-                <th className={cn(th, "text-right")}>Ngân hàng + vốn</th>
+                <th className={cn(th, "text-right")}>Bank fee</th>
                 <th className={cn(th, "text-right")}>Logistics</th>
-                <th className={cn(th, "text-right")}>Thuế NK</th>
-                <th className={cn(th, "text-right")}>Hoa hồng + CIT</th>
+                <th className={cn(th, "text-right")}>Duty</th>
+                <th className={cn(th, "text-right")}>Commission + CIT</th>
               </>
             )}
-            <th className={cn(th, "bg-slate-50/60 text-right")}>Giá vốn ($)</th>
-            <th className={cn(th, "min-w-[104px] bg-slate-50/60 text-right")}>{priceInput ? "Giá bán nhập ($)" : "Giá bán ($)"}</th>
-            <th className={cn(th, "bg-slate-50/60 text-right")}>Giá bán (₫)</th>
-            <th className={cn(th, "bg-slate-50/60 text-right")}>Lãi ($/đv)</th>
-            <th className={cn(th, "bg-slate-50/60 text-right")}>Margin</th>
+            <th className={cn(th, "bg-slate-50/60 text-right")}>Unit Cost</th>
+            <th className={cn(th, "min-w-[104px] bg-slate-50/60 text-right")}>DDP Price (USD)</th>
+            <th className={cn(th, "bg-slate-50/60 text-right")}>DDP Price (VND)</th>
+            <th className={cn(th, "bg-slate-50/60 text-right")}>Margin per unit</th>
+            <th className={cn(th, "bg-slate-50/60 text-right")}>% Margin</th>
             <th className={cn(th, "w-8")} aria-label="Chi tiết" />
           </tr>
         </thead>
@@ -126,13 +126,13 @@ export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct,
                     {item.rawDescription && <div className="truncate text-[11px] text-slate-400" title={item.rawDescription}>{item.rawDescription}</div>}
                   </td>
                   <td className={cn(tdNum, "text-slate-600")}>{fmtNum(item.qty, 0)}</td>
-                  <td className="px-1.5 py-1">{cell("totalWeightLb", "Khối lượng tổng (lb)", "0")}</td>
-                  <td className="px-1.5 py-1">{cell("materialUsd", "Giá gốc ($)", "0")}</td>
-                  <td className="px-1.5 py-1">{cell("dutyPct", "% Thuế", "0")}</td>
+                  <td className="px-1.5 py-1">{cell("totalWeightLb", "Total Weight (lb)", "0")}</td>
+                  <td className="px-1.5 py-1">{cell("materialUsd", "Material Cost", "0")}</td>
+                  <td className="px-1.5 py-1">{cell("dutyPct", "%Duty", "0")}</td>
                   {overrides && (
                     <>
-                      <td className="px-1.5 py-1">{cell("marginPctOverride", "Margin riêng (%)", fmtNum(targetMarginPct, 0))}</td>
-                      <td className="px-1.5 py-1">{cell("marginUsdOverride", "Lãi riêng ($/đv)", "—")}</td>
+                      <td className="px-1.5 py-1">{cell("marginPctOverride", "Margin % override", fmtNum(targetMarginPct, 0))}</td>
+                      <td className="px-1.5 py-1">{cell("marginUsdOverride", "Margin $/unit override", "—")}</td>
                     </>
                   )}
                   {showCosts && (
@@ -145,7 +145,7 @@ export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct,
                   )}
                   <td className={cn(tdNum, "bg-slate-50/50 font-medium text-slate-900")}>{fmtNum(line.unitCostUsd)}</td>
                   {priceInput ? (
-                    <td className="bg-slate-50/50 px-1.5 py-1">{cell("ddpPriceUsdInput", "Giá bán nhập ($)", "0")}</td>
+                    <td className="bg-slate-50/50 px-1.5 py-1">{cell("ddpPriceUsdInput", "DDP Price (USD)", "0")}</td>
                   ) : (
                     <td className={cn(tdNum, "bg-slate-50/50 font-semibold text-slate-900")}>{hasPrice ? fmtNum(line.ddpPriceUsd) : "—"}</td>
                   )}
@@ -182,7 +182,7 @@ export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct,
 
         <tfoot>
           <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold text-slate-800">
-            <td colSpan={2} className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-xs uppercase tracking-wide text-slate-500">Tổng (đã nhân số lượng)</td>
+            <td colSpan={2} className="sticky left-0 z-10 bg-slate-50 px-3 py-2 text-xs uppercase tracking-wide text-slate-500">TOTAL</td>
             <td className={tdNum}>{fmtNum(t.qty, 0)}</td>
             <td className={tdNum}>{fmtNum(totalWeightLb, 1)}</td>
             <td className={tdNum}>{fmtNum(t.materialUsd)}</td>
@@ -212,12 +212,12 @@ export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct,
 // ─── Price structure of one line ──────────────────────────────────────────────
 
 const SEGMENTS: { key: string; label: string; color: string; pick: (l: CbuLineResult) => number }[] = [
-  { key: "material", label: "Giá gốc", color: "bg-slate-400", pick: (l) => l.materialUsd },
-  { key: "bank", label: "Ngân hàng + vốn", color: "bg-amber-400", pick: (l) => l.bankFeeUsd },
+  { key: "material", label: "Material Cost", color: "bg-slate-400", pick: (l) => l.materialUsd },
+  { key: "bank", label: "Bank fee", color: "bg-amber-400", pick: (l) => l.bankFeeUsd },
   { key: "logistics", label: "Logistics", color: "bg-sky-400", pick: (l) => l.logisticsUsd },
-  { key: "duty", label: "Thuế NK", color: "bg-violet-400", pick: (l) => l.dutyUsd + l.customUsd },
-  { key: "commission", label: "Hoa hồng + CIT", color: "bg-rose-300", pick: (l) => l.commissionUsd + l.citUsd },
-  { key: "margin", label: "Lãi", color: "bg-emerald-500", pick: (l) => Math.max(0, l.marginPerUnitUsd) },
+  { key: "duty", label: "Duty", color: "bg-violet-400", pick: (l) => l.dutyUsd + l.customUsd },
+  { key: "commission", label: "Commission + CIT", color: "bg-rose-300", pick: (l) => l.commissionUsd + l.citUsd },
+  { key: "margin", label: "Margin per unit", color: "bg-emerald-500", pick: (l) => Math.max(0, l.marginPerUnitUsd) },
 ];
 
 function PriceBreakdown({ line }: { line: CbuLineResult }) {
@@ -245,7 +245,7 @@ function PriceBreakdown({ line }: { line: CbuLineResult }) {
         ))}
       </dl>
       {line.marginPerUnitUsd < 0 && (
-        <p className="mt-2 text-xs font-medium text-red-600">Giá bán thấp hơn giá vốn {fmtUsd(-line.marginPerUnitUsd)} / đơn vị.</p>
+        <p className="mt-2 text-xs font-medium text-red-600">DDP Price thấp hơn Unit Cost {fmtUsd(-line.marginPerUnitUsd)} / đơn vị.</p>
       )}
     </div>
   );

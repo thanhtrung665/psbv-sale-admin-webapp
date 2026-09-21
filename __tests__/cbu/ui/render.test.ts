@@ -24,6 +24,7 @@ function sheet(): CbuSheet {
   return {
     rfq: { id: "r1", rfqCode: "X", status: "SUPPLIER_QUOTED", incoTerm: null, paymentTerm: null, supplierName: null, clientName: null },
     profile: "DDP_IMPORT",
+    quoteBasis: "FCA",
     mode: "MARGIN_INPUT",
     params: { ...CBU_DEFAULTS, fx: AC0084_PARAMS.fx, logistics: { ...CBU_DEFAULTS.logistics, freightFixedUsd: l.freightFixedUsd, freightRatePerKg: l.freightRatePerKg, chargeableKg: l.chargeableKg, clearanceUsd: l.clearanceUsd, inlandUsd: l.inlandUsd } },
     items: AC0084_AIR.map((r) => ({
@@ -31,7 +32,7 @@ function sheet(): CbuSheet {
       materialUsd: r.materialUsd, totalWeightLb: r.totalWeightLb, dutyPct: r.dutyPct,
       marginPctOverride: null, marginUsdOverride: null, ddpPriceUsdInput: null, savedDdpPriceUsd: null,
     })),
-    scenarios: [{ id: "air", label: "Air", logistics: { ...CBU_DEFAULTS.logistics, freightFixedUsd: l.freightFixedUsd, freightRatePerKg: l.freightRatePerKg, chargeableKg: l.chargeableKg, clearanceUsd: l.clearanceUsd, inlandUsd: l.inlandUsd }, prices: {}, result: {} as CbuSheet["result"] }],
+    scenarios: [{ id: "air", label: "Air", params: { ...CBU_DEFAULTS, logistics: { ...CBU_DEFAULTS.logistics, freightFixedUsd: l.freightFixedUsd, freightRatePerKg: l.freightRatePerKg, chargeableKg: l.chargeableKg, clearanceUsd: l.clearanceUsd, inlandUsd: l.inlandUsd } }, prices: {}, dapPrices: {}, result: {} as CbuSheet["result"] }],
     chosenScenarioId: "air",
     result: {} as CbuSheet["result"],
     saved: { calculatedAt: null, totalCostUsd: null, totalRevenueUsd: null, totalRevenueVnd: null, totalMarginUsd: null, actualMarginPct: null },
@@ -61,8 +62,8 @@ describe("ItemsTable", () => {
   it("default view hides the cost and override columns; the toggles add them", () => {
     const draft = sheetToDraft(sheet());
     expect(table(draft)).not.toContain("Logistics");
-    expect(table(draft, { showCosts: true })).toContain("Ngân hàng + vốn");
-    expect(table(draft, { showOverrides: true })).toContain("Margin riêng");
+    expect(table(draft, { showCosts: true })).toContain("Bank fee");
+    expect(table(draft, { showOverrides: true })).toContain("Margin % override");
   });
 
   it("PRICE_INPUT: the price becomes an input and the override columns disappear", () => {
@@ -70,8 +71,8 @@ describe("ItemsTable", () => {
     draft.mode = "PRICE_INPUT";
     Object.assign(draft, setItemValue(draft, "air", "l1", "ddpPriceUsdInput", "7.1"));
     const html = table(draft, { showOverrides: true });
-    expect(html).toContain("Giá bán nhập");
-    expect(html).not.toContain("Margin riêng");
+    expect(html).toContain('aria-label="DDP Price (USD) — dòng 1"'); // the price cell is an input
+    expect(html).not.toContain("Margin % override");
     expect(html).toContain('data-cell="0:3"'); // weight, material, duty, price
   });
 
@@ -94,7 +95,7 @@ describe("ItemsTable", () => {
   it("an expanded row renders the price structure bar and legend", () => {
     const html = table(sheetToDraft(sheet()), { expanded: new Set(["l1"]) });
     expect(html).toContain("Cấu trúc giá bán");
-    expect(html).toContain("Hoa hồng + CIT");
+    expect(html).toContain("Commission + CIT");
   });
 });
 
@@ -106,11 +107,11 @@ describe("ParamsPanel", () => {
 
   it("opens the everyday sections, keeps policy / advanced collapsed behind a 'Mặc định' badge", () => {
     const html = render(sheetToDraft(sheet()));
-    expect(html).toContain("Tỷ giá USD → VND"); // basic, open
-    expect(html).toContain("Cước cố định"); // freight, open
-    expect(html).not.toContain("Phí chuyển tiền trả hãng"); // policy, collapsed
+    expect(html).toContain("Exchange rate (quote) USD→VND"); // Pricing Parameters, open
+    expect(html).toContain("Fixed charge (USD)"); // Logistic, open
+    expect(html).not.toContain("International remittance — Rate"); // policy, collapsed
     expect((html.match(/Mặc định/g) ?? []).length).toBe(2);
-    expect(html).toContain("Pool logistics");
+    expect(html).toContain("Total Logistic + Insurance");
     expect(html).toContain("$4,015.00");
   });
 
@@ -137,8 +138,8 @@ describe("small pieces", () => {
   });
 
   it("NumCell exposes an accessible name and its grid position", () => {
-    const html = renderToStaticMarkup(h(NumCell, { value: "1", onChange: () => {}, label: "Giá gốc — dòng 3", row: 2, col: 1 }));
-    expect(html).toContain('aria-label="Giá gốc — dòng 3"');
+    const html = renderToStaticMarkup(h(NumCell, { value: "1", onChange: () => {}, label: "Material Cost — dòng 3", row: 2, col: 1 }));
+    expect(html).toContain('aria-label="Material Cost — dòng 3"');
     expect(html).toContain('data-cell="2:1"');
   });
 });
@@ -180,6 +181,6 @@ describe("ScenarioTabs / ScenarioCompare", () => {
     expect(html).toContain("Dùng cho Quotation"); // Sea is chosen
     expect(html).toContain("Chọn phương án này"); // Air can be chosen
     expect(html).toContain("890.800.000"); // both scenarios are identical here (Sea is a copy of Air)
-    expect(html).toContain("Chênh lệch doanh thu");
+    expect(html).toContain("Revenue difference vs chosen scenario (VND)");
   });
 });

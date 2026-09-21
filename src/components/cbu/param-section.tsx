@@ -3,7 +3,7 @@
 import * as React from "react";
 import { ChevronDownIcon, RotateCcwIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { defaultAsString, type ParamField } from "@/lib/cbu/ui/draft";
+import type { ParamField } from "@/lib/cbu/ui/draft";
 
 // ─── One parameter input ──────────────────────────────────────────────────────
 
@@ -12,8 +12,10 @@ interface ParamInputProps {
   /** The text in the input (the caller decides where it lives: shared params or a scenario). */
   value: string;
   error?: string;
-  /** Differs from the engine default — shows the "Đã sửa" reset button. Omit for fields without a default badge. */
+  /** Differs from the default — shows the "Đã sửa" reset button. Omit for fields without a default badge. */
   modified?: boolean;
+  /** The default of THIS profile, as the input text: the reset value and the placeholder. */
+  defaultValue?: string;
   onChange: (path: string, value: string) => void;
   /** Show the hint as a visible line (used in the always-open sections). */
   showHint?: boolean;
@@ -21,7 +23,7 @@ interface ParamInputProps {
 
 const UNIT_LABEL: Record<string, string> = { "%": "%", $: "$", kg: "kg", "₫": "₫", ngày: "ngày", x: "×", "": "" };
 
-export function ParamInput({ field, value, error, modified, onChange, showHint }: ParamInputProps) {
+export function ParamInput({ field, value, error, modified, defaultValue = "", onChange, showHint }: ParamInputProps) {
   const uid = React.useId().replace(/:/g, "");
   const id = `param-${field.path.replace(/\./g, "-")}-${uid}`;
   const unit = UNIT_LABEL[field.unit];
@@ -43,9 +45,9 @@ export function ParamInput({ field, value, error, modified, onChange, showHint }
         {modified && (
           <button
             type="button"
-            onClick={() => onChange(field.path, defaultAsString(field))}
+            onClick={() => onChange(field.path, defaultValue)}
             className="inline-flex shrink-0 items-center gap-1 rounded px-1 text-[10px] font-medium text-amber-700 hover:bg-amber-50"
-            title={`Khôi phục mặc định (${defaultAsString(field)})`}
+            title={`Khôi phục mặc định (${defaultValue})`}
           >
             <RotateCcwIcon className="size-3" aria-hidden />
             Đã sửa
@@ -70,7 +72,7 @@ export function ParamInput({ field, value, error, modified, onChange, showHint }
             autoComplete="off"
             spellCheck={false}
             value={value}
-            placeholder={field.kind === "number" ? defaultAsString(field) : undefined}
+            placeholder={field.kind === "number" ? defaultValue : undefined}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? `${id}-err` : undefined}
             onChange={(e) => onChange(field.path, e.target.value)}

@@ -7,9 +7,11 @@
 //
 // All percentages are percent numbers (3 = 3%).
 
-import type { CbuParams } from "./types";
+import type { CbuParams, CbuProfile, DeepPartial } from "./types";
 
 export const CBU_DEFAULTS: CbuParams = {
+  profile: "DDP_IMPORT",
+  quoteBasis: "FCA",
   mode: "MARGIN_INPUT",
   fx: 26500,
   vndRoundingStep: 10000,
@@ -53,5 +55,25 @@ export const CBU_DEFAULTS: CbuParams = {
     minReceiveUsd: 5,
     receiveBaseUsd: 0,
     otherUsd: 0,
+  },
+};
+
+/**
+ * Defaults that differ per profile, applied on top of CBU_DEFAULTS (SPEC §11.5). Baker Hughes (AC0481):
+ * whole-dollar prices, no commission / CIT, margin typed per line (17%), financing only through the payment terms
+ * (Payment with Order = 0, Net 60 = 100% · 15% · 45 days), receive fee minimum $35.
+ */
+export const PROFILE_DEFAULTS: Record<CbuProfile, DeepPartial<CbuParams>> = {
+  DDP_IMPORT: {},
+  FCA_DAP: {
+    usdRoundingDecimals: 0,
+    targetMarginPct: 17,
+    commissionPct: 0,
+    citPct: 0,
+    destinationCountry: "MY",
+    pctFinanced: 0,
+    interestPct: 15,
+    financingDays: 0,
+    bank: { minReceiveUsd: 35 },
   },
 };

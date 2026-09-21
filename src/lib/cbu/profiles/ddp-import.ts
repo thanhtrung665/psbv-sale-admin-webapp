@@ -165,5 +165,5 @@ export function calculateDdpImport(rawLines: CbuLineInput[], p: CbuParams): CbuR
 
   const checks = runChecks({ mode: p.mode, lines, inputs, pools, targetMarginPct: p.targetMarginPct, unpricedIds });
 
-  return { lines, pools, totals, checks, warnings };
+  return { profile: "DDP_IMPORT", lines, pools, totals, checks, warnings };
 }

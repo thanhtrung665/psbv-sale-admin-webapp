@@ -12,5 +12,6 @@ export default function CbuCalcPage({ params, searchParams }: { params: { id: st
     return <LegacyCbuCalcPage params={params} searchParams={searchParams} />;
   }
   const type = typeof searchParams?.type === "string" ? searchParams.type : undefined;
-  return <CbuWorkspace rfqId={params.id} initialType={type} />;
+  const group = typeof searchParams?.group === "string" ? searchParams.group : undefined;
+  return <CbuWorkspace rfqId={params.id} initialType={type} initialGroup={group} />;
 }

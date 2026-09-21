@@ -34,7 +34,7 @@ export function runChecks({ mode, lines, inputs, pools, targetMarginPct, unprice
   }
   checks.push({
     id: "C1",
-    label: "Unit Cost = Material + Bank + Logistics + Duty + Commission + CIT",
+    label: "Unit Cost = Material Cost + Bank fee + Logistics + Duty + Commission + CIT",
     delta: c1Max,
     ok: c1Bad.length === 0,
     ...(c1Bad.length ? { lineIds: c1Bad } : {}),
@@ -43,12 +43,12 @@ export function runChecks({ mode, lines, inputs, pools, targetMarginPct, unprice
   // C2
   const bankAllocated = lines.reduce((s, l) => s + l.qty * (l.bankFeeUsd - l.financingUsd), 0);
   const c2 = pools.totalMaterialUsd > 0 ? Math.abs(bankAllocated - pools.bankTotalUsd) : 0;
-  checks.push({ id: "C2", label: "Phí ngân hàng phân bổ = Total Bank Fee", delta: c2, ok: c2 <= TOL * Math.max(1, pools.bankTotalUsd) });
+  checks.push({ id: "C2", label: "Bank fee allocated = TOTAL BANK FEE", delta: c2, ok: c2 <= TOL * Math.max(1, pools.bankTotalUsd) });
 
   // C3
   const logisticsAllocated = lines.reduce((s, l) => s + l.qty * l.logisticsUsd, 0);
   const c3 = pools.totalWeightKg > 0 ? Math.abs(logisticsAllocated - pools.logisticsPoolUsd) : 0;
-  checks.push({ id: "C3", label: "Logistics phân bổ = Pool logistics", delta: c3, ok: c3 <= TOL * Math.max(1, pools.logisticsPoolUsd) });
+  checks.push({ id: "C3", label: "Logistics allocated = Total Logistic + Insurance", delta: c3, ok: c3 <= TOL * Math.max(1, pools.logisticsPoolUsd) });
 
   // C4 — skipped for lines whose price could not be derived (they already carry a pricing warning).
   const c4Bad: string[] = [];
@@ -71,7 +71,7 @@ export function runChecks({ mode, lines, inputs, pools, targetMarginPct, unprice
   }
   checks.push({
     id: "C4",
-    label: "Margin thực ≥ margin yêu cầu",
+    label: "% Margin ≥ Target margin (m)",
     delta: c4Max,
     ok: c4Bad.length === 0,
     ...(c4Bad.length ? { lineIds: c4Bad } : {}),

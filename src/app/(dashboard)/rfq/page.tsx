@@ -296,11 +296,6 @@ function CbuCalcModal() {
 
   const handleSubmit = async () => {
     if (!rfqCode.trim()) return;
-    
-    if (customerGroup !== "DOMESTIC") {
-      setNavError("Tính năng cho nhóm khách này đang được phát triển. Vui lòng chọn Nhóm khách: Nội địa.");
-      return;
-    }
 
     setNavigating(true);
     setNavError(null);

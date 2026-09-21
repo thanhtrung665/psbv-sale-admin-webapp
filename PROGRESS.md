@@ -152,7 +152,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 ## 6. CBU Module v2 — Tính lại logic & dựng lại giao diện
 
-**Cập nhật:** 22/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C2 xong · ✅ C3 xong (giao diện mới **kèm kịch bản Air/Sea + so sánh**) · **Migration bước 1 đã áp lên DB thật (22/09); bước 2 chờ deploy code** · ⏳ C4–C5 chưa làm
+**Cập nhật:** 22/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C2 xong · ✅ C3 xong (giao diện mới **kèm kịch bản Air/Sea + so sánh**) · ✅ C4 xong (**Baker Hughes / FCA_DAP**) · **Migration bước 1 đã áp lên DB thật (22/09); bước 2 chờ deploy code** · ⏳ C5 chưa làm
 
 ### 6.1 Việc đã làm (chỉ phân tích + tài liệu)
 
@@ -188,7 +188,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [x] Sửa `jest.config.js` (`moduleNameMapper` cho `@/`, src trước rồi root — khớp tsconfig) — cũng là P1-1 của Sprint 0
 - [x] Commit 4 file md + tài liệu + code C0–C1 — nhánh `feat/cbu-v2-engine` (2 commit: `80d3587` code, `3c15e3f` docs); **chưa push, chưa merge vào `main`**
 - [x] Fixture `__tests__/cbu/fixtures/ac0084.ts` **sinh bằng script** `scripts/gen-cbu-fixture.mjs` từ md (không gõ tay)
-- [ ] Fixture `ac0481.ts` (Baker Hughes) — dời sang Phase C4 cùng engine profile FCA_DAP
+- [x] Fixture `ac0481.ts` (Baker Hughes) — gõ tay từ md Baker ở Phase C4 (`fixtures/baker-db.ts` là RFQ/DB giả dùng chung cho test tích hợp và render)
 
 #### Phase C1 · Engine đúng — TDD (2d) *(= P0-5, P0-6)* — ✅ xong 21/09
 
@@ -244,10 +244,24 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] Tooltip công thức trên tiêu đề cột; a11y ≥ 90 (Lighthouse) chưa đo; test tương tác bằng React Testing Library (Sprint 3)
 - [ ] Nghiệm thu: RFQ mới ra giá với ≤ 8 ô nhập; mở lại RFQ thấy đúng; không cuộn lồng — *chờ xem trực quan*
 
-#### Phase C4 · Profile `FCA_DAP` — Baker Hughes (3d)
+#### Phase C4 · Profile `FCA_DAP` — Baker Hughes (3d) — ✅ xong 22/09
 
-- [ ] Engine profile + kịch bản Payment/Net 60; UI FCA/DAP; bỏ chặn nhóm "Nước ngoài" ở modal CBU (`rfq/page.tsx`)
-- [ ] Nghiệm thu: golden `ac0481` (FCA 131 · Net 60 = 133/đv · DAP 5,090)
+- [x] **Golden viết trước** (`fca-dap.golden.test.ts`, 29 test, đỏ 23 → xanh sau khi có engine): FCA 131 · Net 60 = 133/đv, tổng hàng 3,990 + cước 1,100 = **5,090** · Payment with Order 5,730 · chênh cước $700 chỉ là cảnh báo
+- [x] Engine `src/lib/cbu/profiles/fca-dap.ts` (hai khối giá FCA/DAP, tóm tắt DAP, check C1/C2/C4); `calculateCbu` chọn profile theo `params.profile`; `params.ts` có mặc định theo profile; `finalize.ts` cổng theo profile (Baker: cần giá gốc, PRICE_INPUT cần cả giá FCA và DAP, **không** cần trọng lượng)
+- [x] Lưu/đọc: `RFQ.cbuProfile`, `quoteBasis` + `dapPrices` trong `cbuConfig`, overrides kịch bản mở rộng (`pctFinanced`, `interestPct`, `financingDays`, cước); tổng RFQ cơ sở DAP gồm cước trọn gói; Zod cập nhật
+- [x] UI: `fca-dap-table.tsx` (khối FCA | DAP + dải tóm tắt chào giá DAP + cảnh báo chênh cước), panel tham số theo profile (Cơ bản / Điều khoản thanh toán & cước / Ngân hàng / Nâng cao), `ProfileSwitch` (xác nhận vì đặt lại tham số) và `BasisSwitch` (Quotation theo FCA/DAP), so sánh kịch bản theo profile
+- [x] Modal CBU: bỏ chặn nhóm "Nước ngoài"; `?group=foreign` trên sheet chưa từng tính ⇒ mở thẳng mô hình Baker
+- [x] Kiểm chứng: **327 test pass** (15 suite: +29 golden, +23 tích hợp service↔draft↔engine, +10 render Baker), `tsc` 0 lỗi, eslint 0 lỗi (chỉ còn warning cũ ở `legacy-page.tsx`), **e2e sandbox 48/48** (RFQ Baker `AC0481-SANDBOX`: Payment with Order 5,730 · Net 60 5,090 · cơ sở FCA 131/3,930 · cơ sở DAP 133/5,090 · finalize không cần trọng lượng · RFQ DDP không bị ảnh hưởng). Các trang `/rfq`, `/rfq/[id]/cbu-calc` (mới và `?legacy=1`) render 200 trên sandbox
+- [ ] `next build` **chưa chạy lần này**: dev server của người dùng (cổng 3000) dùng chung thư mục `.next`, build sẽ làm hỏng cache của nó — chạy khi không còn dev server
+- [ ] Xem trực quan Baker trong trình duyệt (cần đăng nhập sandbox) · Q4 (phí *receive*: rate/min/base) vẫn mở
+
+Quyết định trong C4:
+- Baker **tái dùng hai trường cước** của mô hình chung: `freightAllInUsd` = cước báo giá (vào tổng DAP), `freightFixedUsd` = cước theo bảng Logistic (chỉ đối chiếu, chênh ⇒ cảnh báo). Không thêm cột DB mới.
+- `quoteBasis` mặc định suy từ Incoterm RFQ (`DAP`/`DDP` ⇒ DAP; còn lại FCA); người dùng đổi được ở giao diện.
+- Trọng lượng, thuế, hoa hồng, CIT, bảo hiểm **ẩn** ở Baker (không có trong workbook). `fx` và `vndRoundingStep` phải là tham số dùng chung (không ẩn): khi ẩn, trình duyệt tính bằng giá trị mặc định còn server dùng giá trị của RFQ ⇒ tổng VND lệch — bắt được nhờ test "trình duyệt tính đúng như server".
+- Kịch bản đầu = nền: điều khoản của nó nằm ở tham số phẳng (`params`), **không** ở `overrides` — chỉ kịch bản thứ hai trở đi mang overrides (giống Air/Sea).
+- **Tên chỉ số = tiếng Anh đúng như workbook** (yêu cầu của người dùng sau C4): cột `Material Cost` / `Unit Cost` / `DDP Price (USD|VND)` / `Sales Price` / `% Margin`…, tham số `Target margin (m)`, `% Value financed`, `Credit (days)` (Baker)…, KPI `Total Revenue (VND)`, `Incoterm 1 — FCA`, `TOTAL BANK FEE`, tên các dòng CHECK. Riêng vài tên workbook không có sẵn nên đặt theo cùng phong cách: `FREIGHT (USD) all-in`, `Freight (quoted)`, `Other logistics (USD)`, `Sales Price × Q'ty (excl. freight)`. Kịch bản Baker: `Payment with Order` / `Net 60 Days`.
+- Chạy Jest bằng `--runInBand` khi máy ít RAM: nhiều worker song song từng bị "Jest worker ran out of memory" (nguyên nhân của lỗi chập chờn hai suite fail đã ghi ở phiên trước).
 
 #### Phase C5 · Hạ nguồn & hoàn thiện (2d) *(= P2-5)*
 
@@ -270,7 +284,7 @@ Không chặn C1–C3 vì đã có mặc định tạm; cần trả lời trư�
 - [ ] **Q1** 4 tham số "(Bỏ)": loại thật khỏi công thức hay chỉ ẩn? *(đang giữ trong công thức)*
 - [ ] **Q2** Cơ sở tính thuế: theo Excel (Material + toàn bộ Logistics) hay CIF thực (hàng + cước quốc tế + bảo hiểm)?
 - [ ] **Q3** Named range pool trỏ cột **R (Min insurance)** thay vì **S (Insurance)** — có phải lỗi trong Excel gốc?
-- [ ] **Q4** Baker Hughes: phí *International receive* (0.05% hay 0.005%; min $35 hay $5; base nhập tay?)
+- [ ] **Q4** (còn mở sau C4 — mặc định 0.05% / min $35 / base nhập tay) Baker Hughes: phí *International receive* (0.05% hay 0.005%; min $35 hay $5; base nhập tay?)
 - [ ] **Q5–Q7** Bỏ `bookingExchangeRate`/effective margin · mặc định thông quan/nội địa về 0 · Baker dùng tham số chung (lb→kg 0.4536)
 - [ ] **Q8** RFQ đã `QUOTED_TO_CLIENT` có giá lệch: giữ giá đã báo hay báo lại? *(quyết định thương mại — cấp quản lý PSBV)*
 

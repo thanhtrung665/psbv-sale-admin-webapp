@@ -5,7 +5,7 @@ import { CircleCheckIcon, Loader2Icon, RotateCcwIcon, SaveIcon, TriangleAlertIco
 import { Button } from "@/components/ui/button";
 import { calculateCbu } from "@/lib/cbu";
 import { finalizeBlockers } from "@/lib/cbu/finalize";
-import type { CbuMode, CbuResult } from "@/lib/cbu/types";
+import type { CbuMode, CbuProfile, CbuResult, QuoteBasis } from "@/lib/cbu/types";
 import type { CbuSheet } from "@/lib/cbu/db/service";
 import {
   addScenario,
@@ -23,17 +23,19 @@ import {
   setItemValue,
   setScenarioField,
   sheetToDraft,
+  switchProfile,
   type Draft,
   type EngineInput,
   type ItemField,
 } from "@/lib/cbu/ui/draft";
 import { fmtNum } from "@/lib/cbu/ui/format";
 import { FinalizeDialog } from "./finalize-dialog";
+import { FcaDapTable } from "./fca-dap-table";
 import { ItemsTable } from "./items-table";
 import { ParamsPanel } from "./params-panel";
 import { ScenarioCompare } from "./scenario-compare";
 import { ScenarioTabs } from "./scenario-tabs";
-import { WorkspaceBar } from "./workspace-bar";
+import { BasisSwitch, ProfileSwitch, WorkspaceBar } from "./workspace-bar";
 
 interface Notice {
   tone: "success" | "error" | "info";
@@ -53,7 +55,7 @@ async function readError(res: Response): Promise<{ message: string; details: str
   }
 }
 
-export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialType?: string }) {
+export function CbuWorkspace({ rfqId, initialType, initialGroup }: { rfqId: string; initialType?: string; initialGroup?: string }) {
   const [sheet, setSheet] = React.useState<CbuSheet | null>(null);
   const [draft, setDraft] = React.useState<Draft | null>(null);
   const [activeId, setActiveId] = React.useState("");
@@ -66,6 +68,8 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
   const [finalizeOpen, setFinalizeOpen] = React.useState(false);
   const [serverReasons, setServerReasons] = React.useState<string[]>([]);
   const [doneHref, setDoneHref] = React.useState<string | null>(null);
+  /** A model switch waiting for the user's confirmation (it resets the parameters). */
+  const [pendingProfile, setPendingProfile] = React.useState<CbuProfile | null>(null);
 
   // ── load ────────────────────────────────────────────────────────────────────
   const load = React.useCallback(async () => {
@@ -74,17 +78,19 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
       const res = await fetch(`/api/rfq/${rfqId}/cbu`, { cache: "no-store" });
       if (!res.ok) throw new Error((await readError(res)).message);
       const { sheet: s } = (await res.json()) as { sheet: CbuSheet };
-      const d = sheetToDraft(s);
+      let d = sheetToDraft(s);
+      // Entered from "Nước ngoài" on a sheet that was never calculated → start with the Baker Hughes model.
+      if (initialGroup === "foreign" && s.saved.calculatedAt === null && d.profile === "DDP_IMPORT") d = switchProfile(d, "FCA_DAP");
       // Entered from the "Input Price" choice on a sheet that was never calculated → start in price mode.
       if (initialType === "price" && s.saved.calculatedAt === null && d.mode === "MARGIN_INPUT") d.mode = "PRICE_INPUT";
       setSheet(s);
       setDraft(d);
-      setActiveId(s.chosenScenarioId);
+      setActiveId(d.chosenId);
       setShowOverrides(d.items.some((i) => i.marginPctOverride !== "" || i.marginUsdOverride !== ""));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Không tải được dữ liệu CBU.");
     }
-  }, [rfqId, initialType]);
+  }, [rfqId, initialType, initialGroup]);
 
   React.useEffect(() => {
     void load();
@@ -140,11 +146,16 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
       const scenarios = d.scenarios.map((s) => {
         const res = computed.results[s.id];
         const prices = { ...s.prices };
+        const dapPrices = { ...s.dapPrices };
         d.items.forEach((it, i) => {
-          const p = res?.lines[i]?.ddpPriceUsd ?? 0;
+          const l = res?.lines[i];
+          // Baker: FCA and DAP each start from their own block; DDP: from the one price
+          const p = d.profile === "FCA_DAP" ? (l?.fca?.priceUsd ?? 0) : (l?.ddpPriceUsd ?? 0);
           if ((prices[it.id] ?? "") === "" && p > 0) prices[it.id] = numToStr(p);
+          const pd = l?.dap?.priceUsd ?? 0;
+          if (d.profile === "FCA_DAP" && (dapPrices[it.id] ?? "") === "" && pd > 0) dapPrices[it.id] = numToStr(pd);
         });
-        return { ...s, prices };
+        return { ...s, prices, dapPrices };
       });
       return { ...d, mode, scenarios };
     });
@@ -154,7 +165,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
     if (!draft || !active) return false;
     const matrix = parseClipboardMatrix(text);
     if (matrix.length === 0 || (matrix.length === 1 && matrix[0].length === 1)) return false;
-    edit((d) => applyPaste(d, active.id, row, col, matrix, editableColumns(d.mode, showOverrides)));
+    edit((d) => applyPaste(d, active.id, row, col, matrix, editableColumns(d.mode, showOverrides, d.profile)));
     return true;
   };
 
@@ -171,6 +182,16 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
     const next = removeScenario(draft, id);
     edit(() => next);
     if (id === activeId) setActiveId(next.scenarios[0].id);
+  };
+
+  const onBasisChange = (basis: QuoteBasis) => edit((d) => ({ ...d, quoteBasis: basis }));
+  const confirmProfile = () => {
+    if (!pendingProfile || !draft) return;
+    const switched = switchProfile(draft, pendingProfile);
+    setPendingProfile(null);
+    setDraft(switched);
+    setActiveId(switched.chosenId);
+    setNotice(null);
   };
 
   const toggleExpanded = (id: string) =>
@@ -267,6 +288,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
   const canSave = dirty && invalidInputs === 0 && !busy;
   const multiple = draft.scenarios.length > 1;
   const chosenLabel = draft.scenarios.find((s) => s.id === draft.chosenId)?.label ?? "";
+  const baker = draft.profile === "FCA_DAP";
 
   return (
     <div className="space-y-4">
@@ -288,7 +310,27 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
         busy={busy !== null}
         scenarioLabel={multiple ? active.label : undefined}
         scenarioChosen={active.id === draft.chosenId}
+        profile={draft.profile}
       />
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Mô hình</span>
+          <ProfileSwitch profile={pendingProfile ?? draft.profile} onChange={setPendingProfile} disabled={busy !== null} />
+        </div>
+        {baker && <BasisSwitch basis={draft.quoteBasis} onChange={onBasisChange} disabled={busy !== null} />}
+      </div>
+
+      {pendingProfile && (
+        <div role="alertdialog" aria-label="Xác nhận đổi mô hình" className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <TriangleAlertIcon className="size-4 shrink-0" aria-hidden />
+          <p className="min-w-0 flex-1">
+            Đổi sang <strong>{pendingProfile === "FCA_DAP" ? "FCA / DAP (Baker Hughes)" : "DDP nhập khẩu (Hoàng Sơn)"}</strong> sẽ đặt lại các tham số và phương án về mặc định của mô hình mới; các dòng hàng và giá gốc được giữ nguyên. Thay đổi chỉ có hiệu lực khi anh bấm Lưu.
+          </p>
+          <Button variant="outline" onClick={() => setPendingProfile(null)}>Huỷ</Button>
+          <Button onClick={confirmProfile}>Đổi mô hình</Button>
+        </div>
+      )}
 
       {notice && <NoticeBar notice={notice} onClose={() => setNotice(null)} />}
 
@@ -319,6 +361,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
           chosenId={draft.chosenId}
           activeId={active.id}
           targetMarginPct={targetMargin}
+          profile={draft.profile}
           disabled={busy !== null}
           onChoose={(id) => edit((d) => setChosen(d, id))}
           onView={setActiveId}
@@ -334,8 +377,8 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
           </h2>
           <p className="hidden text-xs text-slate-400 md:block">Enter / ↑↓ để chuyển dòng · dán nhiều ô từ Excel để điền nhanh</p>
           <div className="ml-auto flex items-center gap-2">
-            <ToggleChip pressed={showCosts} onClick={() => setShowCosts((v) => !v)}>Chi phí chi tiết</ToggleChip>
-            {draft.mode === "MARGIN_INPUT" && <ToggleChip pressed={showOverrides} onClick={() => setShowOverrides((v) => !v)}>Ghi đè margin</ToggleChip>}
+            {!baker && <ToggleChip pressed={showCosts} onClick={() => setShowCosts((v) => !v)}>Chi phí chi tiết</ToggleChip>}
+            {!baker && draft.mode === "MARGIN_INPUT" && <ToggleChip pressed={showOverrides} onClick={() => setShowOverrides((v) => !v)}>Ghi đè margin</ToggleChip>}
           </div>
         </div>
 
@@ -343,6 +386,8 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-sm text-slate-500">
             RFQ này chưa có dòng hàng. Hãy hoàn tất bước bóc tách báo giá của hãng trước khi tính CBU.
           </div>
+        ) : baker ? (
+          <FcaDapTable draft={draft} scenarioId={active.id} result={result} errors={engine.errors} targetMarginPct={targetMargin} onItemChange={onItemChange} onPasteBlock={onPasteBlock} />
         ) : (
           <ItemsTable
             draft={draft}
@@ -366,10 +411,12 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
             <span className="text-red-600">Sửa {invalidInputs} ô nhập chưa hợp lệ trước khi lưu.</span>
           ) : dirty ? (
             "Bạn có thay đổi chưa lưu."
+          ) : baker ? (
+            <>Quotation theo <strong className="font-semibold text-slate-700">{draft.quoteBasis}</strong>{multiple && <> · điều khoản <strong className="font-semibold text-slate-700">{chosenLabel}</strong></>}</>
           ) : multiple ? (
             <>Quotation dùng phương án <strong className="font-semibold text-slate-700">{chosenLabel}</strong></>
           ) : (
-            <>Trọng lượng {fmtNum(result.totals.weightKg, 1)} kg · {fmtNum(result.totals.qty, 0)} đơn vị</>
+            <>Total Weight {fmtNum(result.totals.weightKg, 1)} kg · Q'ty {fmtNum(result.totals.qty, 0)}</>
           )}
         </p>
         <div className="ml-auto flex items-center gap-2">

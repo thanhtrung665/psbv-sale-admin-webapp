@@ -1,5 +1,5 @@
 // End-to-end check of the CBU API against the LOCAL sandbox (see scripts/dev-cbu-sandbox.ts) — never against a real database.
-// Start the sandbox first (it seeds AC0084-SANDBOX / DEMO-CHECKS), then:  node scripts/e2e-cbu-sandbox.cjs
+// Start the sandbox first (it seeds AC0084-SANDBOX / DEMO-CHECKS / AC0481-SANDBOX), then:  node scripts/e2e-cbu-sandbox.cjs
 // It CHANGES the sandbox data (saves, finalizes); restart the sandbox to get clean data again.
 
 const BASE = "http://localhost:3100";
@@ -115,4 +115,44 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "PASS" : "FAIL"} 
   ok("400 for duplicated scenario ids", dup.status === 400, String(dup.status));
   const finSea = await call("POST", "/api/rfq/r1/cbu/finalize", { chosenScenarioId: "air" });
   ok("finalize with the other scenario chosen → QUOTATION_DRAFTED, totals = Air", finSea.status === 200 && finSea.json.sheet.saved.totalRevenueVnd === 890800000, String(finSea.status));
+
+  // 10. Baker Hughes (FCA_DAP): switch the model, two payment terms as scenarios, FCA / DAP basis (AC0481 workbook)
+  const b0 = (await call("GET", "/api/rfq/r3/cbu")).json.sheet;
+  ok("r3 starts as a plain DDP RFQ; quote basis defaults from the Incoterm (FCA)", b0.profile === "DDP_IMPORT" && b0.quoteBasis === "FCA");
+  const baker = {
+    profile: "FCA_DAP",
+    quoteBasis: "DAP",
+    // the FIRST scenario is the base: its terms are the flat params (as the UI sends them); only the others carry overrides
+    params: { targetMarginPct: 17, destinationCountry: "MY", bank: { minReceiveUsd: 35, receiveBaseUsd: 3930 }, goodsOrigin: "Oversea", pctFinanced: 0, financingDays: 0, interestPct: 15, logistics: { freightAllInUsd: 1800, freightFixedUsd: 1800 } },
+    scenarios: [
+      { id: "pwo", label: "Payment with Order" },
+      { id: "net60", label: "Net 60 Days", overrides: { pctFinanced: 100, financingDays: 45, interestPct: 15, logistics: { freightAllInUsd: 1100, freightFixedUsd: 1800 } } },
+    ],
+    chosenScenarioId: "net60",
+  };
+  const bp = await call("PUT", "/api/rfq/r3/cbu", baker);
+  ok("Baker PUT 200", bp.status === 200, JSON.stringify(bp.json).slice(0, 160));
+  const bs = bp.json.sheet;
+  const [pwo, net60] = bs?.scenarios ?? [];
+  ok("profile persisted as FCA_DAP", bs?.profile === "FCA_DAP" && bs.result.profile === "FCA_DAP");
+  ok("FCA price 131 (Excel), bank pool $85 (remit 50 + receive 35)", pwo?.result.lines[0].fca.priceUsd === 131 && pwo.result.pools.bankTotalUsd === 85, String(pwo?.result.pools?.bankTotalUsd));
+  ok("Payment with Order: DAP 131, total 5,730 = 30 × 131 + 1,800", pwo?.result.lines[0].dap.priceUsd === 131 && pwo.result.dap.totalUsd === 5730, String(pwo?.result.dap?.totalUsd));
+  ok("Net 60: DAP 133, goods 3,990, total 5,090 = + 1,100 freight", net60?.result.lines[0].dap.priceUsd === 133 && net60.result.dap.goodsRevenueUsd === 3990 && net60.result.dap.totalUsd === 5090, String(net60?.result.dap?.totalUsd));
+  ok("Net 60: freight differs from the Logistic sheet by $700 → warning, not a failed check", net60?.result.dap.freightMismatchUsd === 700 && net60.result.checks.every((c) => c.ok) && net60.result.warnings.length > 0);
+  ok("all self-checks pass in both terms", bs.scenarios.every((s) => s.result.checks.every((c) => c.ok)));
+  const bLegacy = (await call("GET", "/api/rfq/r3")).json;
+  ok("DAP basis + Net 60: what the Quotation reads = 133 per unit, RFQ total $5,090", bLegacy.items[0].ddpPriceUsd === 133 && bLegacy.totalRevenueUsd === 5090, `${bLegacy.items[0].ddpPriceUsd} / ${bLegacy.totalRevenueUsd}`);
+  ok("saved profile column = FCA_DAP", bLegacy.cbuProfile === "FCA_DAP");
+  const bReload = (await call("GET", "/api/rfq/r3/cbu")).json.sheet;
+  ok("reload returns the same scenarios, basis and chosen term", JSON.stringify(bReload.scenarios) === JSON.stringify(bs.scenarios) && bReload.quoteBasis === "DAP" && bReload.chosenScenarioId === "net60");
+  const toFca = await call("PUT", "/api/rfq/r3/cbu", { ...baker, quoteBasis: "FCA" });
+  const fcaLegacy = (await call("GET", "/api/rfq/r3")).json;
+  ok("FCA basis: item price 131 and total $3,930 (no freight)", toFca.status === 200 && fcaLegacy.items[0].ddpPriceUsd === 131 && fcaLegacy.totalRevenueUsd === 3930, `${fcaLegacy.items[0].ddpPriceUsd} / ${fcaLegacy.totalRevenueUsd}`);
+  const badBasis = await call("PUT", "/api/rfq/r3/cbu", { quoteBasis: "CIF" });
+  ok("400 for an unknown quote basis / profile", badBasis.status === 400 && (await call("PUT", "/api/rfq/r3/cbu", { profile: "XYZ" })).status === 400);
+  const bFin = await call("POST", "/api/rfq/r3/cbu/finalize", { chosenScenarioId: "pwo" });
+  ok("finalize Baker (no weight needed) → QUOTATION_DRAFTED", bFin.status === 200 && bFin.json.statusChange?.to === "QUOTATION_DRAFTED", `${bFin.status} ${JSON.stringify(bFin.json).slice(0, 100)}`);
+  // the DDP RFQ is untouched by all of this
+  const r1 = (await call("GET", "/api/rfq/r1/cbu")).json.sheet;
+  ok("r1 (DDP) still DDP_IMPORT with its own totals", r1.profile === "DDP_IMPORT" && r1.result.totals.revenueVnd === 890800000);
 })().catch((e) => { console.error("ERROR", e); process.exit(1); });

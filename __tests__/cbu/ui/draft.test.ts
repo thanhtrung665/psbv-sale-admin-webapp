@@ -47,6 +47,7 @@ function sheetFor(air = true): CbuSheet {
   return {
     rfq: { id: "r1", rfqCode: "X", status: "SUPPLIER_QUOTED", incoTerm: null, paymentTerm: null, supplierName: null, clientName: null },
     profile: "DDP_IMPORT",
+    quoteBasis: "FCA",
     mode: "MARGIN_INPUT",
     params,
     items: AC0084_AIR.map((r) => ({
@@ -54,7 +55,7 @@ function sheetFor(air = true): CbuSheet {
       materialUsd: r.materialUsd, totalWeightLb: r.totalWeightLb, dutyPct: r.dutyPct,
       marginPctOverride: null, marginUsdOverride: null, ddpPriceUsdInput: null, savedDdpPriceUsd: null,
     })),
-    scenarios: [{ id: "air", label: "Air", logistics: params.logistics, prices: {}, result: {} as CbuSheet["result"] }],
+    scenarios: [{ id: "air", label: "Air", params, prices: {}, dapPrices: {}, result: {} as CbuSheet["result"] }],
     chosenScenarioId: "air",
     result: {} as CbuSheet["result"],
     saved: { calculatedAt: null, totalCostUsd: null, totalRevenueUsd: null, totalRevenueVnd: null, totalMarginUsd: null, actualMarginPct: null },
@@ -109,7 +110,7 @@ describe("sheetToDraft → draftToEngine", () => {
   it("a blank parameter takes the default on the preview side (and in the save input)", () => {
     const d = sheetToDraft(sheetFor());
     d.params["targetMarginPct"] = "";
-    d.scenarios[0].logistics["logistics.clearanceUsd"] = "";
+    d.scenarios[0].fields["logistics.clearanceUsd"] = "";
     const { params } = draftToEngine(d);
     expect(params.targetMarginPct).toBe(CBU_DEFAULTS.targetMarginPct);
     expect(params.logistics?.clearanceUsd).toBe(0);
@@ -290,9 +291,9 @@ describe("scenarios in the draft", () => {
     const { draft, id } = addScenario(d0, "air")!;
     expect(id).toBe("s2");
     expect(draft.scenarios).toHaveLength(2);
-    expect(draft.scenarios[1].logistics).toEqual(draft.scenarios[0].logistics);
+    expect(draft.scenarios[1].fields).toEqual(draft.scenarios[0].fields);
     expect(draft.scenarios[1].prices).toEqual({ l1: "7.1" });
-    expect(draft.scenarios[1].logistics).not.toBe(draft.scenarios[0].logistics); // a copy, not shared
+    expect(draft.scenarios[1].fields).not.toBe(draft.scenarios[0].fields); // a copy, not shared
     expect(addScenario(draft, "s2")!.id).toBe("s3");
   });
 

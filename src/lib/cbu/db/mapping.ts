@@ -6,13 +6,15 @@
 
 import type { Prisma } from "@prisma/client";
 import { n } from "../math";
-import type { CbuLineInput, CbuMode, CbuParams, CbuParamsInput, CbuResult } from "../types";
+import type { CbuLineInput, CbuMode, CbuParams, CbuParamsInput, CbuProfile, CbuResult, QuoteBasis } from "../types";
+import { roundUpToStep } from "../math";
 import { badInput } from "./errors";
 
 // ─── Row views (a Prisma RFQ / RFQItem satisfies these structurally) ─────────────
 
 export interface RfqCbuRow {
   status: string;
+  incoTerm?: string | null;
   cbuProfile?: string | null;
   cbuMode?: string | null;
   exchangeRate?: number | null;
@@ -84,9 +86,19 @@ export function modeFromRfq(rfq: RfqCbuRow): CbuMode {
   return rfq.cbuMode === "PRICE_INPUT" ? "PRICE_INPUT" : "MARGIN_INPUT";
 }
 
+export function profileFromRfq(rfq: RfqCbuRow): CbuProfile {
+  return rfq.cbuProfile === "FCA_DAP" ? "FCA_DAP" : "DDP_IMPORT";
+}
+
+/** Which price goes onto the lines / totals the Quotation reads (FCA_DAP): DAP when the RFQ's Incoterm says so, else FCA. */
+export function defaultQuoteBasis(incoTerm: string | null | undefined): QuoteBasis {
+  return /\b(DAP|DDP)\b/i.test(incoTerm ?? "") ? "DAP" : "FCA";
+}
+
 /** Flat RFQ columns → engine params. Missing / null columns fall back to the engine defaults. */
 export function paramsFromRfq(rfq: RfqCbuRow): CbuParamsInput {
   return {
+    profile: profileFromRfq(rfq),
     mode: modeFromRfq(rfq),
     fx: num(rfq.exchangeRate),
     vndRoundingStep: num(rfq.vndRoundingStep),
@@ -272,12 +284,15 @@ export function itemUpdateData(
 export interface CbuConfig {
   schemaVersion: 1;
   chosenScenarioId: string;
+  /** FCA_DAP: which price is saved on the lines / totals. Absent = derived from the RFQ's Incoterm. */
+  quoteBasis?: QuoteBasis;
   /**
    * The FIRST scenario is the base: its params are the flat RFQ columns and its `overrides` stay empty.
    * Later scenarios store only what differs (today: logistics). `prices` = typed DDP price per line id
    * (PRICE_INPUT); `undefined` means a legacy config — fall back to the price stored on the item.
+   * `dapPrices` (FCA_DAP): the typed DAP price per line id; `prices` then holds the FCA prices.
    */
-  scenarios: { id: string; label: string; overrides: CbuParamsInput; prices?: Record<string, number> }[];
+  scenarios: { id: string; label: string; overrides: CbuParamsInput; prices?: Record<string, number>; dapPrices?: Record<string, number> }[];
 }
 
 /** Keeps an existing v1 config untouched; otherwise starts with the single implicit scenario. */
@@ -297,14 +312,16 @@ export function rfqUpdateData(args: {
   now: Date;
 }): Prisma.RFQUpdateInput {
   const { params, result, status, config, now } = args;
+  const dapFreightUsd = params.profile === "FCA_DAP" && params.quoteBasis === "DAP" ? (result.dap?.freightUsd ?? 0) : 0;
   return {
     ...paramsToRfqColumns(params),
-    cbuProfile: "DDP_IMPORT",
+    cbuProfile: params.profile,
     cbuConfig: config as unknown as Prisma.InputJsonValue,
     cbuCalculatedAt: now,
     totalCostUsd: result.totals.costUsd,
-    totalRevenueUsd: result.totals.revenueUsd,
-    totalRevenueVnd: BigInt(Math.round(result.totals.revenueVnd)),
+    // FCA_DAP quoted on DAP: the lump-sum freight is part of what the customer pays (Excel G16 = G15 + P16).
+    totalRevenueUsd: result.totals.revenueUsd + dapFreightUsd,
+    totalRevenueVnd: BigInt(Math.round(result.totals.revenueVnd + roundUpToStep(dapFreightUsd * params.fx, params.vndRoundingStep))),
     totalMarginUsd: result.totals.marginUsd,
     // Nominal margin on USD revenue (the "booking rate" margin was dropped — SPEC §11.12 Q5).
     actualMarginPct: result.totals.marginPct,

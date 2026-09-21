@@ -22,7 +22,7 @@ import {
 } from "../../../src/lib/cbu/db/mapping";
 
 // Every numeric column gets a DIFFERENT value, so a swapped mapping cannot pass by coincidence.
-const FULL_ROW: Required<Omit<RfqCbuRow, "status" | "cbuProfile" | "cbuConfig">> & { status: string } = {
+const FULL_ROW: Required<Omit<RfqCbuRow, "status" | "cbuProfile" | "cbuConfig" | "incoTerm">> & { status: string } = {
   status: "SUPPLIER_QUOTED",
   cbuMode: "PRICE_INPUT",
   exchangeRate: 26111,

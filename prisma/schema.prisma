@@ -123,7 +123,7 @@ model RFQ {
   customColumns     Json?
 
   // CBU v2 (SPEC §11.8). All percentages are percent numbers (3 = 3%).
-  cbuProfile          String?    @default("DDP_IMPORT")   // DDP_IMPORT | FCA_DAP (FCA_DAP arrives in phase C4)
+  cbuProfile          String?    @default("DDP_IMPORT")   // DDP_IMPORT (Hoàng Sơn) | FCA_DAP (Baker Hughes)
   cbuMode             String?    @default("MARGIN_INPUT") // MARGIN_INPUT | PRICE_INPUT
   targetMarginPercent Float?     @default(25)           // NOT null on purpose: the legacy page reads null as 0%
   commissionRate      Float?     @default(3)              // % of the selling price

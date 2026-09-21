@@ -8,6 +8,11 @@
 
 export type CbuMode = "MARGIN_INPUT" | "PRICE_INPUT";
 
+/** DDP_IMPORT = Hoàng Sơn (Air/Sea, duty, commission…). FCA_DAP = Baker Hughes (FCA + DAP, payment terms). SPEC §11.3. */
+export type CbuProfile = "DDP_IMPORT" | "FCA_DAP";
+/** FCA_DAP only: which of the two prices is saved on the lines / totals that the Quotation reads. */
+export type QuoteBasis = "FCA" | "DAP";
+
 /** One priced line (Excel "Margin Analysis" row). */
 export interface CbuLineInput {
   id: string;
@@ -23,8 +28,10 @@ export interface CbuLineInput {
   marginPctOverride?: number | null;
   /** Margin $/unit override (> 0 wins over every % margin). null/undefined/0 = not used. */
   marginUsdOverride?: number | null;
-  /** DDP price typed by the user — only read in PRICE_INPUT mode. */
+  /** DDP price typed by the user — only read in PRICE_INPUT mode. FCA_DAP: the FCA price. */
   ddpPriceUsdInput?: number | null;
+  /** FCA_DAP + PRICE_INPUT: the DAP price typed for this line. */
+  dapPriceUsdInput?: number | null;
   /** Extra cost per unit, USD (custom columns collapsed by the caller). Default 0. */
   customUsd?: number;
 }
@@ -68,6 +75,9 @@ export interface BankParams {
 }
 
 export interface CbuParams {
+  profile: CbuProfile;
+  /** FCA_DAP only. */
+  quoteBasis: QuoteBasis;
   mode: CbuMode;
   /** USD → VND rate used on the quotation. */
   fx: number;
@@ -106,6 +116,21 @@ export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartia
 /** What callers pass in: every field optional, missing ones take `CBU_DEFAULTS`. */
 export type CbuParamsInput = DeepPartial<CbuParams>;
 
+/** FCA_DAP: one of the two price blocks of a line (FCA or DAP). */
+export interface CbuBasisBlock {
+  /** Allocated bank fees (+ credit interest for DAP). */
+  financialUsd: number;
+  unitCostUsd: number;
+  priceUsd: number;
+  marginPerUnitUsd: number;
+  /** Realised margin on the price, 0-100. */
+  marginPct: number;
+  totalCostUsd: number;
+  totalRevenueUsd: number;
+  totalMarginUsd: number;
+  pricingFailed: boolean;
+}
+
 export interface CbuLineResult {
   id: string;
   lineNo: number;
@@ -139,6 +164,9 @@ export interface CbuLineResult {
   /** True when no selling price could be derived (no price typed / margin + commission ≥ 100%). */
   pricingFailed: boolean;
   warnings: string[];
+  /** FCA_DAP: both blocks. The primary fields above equal the block of `params.quoteBasis`. */
+  fca?: CbuBasisBlock;
+  dap?: CbuBasisBlock;
 }
 
 export interface CbuPools {
@@ -183,10 +211,29 @@ export interface CbuCheck {
   lineIds?: string[];
 }
 
+/** FCA_DAP: the DAP offer = goods at DAP prices + one lump-sum freight added at order level (Excel G16 = G15 + P16). */
+export interface CbuDapSummary {
+  goodsRevenueUsd: number;
+  /** Freight used for quoting (typed). */
+  freightUsd: number;
+  /** Freight from the Logistic sheet, for reference. */
+  freightReferenceUsd: number;
+  /** |reference − quoted|; the workbook flags it as a warning when it is not 0. */
+  freightMismatchUsd: number;
+  totalUsd: number;
+  costUsd: number;
+  marginUsd: number;
+  marginPct: number;
+}
+
 export interface CbuResult {
+  /** The profile that produced this result (decides which blocks / columns exist). */
+  profile: CbuProfile;
   lines: CbuLineResult[];
   pools: CbuPools;
   totals: CbuTotals;
   checks: CbuCheck[];
   warnings: string[];
+  /** FCA_DAP only. */
+  dap?: CbuDapSummary;
 }

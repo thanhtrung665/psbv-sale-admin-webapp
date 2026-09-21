@@ -152,7 +152,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 ## 6. CBU Module v2 — Tính lại logic & dựng lại giao diện
 
-**Cập nhật:** 21/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C1 xong · ✅ C2 xong về mã nguồn, ⏳ chờ áp migration lên DB thật · 🔶 C3 xong "lát cắt 1" (giao diện mới; còn kịch bản Air/Sea) · ⏳ C4–C5 chưa làm
+**Cập nhật:** 22/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C2 xong · ✅ C3 xong (giao diện mới **kèm kịch bản Air/Sea + so sánh**) · **Migration bước 1 đã áp lên DB thật (22/09); bước 2 chờ deploy code** · ⏳ C4–C5 chưa làm
 
 ### 6.1 Việc đã làm (chỉ phân tích + tài liệu)
 
@@ -217,8 +217,9 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [x] Test: mapping (26) · service với DB giả trên dữ liệu AC0084 (17) · Zod (21) · audit (6). Đã thử **phá cố ý** hai điểm (null→0, bỏ `extWeightLbs`) → test bắt được (6 và 8 test fail). `next build` thành công, 3 route có mặt
 - [x] Nghiệm thu bằng DB giả: lưu→tải giống hệt (kể cả `marginPercent = null`); body cũ với tổng/giá bị giả mạo vẫn lưu đúng số Excel; finalize bị chặn (422, không ghi gì) khi thiếu trọng lượng
 - [x] **Sao lưu** (21/09): xuất `RFQ` (35 dòng) + `RFQItem` (166 dòng) ra JSON cục bộ, ngoài repo. Xác nhận DB thật khớp **đúng** schema cũ (chỉ thiếu các cột mới) và `_prisma_migrations` tồn tại, chỉ ghi `init`
-- [ ] **Áp bước 1 lên DB thật — BỊ CHẶN, cần anh cho phép.** Hệ thống từ chối lệnh ghi vào DB dùng chung (Supabase) khi chưa có quyền rõ ràng; tôi không tìm đường vòng. Anh có thể tự áp: dán `prisma/migrations/20260921120000_cbu_v2/migration.sql` vào Supabase SQL editor, rồi `npx prisma migrate resolve --applied 20260921120000_cbu_v2`. Hoặc cấp quyền cho tôi chạy (script đã sẵn, có kiểm tra số dòng trước/sau)
-- [ ] Deploy code trên nhánh `feat/cbu-v2-engine`, **rồi** áp bước 2 (`20260921120100_cbu_v2_margin_cleanup`)
+- [x] **Bước 1 đã áp lên DB Supabase thật (22/09/2026), có sự đồng ý của người dùng.** Sao lưu `RFQ` (35) + `RFQItem` (166) ra JSON cục bộ ngay trước khi áp; áp trong một câu lệnh đa-statement (atomic); sau đó số dòng và giá trị `marginPercent` **không đổi**, `RFQItem.marginPercent` vẫn có default 25 (code cũ an toàn); cột mới có đúng default; đã ghi `20260921120000_cbu_v2` vào `_prisma_migrations` (`migrate resolve --applied`). Kiểm chứng bằng Prisma client của app trên DB thật (truy vấn đọc): AC0007 tải được và khớp $43,580.30 = đã lưu
+- **Sự cố người dùng gặp ("Giao diện CBU không load được") và nguyên nhân:** nhánh này dùng Prisma client mới (chọn các cột mới) nhưng DB thật chưa có các cột đó → mọi truy vấn `RFQ` lỗi. Đúng rủi ro thứ tự triển khai đã cảnh báo; **đã khắc phục bằng bước 1**. Bài học: máy dev chạy nhánh này với `.env` trỏ Supabase cần bước 1 đã áp trước
+- [ ] Deploy code trên nhánh `feat/cbu-v2-engine`, **rồi** áp bước 2 (`20260921120100_cbu_v2_margin_cleanup`). ⚠️ Cho đến khi áp bước 2, các dòng đã lưu `marginPercent = 0` (ví dụ AC0005 dòng 2–9) được đọc là *override 0% thật*: AC0005 hiện cho $32,538.00 (đã lưu $31,374.66; chênh ~3.7% chỉ do hoa hồng/CIT mặc định) — sau bước 2 các dòng đó dùng margin mục tiêu 25%
 - [x] **Audit trên DB thật** (21/09, chỉ đọc, không ghi gì) — xem 6.4. `scripts/cbu-audit.ts` từng lỗi vì `tsx` không nạp `.env` (đã sửa)
 - [ ] Thử tay end-to-end trên môi trường có DB + đăng nhập: mở RFQ → lưu nháp → tải lại → finalize (chưa làm được; các route mới chỉ được kiểm chứng ở mức service với DB giả + `next build`)
 
@@ -230,7 +231,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - Tham số nền ở cột phẳng RFQ, `cbuConfig` chỉ giữ kịch bản + ghi đè (không sao chép hai nơi) — khác chút với SPEC bản đầu, đã cập nhật §11.3.
 - `receiveVatFactor` (1.00) và số chữ số làm tròn USD là hằng số chính sách — không lưu, client không sửa được.
 
-#### Phase C3 · Dựng lại UI (5d) — 🔶 lát cắt 1 xong 21/09 (chưa có kịch bản Air/Sea)
+#### Phase C3 · Dựng lại UI (5d) — ✅ xong 22/09 (còn tooltip công thức, đo a11y, xem trực quan)
 
 - [x] Trang mới là mặc định ở `/rfq/[id]/cbu-calc`; trang cũ chuyển thành `legacy-page.tsx`, mở bằng `?legacy=1` (link "Giao diện cũ" ở header). Modal "Input Price" (`?type=price`) vẫn khởi tạo chế độ nhập giá cho sheet chưa từng tính
 - [x] Logic thuần của UI, có test: `src/lib/cbu/ui/draft.ts` (phân tích số "4,37"/"1,234.5"/"$"/"%", bản nháp dạng chuỗi, kiểm tra biên khớp Zod của server, chuyển sang engine/save, nhãn Mặc định/Đã sửa, dán từ Excel) và `format.ts`
@@ -239,7 +240,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [x] Kiểm chứng: 233 test pass (thêm 50 ở 2 suite mới: logic draft/format và render component); `tsc` 0 lỗi; `next build` thành công; `GET /rfq/[id]/cbu-calc` cả mới lẫn `?legacy=1` render 200 trên sandbox
 - [x] **Sandbox cục bộ** `npx tsx scripts/dev-cbu-sandbox.ts`: PGlite (Postgres nhúng) + toàn bộ schema + đăng nhập + 2 RFQ dựng từ AC0084, chạy `next dev` với `DATABASE_URL` **ép về localhost** (không thể chạm Supabase). `node scripts/e2e-cbu-sandbox.cjs` chạy 23 kiểm tra API end-to-end trên đó (đăng nhập, 401/400/404, lưu → tải lại, cổng finalize 422, alias cũ bỏ qua số giả mạo) — **tất cả pass** → hoàn thành mục "thử tay end-to-end" ở mức API
 - [ ] **Xem trực quan trong trình duyệt** — chưa làm: đăng nhập cần nhập mật khẩu, tôi không tự nhập trong trình duyệt. Cần người dùng đăng nhập vào sandbox (`sandbox@psbv.local` / `sandbox123` tại http://localhost:3100/login) rồi mới chụp/kiểm tra được bố cục, phản hồi khi gõ, responsive
-- [ ] Kịch bản Air/Sea + so sánh (cần `cbuConfig.scenarios` + engine chạy theo kịch bản + API nhận kịch bản)
+- [x] **Kịch bản Air/Sea + so sánh (22/09):** mô hình ở SPEC §11.3 (kịch bản đầu = nền là cột phẳng; các kịch bản sau chỉ lưu overrides logistics; giá nhập theo kịch bản; kịch bản được chọn quyết định giá lưu trên dòng và tổng RFQ; finalize chỉ chặn theo kịch bản được chọn). Server: `src/lib/cbu/db/scenarios.ts` + `service.ts` + Zod (viết test **trước**, 20 test đỏ → xanh). UI: `scenario-tabs.tsx`, `scenario-compare.tsx`, bản nháp có kịch bản (`draft.ts`). Kiểm chứng: Air 890,800,000 ₫ / Sea 778,800,000 ₫ / chênh 112,000,000 ₫ khớp workbook; e2e trên sandbox 33/33 (thêm 10 kiểm tra kịch bản); 265 test pass; `next build` thành công
 - [ ] Tooltip công thức trên tiêu đề cột; a11y ≥ 90 (Lighthouse) chưa đo; test tương tác bằng React Testing Library (Sprint 3)
 - [ ] Nghiệm thu: RFQ mới ra giá với ≤ 8 ô nhập; mở lại RFQ thấy đúng; không cuộn lồng — *chờ xem trực quan*
 

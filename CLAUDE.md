@@ -107,7 +107,7 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 
 ## CBU Module (đang tái cấu trúc — CBU v2)
 
-**Trạng thái (21/09/2026):** Phase C0–C2 **xong về mã nguồn** — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; 182 test pass. **Migration CBU (2 bước) chưa áp lên DB thật** (xem "Cảnh báo migration"). C3 xong "lát cắt 1": giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là mặc định, trang cũ ở `?legacy=1`; **chưa có kịch bản Air/Sea**. C4–C5 chưa làm. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+**Trạng thái (22/09/2026):** Phase C0–C3 **xong** — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là mặc định, trang cũ ở `?legacy=1`; **có kịch bản Air/Sea + so sánh** (kịch bản đầu = nền ở cột phẳng RFQ, kịch bản được chọn quyết định giá lưu và tổng — SPEC §11.3). 265 test pass. **Migration bước 1 đã áp lên DB thật (22/09); bước 2 (backfill `marginPercent`) CHỈ áp sau khi deploy code.** C4–C5 chưa làm. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
 
 ### Nguồn sự thật nghiệp vụ
 `documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
@@ -125,15 +125,15 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 7. **Golden test lấy số từ file md**, không sửa fixture cho khớp code. Bug này từng bị che vì hai lỗi triệt tiêu ở mức tổng — luôn so **từng dòng**, không chỉ tổng.
 
 ### Cảnh báo migration
-DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`. **Không chạy `npx prisma migrate dev`** — Prisma sẽ đề nghị reset và xoá dữ liệu. Migration CBU được viết **SQL tay, idempotent** (`prisma/migrations/20260921120000_cbu_v2/migration.sql`); kiểm chứng bằng `node scripts/verify-cbu-migration.mjs` (Postgres nhúng, không đụng DB thật). Migration tách 2 bước: `20260921120000_cbu_v2` (chỉ thêm cột/default — an toàn với code cũ) và `20260921120100_cbu_v2_margin_cleanup` (backfill `marginPercent` — **chỉ sau khi code mới đã deploy**, vì `GET /api/rfq/[id]` bản cũ ép `null → 0` và trang cũ coi đó là override 0%). Thứ tự bắt buộc: **backup → bước 1 → deploy code → bước 2** (deploy mà chưa áp bước 1 thì mọi truy vấn `RFQ` lỗi). Đừng ghi vào DB dùng chung (Supabase) khi chưa được người dùng cho phép rõ ràng. Migration Prisma mới cho phần CBU cũng nên viết tay và có script kiểm chứng tương tự. Xem SPEC §11.8.
+DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`. **Không chạy `npx prisma migrate dev`** — Prisma sẽ đề nghị reset và xoá dữ liệu. Migration CBU được viết **SQL tay, idempotent** (`prisma/migrations/20260921120000_cbu_v2/migration.sql`); kiểm chứng bằng `node scripts/verify-cbu-migration.mjs` (Postgres nhúng, không đụng DB thật). Migration tách 2 bước: `20260921120000_cbu_v2` (chỉ thêm cột/default — an toàn với code cũ) và `20260921120100_cbu_v2_margin_cleanup` (backfill `marginPercent` — **chỉ sau khi code mới đã deploy**, vì `GET /api/rfq/[id]` bản cũ ép `null → 0` và trang cũ coi đó là override 0%). Thứ tự bắt buộc: **backup → bước 1 → deploy code → bước 2** (deploy mà chưa áp bước 1 thì mọi truy vấn `RFQ` lỗi). **Trạng thái: bước 1 ĐÃ áp lên Supabase (22/09/2026), bước 2 chưa.** Máy dev chạy nhánh này với .env trỏ Supabase cần bước 1 (nếu thiếu, mọi truy vấn RFQ lỗi và trang CBU không tải được). Đừng ghi vào DB dùng chung (Supabase) khi chưa được người dùng cho phép rõ ràng. Migration Prisma mới cho phần CBU cũng nên viết tay và có script kiểm chứng tương tự. Xem SPEC §11.8.
 
 ### Lệnh hữu ích
 ```bash
-npm test                          # 9 suite / 182 test phải xanh
+npm test                          # 12 suite / 265 test phải xanh
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
 npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
 npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
-node scripts/e2e-cbu-sandbox.cjs       # 23 kiểm tra API end-to-end trên sandbox (đổi dữ liệu sandbox)
+node scripts/e2e-cbu-sandbox.cjs       # 33 kiểm tra API end-to-end trên sandbox (đổi dữ liệu sandbox)
 npx jest __tests__/cbu            # chỉ test CBU (golden AC0084 + adapter)
 node scripts/gen-cbu-fixture.mjs  # sinh lại fixture từ file md (không sửa tay fixture)
 npx tsc --noEmit                  # phải 0 lỗi

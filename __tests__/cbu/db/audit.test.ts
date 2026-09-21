@@ -75,6 +75,14 @@ describe("auditRfqs", () => {
     expect(summary.flagged).toBe(0);
   });
 
+  it("a line with no material cost is listed as not comparable - it never counts as a difference", () => {
+    const r = rfq({}, () => 0);
+    r.items = r.items.map((i) => ({ ...i, supplierUnitPrice: null }));
+    const { rows, summary } = auditRfqs([r]);
+    expect(rows[0]).toMatchObject({ deltaUsd: null, deltaPct: null, note: "no material cost stored - cannot be priced" });
+    expect(summary).toMatchObject({ flagged: 0, unpriceable: 16, maxAbsPct: 0 });
+  });
+
   it("works on a row that has none of the cbu_v2 columns (audit runs before the migration)", () => {
     const legacy = rfq();
     for (const k of ["cbuMode", "targetMarginPercent", "commissionRate", "citOnCommission"] as const) expect(legacy).not.toHaveProperty(k);

@@ -1,14 +1,17 @@
--- CBU v2 (SPEC.md §11.8) — HAND-WRITTEN, IDEMPOTENT migration.
+-- CBU v2 (SPEC.md §11.8) — STEP 1 of 2 — HAND-WRITTEN, IDEMPOTENT, SAFE WITH THE OLD CODE STILL RUNNING.
+--
+-- Additive only: new columns and new defaults. The currently deployed (pre-v2) application never reads or writes
+-- them, so it keeps working. Apply this BEFORE deploying the CBU v2 code; then apply STEP 2
+-- (20260921120100_cbu_v2_margin_cleanup) AFTER the new code is live.
 --
 -- WHY HAND-WRITTEN: the live database has drifted from prisma/migrations (columns and models exist that
 -- migration 20260729114302_init never created), so `prisma migrate dev` would want to RESET it.
 -- Every statement below is safe to run more than once and against either drift state
--- (ADD COLUMN IF NOT EXISTS, DROP DEFAULT, CREATE TABLE IF NOT EXISTS, guarded UPDATE).
--- It touches ONLY "RFQ" and "RFQItem". It is equivalent to the output of
+-- (ADD COLUMN IF NOT EXISTS, SET DEFAULT). It touches ONLY "RFQ" and "RFQItem". It is equivalent to the part of
 --   prisma migrate diff --from-schema <schema before> --to-schema prisma/schema.prisma --script
--- plus the backup and the backfill of section 3.
+-- that adds columns / changes defaults (the marginPercent default is dropped in STEP 2).
 --
--- HOW TO APPLY (pick one; BACK UP THE DATABASE FIRST):
+-- HOW TO APPLY (BACK UP THE DATABASE FIRST; pick one):
 --   a) Supabase SQL editor / psql: paste and run this whole file as one batch, then, only if the
 --      "_prisma_migrations" table exists and lists the init migration:
 --        npx prisma migrate resolve --applied 20260921120000_cbu_v2
@@ -39,28 +42,7 @@ ALTER TABLE "RFQ" ALTER COLUMN "exchangeRate" SET DEFAULT 26500;
 ALTER TABLE "RFQItem"
   ADD COLUMN IF NOT EXISTS "marginOverrideUsd" DOUBLE PRECISION;
 
--- ─── 3. RFQItem."marginPercent": stop inventing overrides (SPEC §11.2 F6) ────
--- Old behaviour: column default (25 in schema.prisma, 0 in the init migration) plus a route that wrote
--- `item.marginPercent ?? 0`. So 0 and 25 carry NO information: they are what "no override" looked like.
--- From now on NULL means "use the order-wide target margin".
-
--- 3a. Backup first (only the first run creates it; re-runs never overwrite it).
-CREATE TABLE IF NOT EXISTS "_cbu_v2_margin_backup" AS
-  SELECT "id" AS "rfqItemId", "marginPercent", now() AS "backedUpAt"
-  FROM "RFQItem"
-  WHERE "marginPercent" IS NOT NULL;
-
--- 3b. No default any more.
-ALTER TABLE "RFQItem" ALTER COLUMN "marginPercent" DROP DEFAULT;
-
--- 3c. Backfill. A real override typed as exactly 0 or 25 is also reset to NULL (25 = the old target anyway;
---     a genuine 0% is rare and is restorable from the backup table).
-UPDATE "RFQItem" SET "marginPercent" = NULL WHERE "marginPercent" IN (0, 25);
-
 -- ─── ROLLBACK (manual, run only if needed) ──────────────────────────────────────
--- UPDATE "RFQItem" i SET "marginPercent" = b."marginPercent"
---   FROM "_cbu_v2_margin_backup" b WHERE b."rfqItemId" = i."id";
--- ALTER TABLE "RFQItem" ALTER COLUMN "marginPercent" SET DEFAULT 25;
 -- ALTER TABLE "RFQ" ALTER COLUMN "clearanceCost" SET DEFAULT 150;
 -- ALTER TABLE "RFQ" ALTER COLUMN "inlandCost" SET DEFAULT 100;
 -- ALTER TABLE "RFQ" ALTER COLUMN "exchangeRate" SET DEFAULT 25500;
@@ -70,4 +52,3 @@ UPDATE "RFQItem" SET "marginPercent" = NULL WHERE "marginPercent" IN (0, 25);
 --   DROP COLUMN IF EXISTS "targetMarginPercent", DROP COLUMN IF EXISTS "commissionRate",
 --   DROP COLUMN IF EXISTS "citOnCommission", DROP COLUMN IF EXISTS "cbuConfig",
 --   DROP COLUMN IF EXISTS "cbuCalculatedAt";
--- DROP TABLE IF EXISTS "_cbu_v2_margin_backup";

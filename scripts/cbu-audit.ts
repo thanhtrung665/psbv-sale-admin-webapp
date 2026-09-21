@@ -20,7 +20,11 @@
  *  - A large gap therefore means "this price deserves a look", not "this price is wrong by exactly that much".
  */
 import fs from "node:fs";
+import dotenv from "dotenv";
 import { auditRfqs, auditToCsv, type AuditRfq } from "../src/lib/cbu/db/audit";
+
+// `tsx` does not load env files the way Next does; without this DATABASE_URL is empty and pg falls back to localhost.
+dotenv.config({ path: [".env.local", ".env"], quiet: true });
 
 interface Args {
   out?: string;
@@ -70,7 +74,8 @@ async function main() {
 
   console.error(
     `Audited ${summary.rfqs} RFQ(s), ${summary.lines} line(s) with status ${args.statuses.join(" / ")}. ` +
-      `Lines whose price differs by >= ${summary.thresholdPct}%: ${summary.flagged}. Largest gap: ${summary.maxAbsPct}%.` +
+      `Lines whose price differs by >= ${summary.thresholdPct}%: ${summary.flagged}. Largest gap: ${summary.maxAbsPct}%. ` +
+      `Lines with no material cost stored (not comparable): ${summary.unpriceable}.` +
       (args.out ? ` CSV written to ${args.out}.` : "")
   );
   await prisma.$disconnect();

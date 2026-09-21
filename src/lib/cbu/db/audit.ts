@@ -35,6 +35,8 @@ export interface AuditSummary {
   lines: number;
   /** Lines whose price differs from the v2 price by at least `thresholdPct`. */
   flagged: number;
+  /** Lines with no stored material cost: nothing to price, so they are listed but never compared. */
+  unpriceable: number;
   maxAbsPct: number;
   thresholdPct: number;
 }
@@ -49,6 +51,7 @@ export function auditRfqs(rfqs: AuditRfq[], opts: { keepMargins?: boolean; thres
   const thresholdPct = opts.thresholdPct ?? 1;
   const rows: AuditRow[] = [];
   let flagged = 0;
+  let unpriceable = 0;
   let maxAbsPct = 0;
 
   for (const rfq of rfqs) {
@@ -62,8 +65,10 @@ export function auditRfqs(rfqs: AuditRfq[], opts: { keepMargins?: boolean; thres
     rfq.items.forEach((item, idx) => {
       const v2 = result.lines[idx];
       const stored = item.ddpPriceUsd ?? null;
-      const deltaUsd = stored === null ? null : r2(v2.ddpPriceUsd - stored);
-      const deltaPct = stored !== null && stored > 0 ? r2(((v2.ddpPriceUsd - stored) / stored) * 100) : null;
+      const noInputs = v2.materialUsd <= 0;
+      if (noInputs) unpriceable++;
+      const deltaUsd = stored === null || noInputs ? null : r2(v2.ddpPriceUsd - stored);
+      const deltaPct = stored !== null && stored > 0 && !noInputs ? r2(((v2.ddpPriceUsd - stored) / stored) * 100) : null;
       if (deltaPct !== null) {
         maxAbsPct = Math.max(maxAbsPct, Math.abs(deltaPct));
         if (Math.abs(deltaPct) >= thresholdPct) flagged++;
@@ -82,12 +87,12 @@ export function auditRfqs(rfqs: AuditRfq[], opts: { keepMargins?: boolean; thres
         storedRevenueUsd: rfq.totalRevenueUsd ?? null,
         v2RevenueUsd: r2(result.totals.revenueUsd),
         selfChecksOk: checksOk,
-        note: stored === null ? "no stored price" : v2.warnings.join(" | "),
+        note: noInputs ? "no material cost stored - cannot be priced" : stored === null ? "no stored price" : v2.warnings.join(" | "),
       });
     });
   }
 
-  const summary: AuditSummary = { rfqs: rfqs.length, lines: rows.length, flagged, maxAbsPct, thresholdPct };
+  const summary: AuditSummary = { rfqs: rfqs.length, lines: rows.length, flagged, unpriceable, maxAbsPct, thresholdPct };
   return { rows, summary };
 }
 

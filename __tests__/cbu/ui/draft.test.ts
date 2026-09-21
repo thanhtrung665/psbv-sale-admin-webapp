@@ -5,7 +5,18 @@ import { calculateCbu } from "../../../src/lib/cbu";
 import { CBU_DEFAULTS } from "../../../src/lib/cbu/defaults";
 import {
   PARAM_FIELDS,
+  MAX_SCENARIOS,
+  addScenario,
+  allErrors,
   applyPaste,
+  getItemValue,
+  priceErrorKey,
+  removeScenario,
+  renameScenario,
+  scenarioErrorKey,
+  setChosen,
+  setItemValue,
+  setScenarioField,
   defaultAsString,
   draftToEngine,
   draftToSaveInput,
@@ -43,6 +54,8 @@ function sheetFor(air = true): CbuSheet {
       materialUsd: r.materialUsd, totalWeightLb: r.totalWeightLb, dutyPct: r.dutyPct,
       marginPctOverride: null, marginUsdOverride: null, ddpPriceUsdInput: null, savedDdpPriceUsd: null,
     })),
+    scenarios: [{ id: "air", label: "Air", logistics: params.logistics, prices: {}, result: {} as CbuSheet["result"] }],
+    chosenScenarioId: "air",
     result: {} as CbuSheet["result"],
     saved: { calculatedAt: null, totalCostUsd: null, totalRevenueUsd: null, totalRevenueVnd: null, totalMarginUsd: null, actualMarginPct: null },
   };
@@ -96,7 +109,7 @@ describe("sheetToDraft → draftToEngine", () => {
   it("a blank parameter takes the default on the preview side (and in the save input)", () => {
     const d = sheetToDraft(sheetFor());
     d.params["targetMarginPct"] = "";
-    d.params["logistics.clearanceUsd"] = "";
+    d.scenarios[0].logistics["logistics.clearanceUsd"] = "";
     const { params } = draftToEngine(d);
     expect(params.targetMarginPct).toBe(CBU_DEFAULTS.targetMarginPct);
     expect(params.logistics?.clearanceUsd).toBe(0);
@@ -125,11 +138,13 @@ describe("sheetToDraft → draftToEngine", () => {
   it("the save input is complete and passes the server's Zod schema", () => {
     const d = sheetToDraft(sheetFor());
     d.mode = "PRICE_INPUT";
-    d.items[0].ddpPriceUsdInput = "7.10";
+    Object.assign(d, setItemValue(d, "air", "l1", "ddpPriceUsdInput", "7.10"));
     d.items[1].marginPctOverride = "";
     const input = draftToSaveInput(d);
     expect(input.items).toHaveLength(16);
-    expect(input.items?.[0]).toMatchObject({ id: "l1", ddpPriceUsdInput: 7.1, marginPctOverride: null });
+    expect(input.items?.[0]).toMatchObject({ id: "l1", marginPctOverride: null });
+    expect(input.items?.[0]).not.toHaveProperty("ddpPriceUsdInput");
+    expect(input.scenarios?.[0].prices).toEqual({ l1: 7.1 });
     expect(input.params).not.toHaveProperty("mode");
     const parsed = saveCbuSchema.safeParse(input);
     expect(parsed.success).toBe(true);
@@ -196,7 +211,7 @@ describe("paste from Excel", () => {
 
   it("a single column pasted down from row 2 fills consecutive lines of that column only", () => {
     const d = sheetToDraft(sheetFor());
-    const out = applyPaste(d, 1, 1, [["4.5"], ["4.6"], ["4.7"]], [...cols]);
+    const out = applyPaste(d, "air", 1, 1, [["4.5"], ["4.6"], ["4.7"]], [...cols]);
     expect(out.items.slice(1, 4).map((i) => i.materialUsd)).toEqual(["4.5", "4.6", "4.7"]);
     expect(out.items[0].materialUsd).toBe(d.items[0].materialUsd);
     expect(out.items[4].materialUsd).toBe(d.items[4].materialUsd);
@@ -205,7 +220,7 @@ describe("paste from Excel", () => {
 
   it("a block spreads across columns; '$', '%' and spaces are stripped; extra cells/rows are ignored", () => {
     const d = sheetToDraft(sheetFor());
-    const out = applyPaste(d, 14, 0, [["10", "$1.5", "5%", "junk"], ["20", "2.5", "6"], ["30", "3.5", "7"]], [...cols]);
+    const out = applyPaste(d, "air", 14, 0, [["10", "$1.5", "5%", "junk"], ["20", "2.5", "6"], ["30", "3.5", "7"]], [...cols]);
     expect(out.items[14]).toMatchObject({ totalWeightLb: "10", materialUsd: "1.5", dutyPct: "5" });
     expect(out.items[15]).toMatchObject({ totalWeightLb: "20", materialUsd: "2.5", dutyPct: "6" });
     expect(out.items).toHaveLength(16);
@@ -214,12 +229,12 @@ describe("paste from Excel", () => {
   it("does not mutate the previous draft", () => {
     const d = sheetToDraft(sheetFor());
     const snapshot = JSON.stringify(d);
-    applyPaste(d, 0, 0, [["1"]], [...cols]);
+    applyPaste(d, "air", 0, 0, [["1"]], [...cols]);
     expect(JSON.stringify(d)).toBe(snapshot);
   });
 
   it("pasted text goes through the same validation as typed text", () => {
-    const d = applyPaste(sheetToDraft(sheetFor()), 0, 1, [["abc"]], [...cols]);
+    const d = applyPaste(sheetToDraft(sheetFor()), "air", 0, 1, [["abc"]], [...cols]);
     expect(draftToEngine(d as Draft).errors[itemErrorKey("l1", "materialUsd")]).toMatch(/số hợp lệ/);
   });
 });
@@ -249,5 +264,107 @@ describe("format", () => {
     expect(marginTone(25.04, true, 25)).toBe("good");
     expect(marginTone(24.5, true, 25)).toBe("good"); // within 1 point of target is not "thin"
     expect(marginTone(0, false, 25)).toBe("none");
+  });
+});
+
+// ─── Scenarios (Air / Sea) ────────────────────────────────────────────────────
+describe("scenarios in the draft", () => {
+  const sea = AC0084_LOGISTICS.sea;
+  /** Air (base) + Sea, exactly as the workbook has them. */
+  function airAndSea() {
+    const added = addScenario(sheetToDraft(sheetFor()), "air")!;
+    const id = added.id;
+    let d = setScenarioField(added.draft, id, "logistics.freightFixedUsd", String(sea.freightFixedUsd));
+    d = setScenarioField(d, id, "logistics.freightRatePerKg", String(sea.freightRatePerKg));
+    d = setScenarioField(d, id, "logistics.chargeableKg", String(sea.chargeableKg));
+    d = renameScenario(renameScenario(d, "air", "Air"), id, "Sea");
+    return { d, seaId: id };
+  }
+  const revenueVnd = (d: Draft, id: string) => {
+    const e = draftToEngine(d, id);
+    return calculateCbu(e.lines, e.params).totals.revenueVnd;
+  };
+
+  it("adding copies the active scenario (logistics and prices) and gets a fresh id", () => {
+    const d0 = setItemValue(sheetToDraft(sheetFor()), "air", "l1", "ddpPriceUsdInput", "7.1");
+    const { draft, id } = addScenario(d0, "air")!;
+    expect(id).toBe("s2");
+    expect(draft.scenarios).toHaveLength(2);
+    expect(draft.scenarios[1].logistics).toEqual(draft.scenarios[0].logistics);
+    expect(draft.scenarios[1].prices).toEqual({ l1: "7.1" });
+    expect(draft.scenarios[1].logistics).not.toBe(draft.scenarios[0].logistics); // a copy, not shared
+    expect(addScenario(draft, "s2")!.id).toBe("s3");
+  });
+
+  it("each scenario reproduces its Excel block and the difference matches the workbook (112,000,000 ₫)", () => {
+    const { d, seaId } = airAndSea();
+    expect(revenueVnd(d, "air")).toBe(AC0084_TOTALS.air.totalRevenueVnd);
+    expect(revenueVnd(d, seaId)).toBe(AC0084_TOTALS.sea.totalRevenueVnd);
+    expect(revenueVnd(d, "air") - revenueVnd(d, seaId)).toBe(112_000_000);
+  });
+
+  it("editing one scenario's logistics never changes another's", () => {
+    const { d, seaId } = airAndSea();
+    const before = revenueVnd(d, "air");
+    const d2 = setScenarioField(d, seaId, "logistics.clearanceUsd", "999");
+    expect(revenueVnd(d2, "air")).toBe(before);
+    expect(revenueVnd(d2, seaId)).toBeGreaterThan(revenueVnd(d, seaId));
+  });
+
+  it("the save input puts the FIRST scenario's logistics in params and only the others as overrides", () => {
+    const { d, seaId } = airAndSea();
+    const s = draftToSaveInput(d);
+    expect(s.params?.logistics).toMatchObject({ freightFixedUsd: 500, freightRatePerKg: 2.5, chargeableKg: 1300 });
+    expect(s.scenarios?.map((x) => x.id)).toEqual(["air", seaId]);
+    expect(s.scenarios?.[0]).not.toHaveProperty("overrides");
+    expect(s.scenarios?.[1].overrides?.logistics).toMatchObject({ freightFixedUsd: 800, freightRatePerKg: 0, chargeableKg: 0 });
+    expect(s.scenarios?.map((x) => x.label)).toEqual(["Air", "Sea"]);
+    expect(s.chosenScenarioId).toBe("air");
+    expect(saveCbuSchema.safeParse(s).success).toBe(true);
+  });
+
+  it("prices are per scenario", () => {
+    const { d, seaId } = airAndSea();
+    let x = setItemValue(d, "air", "l1", "ddpPriceUsdInput", "7.10");
+    x = setItemValue(x, seaId, "l1", "ddpPriceUsdInput", "6.41");
+    expect(getItemValue(x, "air", x.items[0], "ddpPriceUsdInput")).toBe("7.10");
+    expect(getItemValue(x, seaId, x.items[0], "ddpPriceUsdInput")).toBe("6.41");
+    expect(getItemValue(x, "air", x.items[0], "materialUsd")).toBe("4.37"); // other fields are shared
+    const s = draftToSaveInput(x);
+    expect(s.scenarios?.map((sc) => sc.prices)).toEqual([{ l1: 7.1 }, { l1: 6.41 }]);
+  });
+
+  it("choose / remove: the chosen scenario can change; the last scenario cannot be removed; removing the chosen one falls back to the first", () => {
+    const { d, seaId } = airAndSea();
+    expect(setChosen(d, seaId).chosenId).toBe(seaId);
+    expect(setChosen(d, "nope").chosenId).toBe("air");
+    const onlyAir = removeScenario(setChosen(d, seaId), seaId);
+    expect(onlyAir.scenarios.map((s) => s.id)).toEqual(["air"]);
+    expect(onlyAir.chosenId).toBe("air");
+    expect(removeScenario(onlyAir, "air").scenarios).toHaveLength(1); // the last one stays
+  });
+
+  it("is capped at MAX_SCENARIOS", () => {
+    let d = sheetToDraft(sheetFor());
+    for (let i = 1; i < MAX_SCENARIOS; i++) d = addScenario(d, "air")!.draft;
+    expect(d.scenarios).toHaveLength(MAX_SCENARIOS);
+    expect(addScenario(d, "air")).toBeNull();
+  });
+
+  it("errors in ANY scenario block saving and are keyed by scenario", () => {
+    const { d, seaId } = airAndSea();
+    const bad = setItemValue(setScenarioField(d, seaId, "logistics.inlandUsd", "x1"), seaId, "l3", "ddpPriceUsdInput", "-5");
+    const errs = allErrors(bad);
+    expect(errs[scenarioErrorKey(seaId, "logistics.inlandUsd")]).toMatch(/số hợp lệ/);
+    expect(errs[priceErrorKey(seaId, "l3")]).toMatch(/âm/);
+    expect(Object.keys(allErrors(d))).toEqual([]);
+    // the error is only shown while looking at that scenario, but it is always counted
+    expect(draftToEngine(bad, "air").errors[scenarioErrorKey(seaId, "logistics.inlandUsd")]).toBeUndefined();
+  });
+
+  it("a rename or a change of the chosen scenario makes the draft dirty", () => {
+    const { d, seaId } = airAndSea();
+    expect(isDirty(d, renameScenario(d, seaId, "Đường biển"))).toBe(true);
+    expect(isDirty(d, setChosen(d, seaId))).toBe(true);
   });
 });

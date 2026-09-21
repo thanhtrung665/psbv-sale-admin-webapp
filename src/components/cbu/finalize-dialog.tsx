@@ -12,6 +12,8 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   result: CbuResult;
+  /** Shown when the sheet has several scenarios: the one that will be priced into the Quotation. */
+  scenarioLabel?: string;
   /** Reasons found by the same rule the server applies (preflight). */
   blockers: string[];
   /** Reasons the SERVER returned when it refused (422), if any. */
@@ -22,7 +24,7 @@ interface Props {
   onConfirm: () => void;
 }
 
-export function FinalizeDialog({ open, onOpenChange, result, blockers, serverReasons, busy, doneHref, onConfirm }: Props) {
+export function FinalizeDialog({ open, onOpenChange, result, scenarioLabel, blockers, serverReasons, busy, doneHref, onConfirm }: Props) {
   const reasons = serverReasons.length > 0 ? serverReasons : blockers;
   const blocked = reasons.length > 0;
   const t = result.totals;
@@ -40,6 +42,12 @@ export function FinalizeDialog({ open, onOpenChange, result, blockers, serverRea
         </DialogHeader>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 p-3 text-sm">
+          {scenarioLabel && (
+            <>
+              <dt className="text-slate-500">Phương án</dt>
+              <dd className="text-right font-medium">{scenarioLabel}</dd>
+            </>
+          )}
           <dt className="text-slate-500">Số dòng hàng</dt>
           <dd className="text-right font-mono tabular-nums">{result.lines.length}</dd>
           <dt className="text-slate-500">Doanh thu</dt>

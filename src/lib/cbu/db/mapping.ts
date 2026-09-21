@@ -272,8 +272,12 @@ export function itemUpdateData(
 export interface CbuConfig {
   schemaVersion: 1;
   chosenScenarioId: string;
-  /** Scenario overrides on top of the base params stored in the flat RFQ columns (SPEC §11.3). Phase C3 fills them. */
-  scenarios: { id: string; label: string; overrides: CbuParamsInput }[];
+  /**
+   * The FIRST scenario is the base: its params are the flat RFQ columns and its `overrides` stay empty.
+   * Later scenarios store only what differs (today: logistics). `prices` = typed DDP price per line id
+   * (PRICE_INPUT); `undefined` means a legacy config — fall back to the price stored on the item.
+   */
+  scenarios: { id: string; label: string; overrides: CbuParamsInput; prices?: Record<string, number> }[];
 }
 
 /** Keeps an existing v1 config untouched; otherwise starts with the single implicit scenario. */

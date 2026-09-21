@@ -122,27 +122,52 @@ export interface DraftItem {
   dutyPct: string;
   marginPctOverride: string;
   marginUsdOverride: string;
-  ddpPriceUsdInput: string;
 }
 
+/** Editable columns of the line table. `ddpPriceUsdInput` lives in the SCENARIO (prices differ Air vs Sea). */
 export type ItemField = "totalWeightLb" | "materialUsd" | "dutyPct" | "marginPctOverride" | "marginUsdOverride" | "ddpPriceUsdInput";
+type StoredItemField = Exclude<ItemField, "ddpPriceUsdInput">;
+
+/** One logistics option over the same lines (Air / Sea). SPEC §11.3. */
+export interface DraftScenario {
+  id: string;
+  label: string;
+  /** Strings of the SCENARIO_FIELDS, keyed by their PARAM_FIELDS path. */
+  logistics: Record<string, string>;
+  /** Typed DDP price per line id (PRICE_INPUT). */
+  prices: Record<string, string>;
+}
 
 export interface Draft {
   mode: CbuMode;
-  /** Keyed by PARAM_FIELDS[].path; every value is the string shown in its input. */
+  /** The SHARED parameters (everything but logistics), keyed by PARAM_FIELDS[].path. */
   params: Record<string, string>;
   items: DraftItem[];
+  scenarios: DraftScenario[];
+  /** The scenario priced into the Quotation. */
+  chosenId: string;
 }
+
+/** Parameters that vary per scenario vs. the ones shared by all of them. */
+export const SCENARIO_FIELDS = PARAM_FIELDS.filter((f) => f.group === "freight");
+export const SHARED_FIELDS = PARAM_FIELDS.filter((f) => f.group !== "freight");
 
 export function sheetToDraft(sheet: CbuSheet): Draft {
   const params: Record<string, string> = {};
-  for (const f of PARAM_FIELDS) {
+  for (const f of SHARED_FIELDS) {
     const v = getPath(sheet.params, f.path);
     params[f.path] = f.kind === "number" ? numToStr(v as number) : String(v ?? "");
   }
   return {
     mode: sheet.mode,
     params,
+    chosenId: sheet.chosenScenarioId,
+    scenarios: sheet.scenarios.map((sc) => ({
+      id: sc.id,
+      label: sc.label,
+      logistics: Object.fromEntries(SCENARIO_FIELDS.map((f) => [f.path, numToStr(getPath({ logistics: sc.logistics }, f.path) as number)])),
+      prices: Object.fromEntries(Object.entries(sc.prices).map(([id, v]) => [id, numToStr(v)])),
+    })),
     items: sheet.items.map((i) => ({
       id: i.id,
       lineNo: i.lineNo,
@@ -155,10 +180,54 @@ export function sheetToDraft(sheet: CbuSheet): Draft {
       dutyPct: numToStr(i.dutyPct),
       marginPctOverride: numToStr(i.marginPctOverride),
       marginUsdOverride: numToStr(i.marginUsdOverride),
-      ddpPriceUsdInput: numToStr(i.ddpPriceUsdInput),
     })),
   };
 }
+
+/** The value shown in a line cell. Prices are read from the given scenario, everything else from the line. */
+export function getItemValue(draft: Draft, scenarioId: string, item: DraftItem, field: ItemField): string {
+  if (field === "ddpPriceUsdInput") return draft.scenarios.find((s) => s.id === scenarioId)?.prices[item.id] ?? "";
+  return item[field];
+}
+
+export function setItemValue(draft: Draft, scenarioId: string, itemId: string, field: ItemField, value: string): Draft {
+  if (field === "ddpPriceUsdInput") {
+    return { ...draft, scenarios: draft.scenarios.map((s) => (s.id === scenarioId ? { ...s, prices: { ...s.prices, [itemId]: value } } : s)) };
+  }
+  return { ...draft, items: draft.items.map((i) => (i.id === itemId ? { ...i, [field as StoredItemField]: value } : i)) };
+}
+
+export function setScenarioField(draft: Draft, scenarioId: string, path: string, value: string): Draft {
+  return { ...draft, scenarios: draft.scenarios.map((s) => (s.id === scenarioId ? { ...s, logistics: { ...s.logistics, [path]: value } } : s)) };
+}
+
+// ─── Scenario operations ─────────────────────────────────────────────────────
+
+export const MAX_SCENARIOS = 4;
+
+/** Copies `fromId` (its logistics and prices) into a new scenario at the end. Returns the new draft and its id. */
+export function addScenario(draft: Draft, fromId: string): { draft: Draft; id: string } | null {
+  if (draft.scenarios.length >= MAX_SCENARIOS) return null;
+  const source = draft.scenarios.find((s) => s.id === fromId) ?? draft.scenarios[0];
+  let n = draft.scenarios.length + 1;
+  while (draft.scenarios.some((s) => s.id === `s${n}`)) n++;
+  const id = `s${n}`;
+  const next: DraftScenario = { id, label: `Phương án ${draft.scenarios.length + 1}`, logistics: { ...source.logistics }, prices: { ...source.prices } };
+  return { draft: { ...draft, scenarios: [...draft.scenarios, next] }, id };
+}
+
+/** Removing the chosen scenario makes the first remaining one chosen. The last scenario cannot be removed. */
+export function removeScenario(draft: Draft, id: string): Draft {
+  if (draft.scenarios.length <= 1) return draft;
+  const scenarios = draft.scenarios.filter((s) => s.id !== id);
+  return { ...draft, scenarios, chosenId: draft.chosenId === id ? scenarios[0].id : draft.chosenId };
+}
+
+export function renameScenario(draft: Draft, id: string, label: string): Draft {
+  return { ...draft, scenarios: draft.scenarios.map((s) => (s.id === id ? { ...s, label } : s)) };
+}
+
+export const setChosen = (draft: Draft, id: string): Draft => (draft.scenarios.some((s) => s.id === id) ? { ...draft, chosenId: id } : draft);
 
 // ─── Validation & conversion ─────────────────────────────────────────────────
 
@@ -183,6 +252,10 @@ const ITEM_FIELD_LIMITS: Record<ItemField, { max?: number; maxExclusive?: number
 
 export const itemErrorKey = (id: string, field: ItemField) => `items.${id}.${field}`;
 export const paramErrorKey = (path: string) => `params.${path}`;
+/** Error key of a scenario-specific parameter (logistics). */
+export const scenarioErrorKey = (scenarioId: string, path: string) => `scenarios.${scenarioId}.${path}`;
+/** Error key of a typed price (per scenario, per line). */
+export const priceErrorKey = (scenarioId: string, itemId: string) => `prices.${scenarioId}.${itemId}`;
 
 export interface EngineInput {
   params: CbuParamsInput;
@@ -190,34 +263,42 @@ export interface EngineInput {
   errors: FieldErrors;
 }
 
-/** Draft → engine input. Blank params take the default; blank line overrides are null; invalid text is an error. */
-export function draftToEngine(draft: Draft): EngineInput {
+/** One parameter's raw text → its value (blank = the engine default) or an error message. */
+function readParam(f: ParamField, raw: string): { value?: number | string; error?: string } {
+  if (f.kind !== "number") {
+    const t = raw.trim();
+    return { value: t === "" ? (getPath(CBU_DEFAULTS, f.path) as string) : t };
+  }
+  const p = parseNumber(raw);
+  if (!p.ok) return { error: "Không phải số hợp lệ" };
+  if (p.value === null) return { value: getPath(CBU_DEFAULTS, f.path) as number };
+  const range = checkRange(p.value, f);
+  return range ? { error: range } : { value: p.value };
+}
+
+/**
+ * Draft → engine input for ONE scenario (default: the chosen one): shared params + that scenario's logistics + the
+ * shared lines carrying that scenario's typed prices. Blank params take the default; blank overrides and prices are
+ * null; invalid text is an error (the value is left out, never guessed).
+ */
+export function draftToEngine(draft: Draft, scenarioId: string = draft.chosenId): EngineInput {
   const errors: FieldErrors = {};
+  const scenario = draft.scenarios.find((s) => s.id === scenarioId) ?? draft.scenarios[0];
   const params: Record<string, unknown> = { mode: draft.mode };
 
-  for (const f of PARAM_FIELDS) {
-    const raw = draft.params[f.path] ?? "";
-    if (f.kind !== "number") {
-      const t = raw.trim();
-      setPath(params, f.path, t === "" ? getPath(CBU_DEFAULTS, f.path) : t);
-      continue;
-    }
-    const p = parseNumber(raw);
-    if (!p.ok) {
-      errors[paramErrorKey(f.path)] = "Không phải số hợp lệ";
-      continue;
-    }
-    if (p.value === null) {
-      setPath(params, f.path, getPath(CBU_DEFAULTS, f.path)); // blank = default
-      continue;
-    }
-    const range = checkRange(p.value, f);
-    if (range) errors[paramErrorKey(f.path)] = range;
-    else setPath(params, f.path, p.value);
+  for (const f of SHARED_FIELDS) {
+    const r = readParam(f, draft.params[f.path] ?? "");
+    if (r.error) errors[paramErrorKey(f.path)] = r.error;
+    else setPath(params, f.path, r.value);
+  }
+  for (const f of SCENARIO_FIELDS) {
+    const r = readParam(f, scenario?.logistics[f.path] ?? "");
+    if (r.error) errors[scenarioErrorKey(scenario.id, f.path)] = r.error;
+    else setPath(params, f.path, r.value);
   }
 
   const lines: CbuLineInput[] = draft.items.map((it) => {
-    const num = (field: ItemField, blank: number | null): number | null => {
+    const num = (field: StoredItemField, blank: number | null): number | null => {
       const p = parseNumber(it[field]);
       if (!p.ok) {
         errors[itemErrorKey(it.id, field)] = "Không phải số hợp lệ";
@@ -231,6 +312,20 @@ export function draftToEngine(draft: Draft): EngineInput {
       }
       return p.value;
     };
+    const price = ((): number | null => {
+      const p = parseNumber(scenario?.prices[it.id] ?? "");
+      if (!p.ok) {
+        errors[priceErrorKey(scenario.id, it.id)] = "Không phải số hợp lệ";
+        return null;
+      }
+      if (p.value === null) return null;
+      const err = checkRange(p.value, ITEM_FIELD_LIMITS.ddpPriceUsdInput);
+      if (err) {
+        errors[priceErrorKey(scenario.id, it.id)] = err;
+        return null;
+      }
+      return p.value;
+    })();
     return {
       id: it.id,
       lineNo: it.lineNo,
@@ -240,30 +335,47 @@ export function draftToEngine(draft: Draft): EngineInput {
       dutyPct: num("dutyPct", 0) ?? 0,
       marginPctOverride: num("marginPctOverride", null),
       marginUsdOverride: num("marginUsdOverride", null),
-      ddpPriceUsdInput: num("ddpPriceUsdInput", null),
+      ddpPriceUsdInput: price,
     };
   });
 
   return { params: params as CbuParamsInput, lines, errors };
 }
 
+/** Every input error across ALL scenarios — what gates the Save button. */
+export function allErrors(draft: Draft): FieldErrors {
+  return draft.scenarios.reduce<FieldErrors>((acc, s) => ({ ...acc, ...draftToEngine(draft, s.id).errors }), {});
+}
+
 /** Everything the server needs — inputs only, complete, so a save always reproduces what the preview shows. */
 export function draftToSaveInput(draft: Draft): SaveCbuInput {
-  const { params, lines } = draftToEngine(draft);
-  const { mode, ...rest } = params as CbuParamsInput & { mode?: CbuMode };
+  const base = draftToEngine(draft, draft.scenarios[0].id);
+  const { mode, ...rest } = base.params as CbuParamsInput & { mode?: CbuMode };
   void mode;
   return {
     mode: draft.mode,
+    // the FIRST scenario is the base: its logistics travel in `params` (the flat RFQ columns)
     params: rest as SaveCbuInput["params"],
-    items: lines.map((l) => ({
+    items: base.lines.map((l) => ({
       id: l.id,
       materialUsd: l.materialUsd,
       totalWeightLb: l.totalWeightLb,
       dutyPct: l.dutyPct ?? 0,
       marginPctOverride: l.marginPctOverride ?? null,
       marginUsdOverride: l.marginUsdOverride ?? null,
-      ddpPriceUsdInput: l.ddpPriceUsdInput ?? null,
     })),
+    scenarios: draft.scenarios.map((s, i) => {
+      const e = draftToEngine(draft, s.id);
+      const prices: Record<string, number> = {};
+      for (const l of e.lines) if (l.ddpPriceUsdInput != null && l.ddpPriceUsdInput > 0) prices[l.id] = l.ddpPriceUsdInput;
+      return {
+        id: s.id,
+        label: s.label.trim() || s.id,
+        ...(i > 0 ? { overrides: { logistics: e.params.logistics } } : {}),
+        prices,
+      };
+    }) as SaveCbuInput["scenarios"],
+    chosenScenarioId: draft.chosenId,
   };
 }
 
@@ -314,17 +426,17 @@ export function parseClipboardMatrix(text: string): string[][] {
 
 /**
  * Writes a pasted block into the line table starting at (`startRow`, `startCol`). `columns` are the editable
- * columns currently visible, left to right. Cells that fall outside the table are ignored.
+ * columns currently visible, left to right; a pasted price goes to the given scenario. Cells outside the table are ignored.
  */
-export function applyPaste(draft: Draft, startRow: number, startCol: number, matrix: string[][], columns: ItemField[]): Draft {
-  const items = draft.items.map((i) => ({ ...i }));
+export function applyPaste(draft: Draft, scenarioId: string, startRow: number, startCol: number, matrix: string[][], columns: ItemField[]): Draft {
+  let out = draft;
   matrix.forEach((cells, r) => {
-    const item = items[startRow + r];
+    const item = draft.items[startRow + r];
     if (!item) return;
     cells.forEach((cell, c) => {
       const field = columns[startCol + c];
-      if (field) item[field] = cell.replace(/[\s $%]/g, "");
+      if (field) out = setItemValue(out, scenarioId, item.id, field, cell.replace(/[\s $%]/g, ""));
     });
   });
-  return { ...draft, items };
+  return out;
 }

@@ -5,9 +5,11 @@ import { CircleCheckIcon, Loader2Icon, RotateCcwIcon, SaveIcon, TriangleAlertIco
 import { Button } from "@/components/ui/button";
 import { calculateCbu } from "@/lib/cbu";
 import { finalizeBlockers } from "@/lib/cbu/finalize";
-import type { CbuMode } from "@/lib/cbu/types";
+import type { CbuMode, CbuResult } from "@/lib/cbu/types";
 import type { CbuSheet } from "@/lib/cbu/db/service";
 import {
+  addScenario,
+  allErrors,
   applyPaste,
   draftToEngine,
   draftToSaveInput,
@@ -15,14 +17,22 @@ import {
   isDirty,
   numToStr,
   parseClipboardMatrix,
+  removeScenario,
+  renameScenario,
+  setChosen,
+  setItemValue,
+  setScenarioField,
   sheetToDraft,
   type Draft,
+  type EngineInput,
   type ItemField,
 } from "@/lib/cbu/ui/draft";
 import { fmtNum } from "@/lib/cbu/ui/format";
 import { FinalizeDialog } from "./finalize-dialog";
 import { ItemsTable } from "./items-table";
 import { ParamsPanel } from "./params-panel";
+import { ScenarioCompare } from "./scenario-compare";
+import { ScenarioTabs } from "./scenario-tabs";
 import { WorkspaceBar } from "./workspace-bar";
 
 interface Notice {
@@ -46,6 +56,7 @@ async function readError(res: Response): Promise<{ message: string; details: str
 export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialType?: string }) {
   const [sheet, setSheet] = React.useState<CbuSheet | null>(null);
   const [draft, setDraft] = React.useState<Draft | null>(null);
+  const [activeId, setActiveId] = React.useState("");
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState<"save" | "finalize" | null>(null);
   const [notice, setNotice] = React.useState<Notice | null>(null);
@@ -68,6 +79,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
       if (initialType === "price" && s.saved.calculatedAt === null && d.mode === "MARGIN_INPUT") d.mode = "PRICE_INPUT";
       setSheet(s);
       setDraft(d);
+      setActiveId(s.chosenScenarioId);
       setShowOverrides(d.items.some((i) => i.marginPctOverride !== "" || i.marginUsdOverride !== ""));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Không tải được dữ liệu CBU.");
@@ -78,13 +90,25 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
     void load();
   }, [load]);
 
-  // ── derived ─────────────────────────────────────────────────────────────────
+  // ── derived: every scenario is calculated in the browser with the same engine the server runs ──
   const baseDraft = React.useMemo(() => (sheet ? sheetToDraft(sheet) : null), [sheet]);
-  const engine = React.useMemo(() => (draft ? draftToEngine(draft) : null), [draft]);
-  const result = React.useMemo(() => (engine ? calculateCbu(engine.lines, engine.params) : null), [engine]);
+  const computed = React.useMemo(() => {
+    if (!draft) return null;
+    const engines: Record<string, EngineInput> = {};
+    const results: Record<string, CbuResult> = {};
+    for (const s of draft.scenarios) {
+      engines[s.id] = draftToEngine(draft, s.id);
+      results[s.id] = calculateCbu(engines[s.id].lines, engines[s.id].params);
+    }
+    return { engines, results, errors: allErrors(draft) };
+  }, [draft]);
+
   const dirty = !!(draft && baseDraft && isDirty(draft, baseDraft));
-  const invalidInputs = engine ? Object.keys(engine.errors).length : 0;
-  const blockers = React.useMemo(() => (engine && result ? finalizeBlockers(engine.lines, result) : []), [engine, result]);
+  const invalidInputs = computed ? Object.keys(computed.errors).length : 0;
+  const active = draft ? (draft.scenarios.find((s) => s.id === activeId) ?? draft.scenarios[0]) : null;
+  const chosenEngine = draft && computed ? computed.engines[draft.chosenId] : null;
+  const chosenResult = draft && computed ? computed.results[draft.chosenId] : null;
+  const blockers = React.useMemo(() => (chosenEngine && chosenResult ? finalizeBlockers(chosenEngine.lines, chosenResult) : []), [chosenEngine, chosenResult]);
 
   // Leaving with unsaved edits loses them — let the browser ask.
   React.useEffect(() => {
@@ -98,38 +122,55 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
   }, [dirty]);
 
   // ── edits ───────────────────────────────────────────────────────────────────
-  const onParamChange = React.useCallback((path: string, value: string) => {
+  const edit = React.useCallback((fn: (d: Draft) => Draft) => {
     setNotice(null);
-    setDraft((d) => (d ? { ...d, params: { ...d.params, [path]: value } } : d));
+    setDraft((d) => (d ? fn(d) : d));
   }, []);
 
-  const onItemChange = React.useCallback((id: string, field: ItemField, value: string) => {
-    setNotice(null);
-    setDraft((d) => (d ? { ...d, items: d.items.map((i) => (i.id === id ? { ...i, [field]: value } : i)) } : d));
-  }, []);
+  const onParamChange = React.useCallback((path: string, value: string) => edit((d) => ({ ...d, params: { ...d.params, [path]: value } })), [edit]);
+  const onScenarioChange = (path: string, value: string) => active && edit((d) => setScenarioField(d, active.id, path, value));
+  const onItemChange = (id: string, field: ItemField, value: string) => active && edit((d) => setItemValue(d, active.id, id, field, value));
 
   const onModeChange = (mode: CbuMode) => {
-    if (!draft || !result) return;
-    setNotice(null);
-    setDraft((d) => {
-      if (!d) return d;
-      // Switching to "enter the price": start every empty price from the price the sheet gives right now,
+    if (!computed) return;
+    edit((d) => {
+      if (mode !== "PRICE_INPUT") return { ...d, mode };
+      // Switching to "enter the price": every scenario starts each EMPTY price from the price it gives right now,
       // so nothing jumps to zero.
-      const items =
-        mode === "PRICE_INPUT"
-          ? d.items.map((it, i) => (it.ddpPriceUsdInput === "" && result.lines[i]?.ddpPriceUsd > 0 ? { ...it, ddpPriceUsdInput: numToStr(result.lines[i].ddpPriceUsd) } : it))
-          : d.items;
-      return { ...d, mode, items };
+      const scenarios = d.scenarios.map((s) => {
+        const res = computed.results[s.id];
+        const prices = { ...s.prices };
+        d.items.forEach((it, i) => {
+          const p = res?.lines[i]?.ddpPriceUsd ?? 0;
+          if ((prices[it.id] ?? "") === "" && p > 0) prices[it.id] = numToStr(p);
+        });
+        return { ...s, prices };
+      });
+      return { ...d, mode, scenarios };
     });
   };
 
   const onPasteBlock = (row: number, col: number, text: string): boolean => {
-    if (!draft) return false;
+    if (!draft || !active) return false;
     const matrix = parseClipboardMatrix(text);
     if (matrix.length === 0 || (matrix.length === 1 && matrix[0].length === 1)) return false;
-    setNotice(null);
-    setDraft(applyPaste(draft, row, col, matrix, editableColumns(draft.mode, showOverrides)));
+    edit((d) => applyPaste(d, active.id, row, col, matrix, editableColumns(d.mode, showOverrides)));
     return true;
+  };
+
+  // ── scenarios ───────────────────────────────────────────────────────────────
+  const onAddScenario = () => {
+    if (!draft || !active) return;
+    const r = addScenario(draft, active.id);
+    if (!r) return;
+    edit(() => r.draft);
+    setActiveId(r.id);
+  };
+  const onRemoveScenario = (id: string) => {
+    if (!draft) return;
+    const next = removeScenario(draft, id);
+    edit(() => next);
+    if (id === activeId) setActiveId(next.scenarios[0].id);
   };
 
   const toggleExpanded = (id: string) =>
@@ -144,6 +185,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
   const adopt = (s: CbuSheet) => {
     setSheet(s);
     setDraft(sheetToDraft(s));
+    setActiveId((cur) => (s.scenarios.some((x) => x.id === cur) ? cur : s.chosenScenarioId));
   };
 
   const saveDraft = async () => {
@@ -196,7 +238,10 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
   };
 
   const revert = () => {
-    if (baseDraft) setDraft(baseDraft);
+    if (baseDraft) {
+      setDraft(baseDraft);
+      setActiveId((cur) => (baseDraft.scenarios.some((x) => x.id === cur) ? cur : baseDraft.chosenId));
+    }
     setNotice(null);
   };
 
@@ -212,12 +257,16 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
     );
   }
 
-  if (!sheet || !draft || !engine || !result) return <WorkspaceSkeleton />;
+  if (!sheet || !draft || !computed || !active || !chosenResult) return <WorkspaceSkeleton />;
 
+  const engine = computed.engines[active.id];
+  const result = computed.results[active.id];
   const savedAt = sheet.saved.calculatedAt ? new Date(sheet.saved.calculatedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : null;
   const route = `${draft.params["goodsOrigin"] || "Oversea"} → ${draft.params["destinationCountry"] || "VN"}`;
   const targetMargin = Number(engine.params.targetMarginPct ?? 25);
   const canSave = dirty && invalidInputs === 0 && !busy;
+  const multiple = draft.scenarios.length > 1;
+  const chosenLabel = draft.scenarios.find((s) => s.id === draft.chosenId)?.label ?? "";
 
   return (
     <div className="space-y-4">
@@ -237,24 +286,52 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
         dirty={dirty}
         savedAt={savedAt}
         busy={busy !== null}
+        scenarioLabel={multiple ? active.label : undefined}
+        scenarioChosen={active.id === draft.chosenId}
       />
 
       {notice && <NoticeBar notice={notice} onClose={() => setNotice(null)} />}
 
       {result.warnings.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          <p className="flex items-center gap-2 font-medium"><TriangleAlertIcon className="size-4" aria-hidden />Lưu ý ({result.warnings.length})</p>
+          <p className="flex items-center gap-2 font-medium"><TriangleAlertIcon className="size-4" aria-hidden />Lưu ý{multiple ? ` — ${active.label}` : ""} ({result.warnings.length})</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-6 text-[13px]">
             {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
           </ul>
         </div>
       )}
 
-      <ParamsPanel draft={draft} errors={engine.errors} result={result} onChange={onParamChange} />
+      <ScenarioTabs
+        scenarios={draft.scenarios}
+        activeId={active.id}
+        chosenId={draft.chosenId}
+        disabled={busy !== null}
+        onSelect={setActiveId}
+        onAdd={onAddScenario}
+        onRename={(id, label) => edit((d) => renameScenario(d, id, label))}
+        onRemove={onRemoveScenario}
+      />
+
+      {multiple && (
+        <ScenarioCompare
+          scenarios={draft.scenarios}
+          results={computed.results}
+          chosenId={draft.chosenId}
+          activeId={active.id}
+          targetMarginPct={targetMargin}
+          disabled={busy !== null}
+          onChoose={(id) => edit((d) => setChosen(d, id))}
+          onView={setActiveId}
+        />
+      )}
+
+      <ParamsPanel draft={draft} scenario={active} errors={engine.errors} result={result} onChange={onParamChange} onScenarioChange={onScenarioChange} />
 
       <section aria-labelledby="items-heading" className="space-y-2">
         <div className="flex flex-wrap items-center gap-3">
-          <h2 id="items-heading" className="text-sm font-semibold text-slate-800">Dòng hàng <span className="font-normal text-slate-400">({draft.items.length})</span></h2>
+          <h2 id="items-heading" className="text-sm font-semibold text-slate-800">
+            Dòng hàng <span className="font-normal text-slate-400">({draft.items.length}){multiple && ` · đang xem ${active.label}`}</span>
+          </h2>
           <p className="hidden text-xs text-slate-400 md:block">Enter / ↑↓ để chuyển dòng · dán nhiều ô từ Excel để điền nhanh</p>
           <div className="ml-auto flex items-center gap-2">
             <ToggleChip pressed={showCosts} onClick={() => setShowCosts((v) => !v)}>Chi phí chi tiết</ToggleChip>
@@ -269,6 +346,7 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
         ) : (
           <ItemsTable
             draft={draft}
+            scenarioId={active.id}
             result={result}
             errors={engine.errors}
             targetMarginPct={targetMargin}
@@ -288,6 +366,8 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
             <span className="text-red-600">Sửa {invalidInputs} ô nhập chưa hợp lệ trước khi lưu.</span>
           ) : dirty ? (
             "Bạn có thay đổi chưa lưu."
+          ) : multiple ? (
+            <>Quotation dùng phương án <strong className="font-semibold text-slate-700">{chosenLabel}</strong></>
           ) : (
             <>Trọng lượng {fmtNum(result.totals.weightKg, 1)} kg · {fmtNum(result.totals.qty, 0)} đơn vị</>
           )}
@@ -308,7 +388,8 @@ export function CbuWorkspace({ rfqId, initialType }: { rfqId: string; initialTyp
       <FinalizeDialog
         open={finalizeOpen}
         onOpenChange={setFinalizeOpen}
-        result={result}
+        result={chosenResult}
+        scenarioLabel={multiple ? chosenLabel : undefined}
         blockers={blockers}
         serverReasons={serverReasons}
         busy={busy === "finalize"}

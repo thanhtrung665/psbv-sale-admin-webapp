@@ -88,4 +88,31 @@ const ok = (name, cond, extra = "") => { console.log(`${cond ? "PASS" : "FAIL"} 
   });
   ok("legacy alias 200 and ignores forged totals", alias.status === 200 && alias.json.sheet.result.totals.revenueVnd === 890800000, `status→${alias.json.status}`);
   ok("finalized RFQ falls back to CBU_PENDING_ADMIN on a draft save", alias.json.status === "CBU_PENDING_ADMIN");
+
+  // 9. scenarios: Air (base) + Sea over the same lines (AC0084 workbook)
+  const scen = await call("PUT", "/api/rfq/r1/cbu", {
+    params: { targetMarginPct: 25 },
+    items: [{ id: "r1-l1", marginPctOverride: null, dutyPct: 0 }],
+    scenarios: [
+      { id: "air", label: "Air" },
+      { id: "sea", label: "Sea", overrides: { logistics: { freightFixedUsd: 800, freightRatePerKg: 0, chargeableKg: 0 } } },
+    ],
+    chosenScenarioId: "sea",
+  });
+  ok("scenarios PUT 200", scen.status === 200, JSON.stringify(scen.json).slice(0, 100));
+  const [sa, ss] = scen.json.sheet?.scenarios ?? [];
+  ok("Air = 890,800,000 ₫ and Sea = 778,800,000 ₫ (Excel blocks)", sa?.result.totals.revenueVnd === 890800000 && ss?.result.totals.revenueVnd === 778800000);
+  ok("Air − Sea = 112,000,000 ₫ (workbook 'Revenue difference')", sa && ss && sa.result.totals.revenueVnd - ss.result.totals.revenueVnd === 112000000);
+  ok("chosen = sea: saved RFQ totals follow Sea", scen.json.sheet.chosenScenarioId === "sea" && scen.json.sheet.saved.totalRevenueVnd === 778800000, String(scen.json.sheet.saved.totalRevenueVnd));
+  const legacyView = (await call("GET", "/api/rfq/r1")).json;
+  ok("what the Quotation reads (item price / totals) = the CHOSEN scenario (6.41, not 7.10)", legacyView.items[0].ddpPriceUsd === 6.41 && legacyView.totalRevenueVnd === 778800000, `${legacyView.items[0].ddpPriceUsd}`);
+  ok("flat freight columns keep the BASE (Air) scenario", legacyView.freightFixed === 500 && legacyView.freightRatePerKg === 2.5, `${legacyView.freightFixed}/${legacyView.freightRatePerKg}`);
+  const again = (await call("GET", "/api/rfq/r1/cbu")).json.sheet;
+  ok("reload returns the same scenarios and chosen id", JSON.stringify(again.scenarios) === JSON.stringify(scen.json.sheet.scenarios) && again.chosenScenarioId === "sea");
+  const badChosen = await call("PUT", "/api/rfq/r1/cbu", { chosenScenarioId: "zzz" });
+  ok("400 for a chosen scenario that does not exist", badChosen.status === 400, String(badChosen.status));
+  const dup = await call("PUT", "/api/rfq/r1/cbu", { scenarios: [{ id: "a", label: "A" }, { id: "a", label: "B" }] });
+  ok("400 for duplicated scenario ids", dup.status === 400, String(dup.status));
+  const finSea = await call("POST", "/api/rfq/r1/cbu/finalize", { chosenScenarioId: "air" });
+  ok("finalize with the other scenario chosen → QUOTATION_DRAFTED, totals = Air", finSea.status === 200 && finSea.json.sheet.saved.totalRevenueVnd === 890800000, String(finSea.status));
 })().catch((e) => { console.error("ERROR", e); process.exit(1); });

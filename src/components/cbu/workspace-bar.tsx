@@ -114,9 +114,12 @@ interface BarProps {
   dirty: boolean;
   savedAt: string | null;
   busy: boolean;
+  /** Set when the sheet has several scenarios: which one the KPIs and the table show. */
+  scenarioLabel?: string;
+  scenarioChosen?: boolean;
 }
 
-export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, rfqId }: BarProps) {
+export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, rfqId, scenarioLabel, scenarioChosen }: BarProps) {
   const t = result.totals;
   const hasRevenue = t.revenueUsd > 0;
   const tone = marginTone(t.marginPct, hasRevenue, targetMarginPct);
@@ -153,6 +156,11 @@ export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, statu
 
       <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3" aria-live="polite">
         <ModeSwitch mode={mode} onChange={onModeChange} disabled={busy} />
+        {scenarioLabel && (
+          <span className="self-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700" title="Phương án đang xem — KPI và bảng bên dưới theo phương án này">
+            Đang xem: {scenarioLabel}{scenarioChosen ? " ✓ dùng cho Quotation" : ""}
+          </span>
+        )}
         <Kpi label="Doanh thu" value={<>{fmtVnd(t.revenueVnd)} <span className="text-xs font-normal text-slate-400">₫</span></>} sub={fmtUsd(t.revenueUsd)} />
         <Kpi label="Giá vốn" value={fmtUsd(t.costUsd)} sub={`Hàng ${fmtUsd(t.materialUsd)}`} />
         <Kpi label="Margin" value={hasRevenue ? fmtPct(t.marginPct) : "—"} sub={hasRevenue ? `Lãi ${fmtUsd(t.marginUsd)}` : undefined} tone={TONE_TEXT[tone]} />

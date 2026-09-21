@@ -8,7 +8,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { calculateCbu } from "../../../src/lib/cbu";
 import { CBU_DEFAULTS } from "../../../src/lib/cbu/defaults";
 import type { CbuSheet } from "../../../src/lib/cbu/db/service";
-import { draftToEngine, sheetToDraft, type Draft } from "../../../src/lib/cbu/ui/draft";
+import { addScenario, draftToEngine, setChosen, setItemValue, sheetToDraft, type Draft } from "../../../src/lib/cbu/ui/draft";
+import { ScenarioCompare } from "../../../src/components/cbu/scenario-compare";
+import { ScenarioTabs } from "../../../src/components/cbu/scenario-tabs";
 import { ItemsTable } from "../../../src/components/cbu/items-table";
 import { ParamsPanel } from "../../../src/components/cbu/params-panel";
 import { ChecksBadge, ModeSwitch } from "../../../src/components/cbu/workspace-bar";
@@ -29,6 +31,8 @@ function sheet(): CbuSheet {
       materialUsd: r.materialUsd, totalWeightLb: r.totalWeightLb, dutyPct: r.dutyPct,
       marginPctOverride: null, marginUsdOverride: null, ddpPriceUsdInput: null, savedDdpPriceUsd: null,
     })),
+    scenarios: [{ id: "air", label: "Air", logistics: { ...CBU_DEFAULTS.logistics, freightFixedUsd: l.freightFixedUsd, freightRatePerKg: l.freightRatePerKg, chargeableKg: l.chargeableKg, clearanceUsd: l.clearanceUsd, inlandUsd: l.inlandUsd }, prices: {}, result: {} as CbuSheet["result"] }],
+    chosenScenarioId: "air",
     result: {} as CbuSheet["result"],
     saved: { calculatedAt: null, totalCostUsd: null, totalRevenueUsd: null, totalRevenueVnd: null, totalMarginUsd: null, actualMarginPct: null },
   };
@@ -39,7 +43,7 @@ function table(draft: Draft, over: Partial<React.ComponentProps<typeof ItemsTabl
   const result = calculateCbu(e.lines, e.params);
   return renderToStaticMarkup(
     h(ItemsTable, {
-      draft, result, errors: e.errors, targetMarginPct: 25, showCosts: false, showOverrides: false,
+      draft, scenarioId: draft.chosenId, result, errors: e.errors, targetMarginPct: 25, showCosts: false, showOverrides: false,
       expanded: new Set<string>(), onToggleExpanded: () => {}, onItemChange: () => {}, onPasteBlock: () => false, ...over,
     })
   );
@@ -64,7 +68,7 @@ describe("ItemsTable", () => {
   it("PRICE_INPUT: the price becomes an input and the override columns disappear", () => {
     const draft = sheetToDraft(sheet());
     draft.mode = "PRICE_INPUT";
-    draft.items[0].ddpPriceUsdInput = "7.1";
+    Object.assign(draft, setItemValue(draft, "air", "l1", "ddpPriceUsdInput", "7.1"));
     const html = table(draft, { showOverrides: true });
     expect(html).toContain("Giá bán nhập");
     expect(html).not.toContain("Margin riêng");
@@ -74,7 +78,7 @@ describe("ItemsTable", () => {
   it("a line below cost is marked as a loss; a missing weight shows a warning marker", () => {
     const draft = sheetToDraft(sheet());
     draft.mode = "PRICE_INPUT";
-    draft.items[0].ddpPriceUsdInput = "1";
+    Object.assign(draft, setItemValue(draft, "air", "l1", "ddpPriceUsdInput", "1"));
     draft.items[1].totalWeightLb = "";
     const html = table(draft);
     expect(html).toContain("bg-red-50/50");
@@ -97,7 +101,7 @@ describe("ItemsTable", () => {
 describe("ParamsPanel", () => {
   const render = (draft: Draft) => {
     const e = draftToEngine(draft);
-    return renderToStaticMarkup(h(ParamsPanel, { draft, errors: e.errors, result: calculateCbu(e.lines, e.params), onChange: () => {} }));
+    return renderToStaticMarkup(h(ParamsPanel, { draft, scenario: draft.scenarios[0], errors: e.errors, result: calculateCbu(e.lines, e.params), onChange: () => {}, onScenarioChange: () => {} }));
   };
 
   it("opens the everyday sections, keeps policy / advanced collapsed behind a 'Mặc định' badge", () => {
@@ -136,5 +140,46 @@ describe("small pieces", () => {
     const html = renderToStaticMarkup(h(NumCell, { value: "1", onChange: () => {}, label: "Giá gốc — dòng 3", row: 2, col: 1 }));
     expect(html).toContain('aria-label="Giá gốc — dòng 3"');
     expect(html).toContain('data-cell="2:1"');
+  });
+});
+
+describe("ScenarioTabs / ScenarioCompare", () => {
+  const two = () => {
+    const { draft } = addScenario(sheetToDraft(sheet()), "air")!;
+    const named = { ...draft, scenarios: draft.scenarios.map((x, i) => ({ ...x, label: i === 0 ? "Air" : "Sea" })) };
+    return setChosen(named, "s2");
+  };
+
+  it("tabs: one per scenario, the chosen one is marked, the active one is selected, add/remove are offered", () => {
+    const d = two();
+    const html = renderToStaticMarkup(h(ScenarioTabs, { scenarios: d.scenarios, activeId: "air", chosenId: d.chosenId, onSelect() {}, onAdd() {}, onRename() {}, onRemove() {} }));
+    expect(html).toContain("Air");
+    expect(html).toContain("Sea");
+    expect(html).toMatch(/aria-selected="true"[^>]*>Air/);
+    expect(html).toContain("Dùng cho Quotation"); // check mark on the chosen (Sea)
+    expect(html).toContain("Thêm phương án");
+    expect(html).toContain("Xoá phương án Air");
+  });
+
+  it("tabs: a single scenario has no remove button and no 'chosen' mark", () => {
+    const d = sheetToDraft(sheet());
+    const html = renderToStaticMarkup(h(ScenarioTabs, { scenarios: d.scenarios, activeId: "air", chosenId: "air", onSelect() {}, onAdd() {}, onRename() {}, onRemove() {} }));
+    expect(html).not.toContain("Xoá phương án");
+    expect(html).not.toContain("Dùng cho Quotation");
+  });
+
+  it("compare: every scenario side by side, the chosen one flagged, the difference in dong", () => {
+    const d = two();
+    const results: Record<string, ReturnType<typeof calculateCbu>> = {};
+    for (const sc of d.scenarios) {
+      const e = draftToEngine(d, sc.id);
+      results[sc.id] = calculateCbu(e.lines, e.params);
+    }
+    const html = renderToStaticMarkup(h(ScenarioCompare, { scenarios: d.scenarios, results, chosenId: "s2", activeId: "air", targetMarginPct: 25, onChoose() {}, onView() {} }));
+    expect(html).toContain("So sánh phương án");
+    expect(html).toContain("Dùng cho Quotation"); // Sea is chosen
+    expect(html).toContain("Chọn phương án này"); // Air can be chosen
+    expect(html).toContain("890.800.000"); // both scenarios are identical here (Sea is a copy of Air)
+    expect(html).toContain("Chênh lệch doanh thu");
   });
 });

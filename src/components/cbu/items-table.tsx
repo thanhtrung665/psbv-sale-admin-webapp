@@ -3,13 +3,15 @@
 import * as React from "react";
 import { ChevronRightIcon, TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { editableColumns, itemErrorKey, type Draft, type FieldErrors, type ItemField } from "@/lib/cbu/ui/draft";
+import { editableColumns, getItemValue, itemErrorKey, priceErrorKey, type Draft, type FieldErrors, type ItemField } from "@/lib/cbu/ui/draft";
 import { fmtNum, fmtPct, fmtUsd, fmtVnd, marginTone, type MarginTone } from "@/lib/cbu/ui/format";
 import type { CbuLineResult, CbuResult } from "@/lib/cbu/types";
 import { NumCell } from "./num-cell";
 
 interface Props {
   draft: Draft;
+  /** The scenario whose prices are shown / typed in PRICE_INPUT. */
+  scenarioId: string;
   result: CbuResult;
   errors: FieldErrors;
   targetMarginPct: number;
@@ -31,7 +33,7 @@ const TONE_CLASS: Record<MarginTone, string> = {
 const th = "px-2 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 whitespace-nowrap";
 const tdNum = "px-2 py-1.5 text-right font-mono text-[13px] tabular-nums";
 
-export function ItemsTable({ draft, result, errors, targetMarginPct, showCosts, showOverrides, expanded, onToggleExpanded, onItemChange, onPasteBlock }: Props) {
+export function ItemsTable({ draft, scenarioId, result, errors, targetMarginPct, showCosts, showOverrides, expanded, onToggleExpanded, onItemChange, onPasteBlock }: Props) {
   const mode = draft.mode;
   const columns = editableColumns(mode, showOverrides);
   const colOf = (f: ItemField) => columns.indexOf(f);
@@ -93,10 +95,10 @@ export function ItemsTable({ draft, result, errors, targetMarginPct, showCosts, 
             const open = expanded.has(item.id);
             const hasPrice = line.ddpPriceUsd > 0;
             const tone = marginTone(line.marginPct, hasPrice, targetMarginPct);
-            const err = (f: ItemField) => errors[itemErrorKey(item.id, f)];
+            const err = (f: ItemField) => errors[f === "ddpPriceUsdInput" ? priceErrorKey(scenarioId, item.id) : itemErrorKey(item.id, f)];
             const cell = (f: ItemField, label: string, placeholder?: string) => (
               <NumCell
-                value={item[f]}
+                value={getItemValue(draft, scenarioId, item, f)}
                 onChange={(v) => onItemChange(item.id, f, v)}
                 label={`${label} — dòng ${item.lineNo}`}
                 error={err(f)}

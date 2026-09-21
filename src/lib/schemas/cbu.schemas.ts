@@ -83,12 +83,28 @@ export const cbuItemEditSchema = z.object({
   ddpPriceUsdInput: money.nullable().optional(),
 });
 
+/**
+ * A scenario = one logistics option over the SAME lines (Air / Sea). The FIRST scenario is the base: its logistics
+ * live in `params.logistics` (flat RFQ columns), so its `overrides` are ignored. Later scenarios store only what
+ * differs. Only `logistics` may vary per scenario for now. `prices` = the typed DDP price per line id (PRICE_INPUT).
+ */
+export const cbuScenarioSchema = z.object({
+  id: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/, "Mã kịch bản chỉ gồm chữ, số, - và _ (tối đa 32 ký tự)"),
+  label: z.string().trim().min(1).max(40),
+  overrides: z.object({ logistics: logisticsSchema.optional() }).optional(),
+  prices: z.record(z.string().min(1).max(64), money).optional(),
+});
+
 /** Body of `PUT /api/rfq/[id]/cbu` and `POST /api/rfq/[id]/cbu/finalize`: INPUTS only. */
 export const saveCbuSchema = z
   .object({
     mode: cbuModeSchema.optional(),
     params: cbuParamsSchema.optional(),
     items: z.array(cbuItemEditSchema).max(1000).optional(),
+    /** Omit to keep the stored scenarios; give the full list to add / remove / rename / re-price them. */
+    scenarios: z.array(cbuScenarioSchema).min(1).max(4).optional(),
+    /** The scenario priced into the saved item prices and RFQ totals (what the Quotation reads). */
+    chosenScenarioId: cbuScenarioSchema.shape.id.optional(),
   })
   .superRefine((body, ctx) => {
     const seen = new Set<string>();
@@ -98,6 +114,14 @@ export const saveCbuSchema = z
       }
       seen.add(it.id);
     });
+    const ids = new Set<string>();
+    (body.scenarios ?? []).forEach((s, index) => {
+      if (ids.has(s.id)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["scenarios", index, "id"], message: `Kịch bản bị lặp: ${s.id}` });
+      ids.add(s.id);
+    });
+    if (body.scenarios && body.chosenScenarioId && !ids.has(body.chosenScenarioId)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["chosenScenarioId"], message: "Kịch bản được chọn không nằm trong danh sách" });
+    }
   });
 
 export type CbuParamsBody = z.infer<typeof cbuParamsSchema>;

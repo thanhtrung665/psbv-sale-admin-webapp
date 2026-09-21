@@ -1,19 +1,20 @@
 // src/lib/cbu/db/service.ts
 // Load / save a CBU sheet. The SERVER decides the numbers: it reads the stored inputs, applies the client's
-// edits, runs the engine and persists the result. Nothing the client computed is ever written (SPEC §11.6-5).
+// edits, runs the engine once per scenario and persists the CHOSEN scenario's result. Nothing the client computed
+// is ever written (SPEC §11.6-5).
 //
 // The Prisma client is injected so the whole flow (including "save → reload gives the same sheet") is tested
 // against an in-memory fake without a database.
 
 import type { PrismaClient } from "@prisma/client";
 import { calculateCbu } from "../index";
+import { finalizeBlockers } from "../finalize";
 import { resolveParams } from "../params";
-import type { CbuLineInput, CbuMode, CbuParams, CbuResult } from "../types";
+import type { CbuLineInput, CbuMode, CbuParams, CbuResult, LogisticsParams } from "../types";
 import type { SaveCbuInput } from "../../schemas/cbu.schemas";
 import { blocked, notFound } from "./errors";
 import {
   buildLines,
-  finalizeBlockers,
   itemUpdateData,
   mergeParams,
   nextStatus,
@@ -21,7 +22,9 @@ import {
   paramsFromRfq,
   rfqUpdateData,
   type CbuAction,
+  type CbuConfig,
 } from "./mapping";
+import { pricesToPersist, resolveScenarios, scenarioLines, scenarioParams, type ScenarioState } from "./scenarios";
 
 export type CbuDb = Pick<PrismaClient, "rFQ" | "rFQItem" | "$transaction">;
 
@@ -38,9 +41,20 @@ export interface CbuSheetItem {
   dutyPct: number;
   marginPctOverride: number | null;
   marginUsdOverride: number | null;
+  /** The typed price of the CHOSEN scenario (per-scenario prices are in `scenarios[].prices`). */
   ddpPriceUsdInput: number | null;
   /** The price stored in the database (may differ from `result` when the sheet was saved by the pre-v2 engine). */
   savedDdpPriceUsd: number | null;
+}
+
+export interface CbuSheetScenario {
+  id: string;
+  label: string;
+  /** Effective logistics of this scenario (base + overrides). */
+  logistics: LogisticsParams;
+  /** Typed DDP price per line id (PRICE_INPUT). */
+  prices: Record<string, number>;
+  result: CbuResult;
 }
 
 export interface CbuSheet {
@@ -55,10 +69,12 @@ export interface CbuSheet {
   };
   profile: string;
   mode: CbuMode;
-  /** Fully resolved parameters (defaults applied). */
+  /** Base parameters = the FIRST scenario's effective params (defaults applied). */
   params: CbuParams;
   items: CbuSheetItem[];
-  /** Recomputed from the stored inputs on every load — never a stale copy. */
+  scenarios: CbuSheetScenario[];
+  chosenScenarioId: string;
+  /** The CHOSEN scenario's result, recomputed from the stored inputs on every load — never a stale copy. */
   result: CbuResult;
   saved: {
     calculatedAt: string | null;
@@ -86,7 +102,33 @@ async function readRfq(db: CbuDb, rfqId: string) {
 
 type RfqWithItems = Awaited<ReturnType<typeof readRfq>>;
 
-function toSheet(rfq: RfqWithItems, params: CbuParams, lines: CbuLineInput[], result: CbuResult): CbuSheet {
+interface ScenarioRun {
+  scenario: ScenarioState;
+  params: CbuParams;
+  lines: CbuLineInput[];
+  result: CbuResult;
+  /** Prices to persist / show for this scenario. */
+  prices: Record<string, number>;
+}
+
+function compute(rfq: RfqWithItems, input?: SaveCbuInput) {
+  const baseInput = mergeParams(paramsFromRfq(rfq), { ...(input?.params ?? {}), ...(input?.mode ? { mode: input.mode } : {}) });
+  const baseParams = resolveParams(baseInput);
+  const lines = buildLines(rfq.items, input?.items);
+  const stored = normalizeCbuConfig(rfq.cbuConfig);
+  const { scenarios, chosenId } = resolveScenarios(stored, { ...input, items: input?.items }, lines);
+
+  const runs: ScenarioRun[] = scenarios.map((scenario, i) => {
+    const params = scenarioParams(baseInput, scenario, i);
+    const sLines = scenarioLines(lines, scenario);
+    return { scenario, params, lines: sLines, result: calculateCbu(sLines, params), prices: pricesToPersist(scenario, sLines, baseParams.mode === "PRICE_INPUT") };
+  });
+  const chosen = runs.find((r) => r.scenario.id === chosenId) as ScenarioRun;
+  return { baseParams, lines, runs, chosen };
+}
+
+function toSheet(rfq: RfqWithItems, c: ReturnType<typeof compute>): CbuSheet {
+  const { baseParams, runs, chosen } = c;
   return {
     rfq: {
       id: rfq.id,
@@ -98,24 +140,26 @@ function toSheet(rfq: RfqWithItems, params: CbuParams, lines: CbuLineInput[], re
       clientName: rfq.client?.companyName ?? rfq.client?.name ?? null,
     },
     profile: rfq.cbuProfile ?? "DDP_IMPORT",
-    mode: params.mode,
-    params,
+    mode: baseParams.mode,
+    params: baseParams,
     items: rfq.items.map((item, i) => ({
       id: item.id,
       lineNo: item.lineNo,
       rawPartNumber: item.rawPartNumber,
       rawDescription: item.rawDescription ?? "",
       uom: item.uom,
-      qty: lines[i].qty,
-      materialUsd: lines[i].materialUsd,
-      totalWeightLb: lines[i].totalWeightLb,
-      dutyPct: lines[i].dutyPct ?? 0,
-      marginPctOverride: lines[i].marginPctOverride ?? null,
-      marginUsdOverride: lines[i].marginUsdOverride ?? null,
-      ddpPriceUsdInput: lines[i].ddpPriceUsdInput ?? null,
+      qty: chosen.lines[i].qty,
+      materialUsd: chosen.lines[i].materialUsd,
+      totalWeightLb: chosen.lines[i].totalWeightLb,
+      dutyPct: chosen.lines[i].dutyPct ?? 0,
+      marginPctOverride: chosen.lines[i].marginPctOverride ?? null,
+      marginUsdOverride: chosen.lines[i].marginUsdOverride ?? null,
+      ddpPriceUsdInput: chosen.prices[item.id] ?? null,
       savedDdpPriceUsd: item.ddpPriceUsd ?? null,
     })),
-    result,
+    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, logistics: r.params.logistics, prices: r.prices, result: r.result })),
+    chosenScenarioId: chosen.scenario.id,
+    result: chosen.result,
     saved: {
       calculatedAt: rfq.cbuCalculatedAt ? rfq.cbuCalculatedAt.toISOString() : null,
       totalCostUsd: rfq.totalCostUsd ?? null,
@@ -128,25 +172,16 @@ function toSheet(rfq: RfqWithItems, params: CbuParams, lines: CbuLineInput[], re
   };
 }
 
-function compute(rfq: RfqWithItems, input?: SaveCbuInput) {
-  const params = resolveParams(
-    mergeParams(paramsFromRfq(rfq), { ...(input?.params ?? {}), ...(input?.mode ? { mode: input.mode } : {}) })
-  );
-  const lines = buildLines(rfq.items, input?.items);
-  const result = calculateCbu(lines, params);
-  return { params, lines, result };
-}
-
-/** Current sheet: stored inputs + a fresh server-side calculation. */
+/** Current sheet: stored inputs + a fresh server-side calculation of every scenario. */
 export async function loadCbuSheet(db: CbuDb, rfqId: string): Promise<CbuSheet> {
   const rfq = await readRfq(db, rfqId);
-  const { params, lines, result } = compute(rfq);
-  return toSheet(rfq, params, lines, result);
+  return toSheet(rfq, compute(rfq));
 }
 
 /**
- * Apply `input` on top of the stored sheet, recalculate on the server and persist.
- * `finalize` additionally requires every self-check to pass and every line to be priced and weighed.
+ * Apply `input` on top of the stored sheet, recalculate every scenario on the server and persist.
+ * The CHOSEN scenario's result becomes the item prices / RFQ totals. `finalize` additionally requires that scenario
+ * to pass every self-check and to have every line priced and weighed.
  */
 export async function saveCbuSheet(
   db: CbuDb,
@@ -156,21 +191,27 @@ export async function saveCbuSheet(
   now: Date = new Date()
 ): Promise<CbuSaveOutcome> {
   const rfq = await readRfq(db, rfqId);
-  const { params, lines, result } = compute(rfq, input);
+  const c = compute(rfq, input);
+  const { baseParams, lines, runs, chosen } = c;
 
   if (action === "finalize") {
-    const reasons = finalizeBlockers(lines, result);
+    const reasons = finalizeBlockers(chosen.lines, chosen.result);
     if (reasons.length > 0) throw blocked("Chưa thể hoàn tất CBU.", reasons);
   }
 
   const { status, note } = nextStatus(rfq.status, action);
-  const config = normalizeCbuConfig(rfq.cbuConfig);
+  const config: CbuConfig = {
+    schemaVersion: 1,
+    chosenScenarioId: chosen.scenario.id,
+    scenarios: runs.map((r) => ({ id: r.scenario.id, label: r.scenario.label, overrides: r.scenario.overrides, prices: r.prices })),
+  };
 
   await db.$transaction([
     ...rfq.items.map((item, i) =>
-      db.rFQItem.update({ where: { id: item.id }, data: itemUpdateData(item, lines[i], result.lines[i], params) })
+      db.rFQItem.update({ where: { id: item.id }, data: itemUpdateData(item, lines[i], chosen.result.lines[i], chosen.params) })
     ),
-    db.rFQ.update({ where: { id: rfqId }, data: rfqUpdateData({ params, result, status, config, now }) }),
+    // Flat columns = the base (first) scenario; totals and item prices = the chosen scenario.
+    db.rFQ.update({ where: { id: rfqId }, data: rfqUpdateData({ params: baseParams, result: chosen.result, status, config, now }) }),
   ]);
 
   // Re-read so the response is exactly what a later load returns (save → reload must match).

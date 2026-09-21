@@ -3,21 +3,17 @@
 import * as React from "react";
 import { ChevronDownIcon, RotateCcwIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  defaultAsString,
-  isParamModified,
-  paramErrorKey,
-  type Draft,
-  type FieldErrors,
-  type ParamField,
-} from "@/lib/cbu/ui/draft";
+import { defaultAsString, type ParamField } from "@/lib/cbu/ui/draft";
 
 // ─── One parameter input ──────────────────────────────────────────────────────
 
 interface ParamInputProps {
   field: ParamField;
-  draft: Draft;
-  errors: FieldErrors;
+  /** The text in the input (the caller decides where it lives: shared params or a scenario). */
+  value: string;
+  error?: string;
+  /** Differs from the engine default — shows the "Đã sửa" reset button. Omit for fields without a default badge. */
+  modified?: boolean;
   onChange: (path: string, value: string) => void;
   /** Show the hint as a visible line (used in the always-open sections). */
   showHint?: boolean;
@@ -25,11 +21,9 @@ interface ParamInputProps {
 
 const UNIT_LABEL: Record<string, string> = { "%": "%", $: "$", kg: "kg", "₫": "₫", ngày: "ngày", x: "×", "": "" };
 
-export function ParamInput({ field, draft, errors, onChange, showHint }: ParamInputProps) {
-  const id = `param-${field.path.replace(/\./g, "-")}`;
-  const value = draft.params[field.path] ?? "";
-  const error = errors[paramErrorKey(field.path)];
-  const modified = isParamModified(draft, field);
+export function ParamInput({ field, value, error, modified, onChange, showHint }: ParamInputProps) {
+  const uid = React.useId().replace(/:/g, "");
+  const id = `param-${field.path.replace(/\./g, "-")}-${uid}`;
   const unit = UNIT_LABEL[field.unit];
 
   const inputClass = cn(

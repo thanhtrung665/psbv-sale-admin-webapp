@@ -130,7 +130,7 @@ Cùng lý do lệch migration: `prisma/migrations` trước đây chưa từng t
 
 ### Lệnh hữu ích
 ```bash
-npm test -- --runInBand          # 16 suite / 334 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
+npm test -- --runInBand          # 21 suite / 366 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
 node scripts/verify-missing-models-migration.mjs  # kiểm chứng migration 6 model thiếu (không cần DB)
 node scripts/verify-fk-indexes-migration.mjs  # kiểm chứng migration index cho 7 cột FK (không cần DB)

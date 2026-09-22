@@ -28,7 +28,7 @@ $ git log --oneline 0b02859..HEAD
 ### 2.1 Cập nhật so với bảng "Key Features" trong SPEC.md §5.1
 
 | Feature | SPEC.md ghi | Thực tế hôm nay | Ghi chú |
-|---------|:-----------:|:----------------:|---------|
+| --------- | :-----------: | :----------------: | --------- |
 | Tiếp nhận Inquiry (AI parse) | ✅ | ✅ | `lib/gemini-inquiry.ts` hoạt động |
 | Gửi RFO cho hãng | ✅ | ✅ | |
 | Bóc tách Quote (AI) | ✅ | ✅ | `lib/gemini-quote.ts` |
@@ -57,7 +57,7 @@ Tất cả các mục dưới đây đã được **kiểm chứng lại trực 
 ### 3.1 Vẫn còn nguyên — 6/6 lỗi P0
 
 | ID | Vấn đề | Verify hôm nay |
-|----|--------|-----------------|
+| ---- | -------- | ----------------- |
 | P0-1 | Open proxy/SSRF ở `api/download-pdf/route.ts` | ✅ Còn nguyên — code vẫn `fetch(url)` không auth, không allow-list |
 | P0-2 | `api/pdf/split-cipl/route.ts` không xác thực | ✅ Còn nguyên — grep `getServerSession` → 0 kết quả |
 | P0-3 | Mass assignment `PATCH /api/rfq/[id]` | ✅ Còn nguyên — `data: body` đi thẳng vào Prisma, dòng 117 |
@@ -114,7 +114,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] Backup DB + sinh migration cho 7 model thiếu (`Task`, `AiConfig`, `MasterPart`, `Supplier`, `CiplRecord`, `CiplItem`, `TaskStatus`)
 - [ ] Bổ sung `SUPABASE_SERVICE_ROLE_KEY`, bỏ fallback base64-vào-DB
 - [ ] Rate limiting cho route AI (`parse-*`, `cipl/extract`)
-- [ ] Sửa `unit_price`/`amount` sai trong payload quotation PDF (P2-5)
+- [x] Sửa `unit_price`/`amount` sai trong payload quotation PDF (P2-5) — *xong 22/09 trong CBU Phase C5, xem §6.3*
 
 ### SPRINT 2 — Kiến trúc & chất lượng (5 ngày) — **CHƯA BẮT ĐẦU**
 
@@ -152,7 +152,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 
 ## 6. CBU Module v2 — Tính lại logic & dựng lại giao diện
 
-**Cập nhật:** 22/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C2 xong · ✅ C3 xong (giao diện mới **kèm kịch bản Air/Sea + so sánh**) · ✅ C4 xong (**Baker Hughes / FCA_DAP**) · **Migration bước 1 đã áp lên DB thật (22/09); bước 2 chờ deploy code** · ⏳ C5 chưa làm
+**Cập nhật:** 22/09/2026 · **Đặc tả đầy đủ:** `SPEC.md` §11 · **Trạng thái tổng:** ✅ C0–C2 xong · ✅ C3 xong (giao diện mới **kèm kịch bản Air/Sea + so sánh**) · ✅ C4 xong (**Baker Hughes / FCA_DAP**) · ✅ **C5 xong** (payload Quotation PDF sửa, code cũ đã xoá) · **Migration bước 1 đã áp lên DB thật (22/09); bước 2 chờ deploy code**
 
 ### 6.1 Việc đã làm (chỉ phân tích + tài liệu)
 
@@ -166,7 +166,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 ### 6.2 Phát hiện chính (chi tiết ở SPEC §11.2)
 
 | # | Vấn đề | Mức | Nguồn xác nhận |
-|---|--------|:---:|----------------|
+| --- | -------- | :---: | ---------------- |
 | F1 | Phân bổ logistics sai (Σ phân bổ 14.78 vs pool 4,253) — `netWeightLbs` dùng 2 nghĩa | 🔴 | Đã chạy |
 | F2 | `pct()` tự đoán đơn vị: duty 1%→100%, bank fee ×39, insurance 253 vs 15 | 🔴 | Đã chạy |
 | F2b | F1 & F2 triệt tiêu ở mức tổng (+0.8%) nên che lỗi; giá dòng 1: 7.49 vs 7.10 | 🔴 | Đã chạy |
@@ -239,7 +239,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [x] `finalizeBlockers` tách thành module thuần `src/lib/cbu/finalize.ts`: server (quyết định) và giao diện (kiểm tra trước) dùng chung một quy tắc; `sheet.rfq.clientName` được thêm vào GET
 - [x] Kiểm chứng: 233 test pass (thêm 50 ở 2 suite mới: logic draft/format và render component); `tsc` 0 lỗi; `next build` thành công; `GET /rfq/[id]/cbu-calc` cả mới lẫn `?legacy=1` render 200 trên sandbox
 - [x] **Sandbox cục bộ** `npx tsx scripts/dev-cbu-sandbox.ts`: PGlite (Postgres nhúng) + toàn bộ schema + đăng nhập + 2 RFQ dựng từ AC0084, chạy `next dev` với `DATABASE_URL` **ép về localhost** (không thể chạm Supabase). `node scripts/e2e-cbu-sandbox.cjs` chạy 23 kiểm tra API end-to-end trên đó (đăng nhập, 401/400/404, lưu → tải lại, cổng finalize 422, alias cũ bỏ qua số giả mạo) — **tất cả pass** → hoàn thành mục "thử tay end-to-end" ở mức API
-- [ ] **Xem trực quan trong trình duyệt** — chưa làm: đăng nhập cần nhập mật khẩu, tôi không tự nhập trong trình duyệt. Cần người dùng đăng nhập vào sandbox (`sandbox@psbv.local` / `sandbox123` tại http://localhost:3100/login) rồi mới chụp/kiểm tra được bố cục, phản hồi khi gõ, responsive
+- [ ] **Xem trực quan trong trình duyệt** — chưa làm: đăng nhập cần nhập mật khẩu, tôi không tự nhập trong trình duyệt. Cần người dùng đăng nhập vào sandbox (`sandbox@psbv.local` / `sandbox123` tại <http://localhost:3100/login>) rồi mới chụp/kiểm tra được bố cục, phản hồi khi gõ, responsive
 - [x] **Kịch bản Air/Sea + so sánh (22/09):** mô hình ở SPEC §11.3 (kịch bản đầu = nền là cột phẳng; các kịch bản sau chỉ lưu overrides logistics; giá nhập theo kịch bản; kịch bản được chọn quyết định giá lưu trên dòng và tổng RFQ; finalize chỉ chặn theo kịch bản được chọn). Server: `src/lib/cbu/db/scenarios.ts` + `service.ts` + Zod (viết test **trước**, 20 test đỏ → xanh). UI: `scenario-tabs.tsx`, `scenario-compare.tsx`, bản nháp có kịch bản (`draft.ts`). Kiểm chứng: Air 890,800,000 ₫ / Sea 778,800,000 ₫ / chênh 112,000,000 ₫ khớp workbook; e2e trên sandbox 33/33 (thêm 10 kiểm tra kịch bản); 265 test pass; `next build` thành công
 - [ ] Tooltip công thức trên tiêu đề cột; a11y ≥ 90 (Lighthouse) chưa đo; test tương tác bằng React Testing Library (Sprint 3)
 - [ ] Nghiệm thu: RFQ mới ra giá với ≤ 8 ô nhập; mở lại RFQ thấy đúng; không cuộn lồng — *chờ xem trực quan*
@@ -256,6 +256,7 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] Xem trực quan Baker trong trình duyệt (cần đăng nhập sandbox) · Q4 (phí *receive*: rate/min/base) vẫn mở
 
 Quyết định trong C4:
+
 - Baker **tái dùng hai trường cước** của mô hình chung: `freightAllInUsd` = cước báo giá (vào tổng DAP), `freightFixedUsd` = cước theo bảng Logistic (chỉ đối chiếu, chênh ⇒ cảnh báo). Không thêm cột DB mới.
 - `quoteBasis` mặc định suy từ Incoterm RFQ (`DAP`/`DDP` ⇒ DAP; còn lại FCA); người dùng đổi được ở giao diện.
 - Trọng lượng, thuế, hoa hồng, CIT, bảo hiểm **ẩn** ở Baker (không có trong workbook). `fx` và `vndRoundingStep` phải là tham số dùng chung (không ẩn): khi ẩn, trình duyệt tính bằng giá trị mặc định còn server dùng giá trị của RFQ ⇒ tổng VND lệch — bắt được nhờ test "trình duyệt tính đúng như server".
@@ -263,10 +264,17 @@ Quyết định trong C4:
 - **Tên chỉ số = tiếng Anh đúng như workbook** (yêu cầu của người dùng sau C4): cột `Material Cost` / `Unit Cost` / `DDP Price (USD|VND)` / `Sales Price` / `% Margin`…, tham số `Target margin (m)`, `% Value financed`, `Credit (days)` (Baker)…, KPI `Total Revenue (VND)`, `Incoterm 1 — FCA`, `TOTAL BANK FEE`, tên các dòng CHECK. Riêng vài tên workbook không có sẵn nên đặt theo cùng phong cách: `FREIGHT (USD) all-in`, `Freight (quoted)`, `Other logistics (USD)`, `Sales Price × Q'ty (excl. freight)`. Kịch bản Baker: `Payment with Order` / `Net 60 Days`.
 - Chạy Jest bằng `--runInBand` khi máy ít RAM: nhiều worker song song từng bị "Jest worker ran out of memory" (nguyên nhân của lỗi chập chờn hai suite fail đã ghi ở phiên trước).
 
-#### Phase C5 · Hạ nguồn & hoàn thiện (2d) *(= P2-5)*
+#### Phase C5 · Hạ nguồn & hoàn thiện (2d) *(= P2-5)* — ✅ xong 22/09
 
-- [ ] Sửa payload Quotation PDF (`unit_price` = `ddpPriceUsd`, `amount` = × qty) theo kịch bản đã chọn
-- [ ] Xoá trang legacy + code cũ; đọc lại tài liệu
+- [x] Sửa payload Quotation PDF (`unit_price` = `ddpPriceUsd`, `amount` = × qty) — `src/app/api/rfq/generate-document/route.ts`. Bug cũ: `unit_price` chia `ddpPriceUsd` (vốn đã là giá/đơn vị) cho `qty` một lần nữa, còn `amount` dùng thẳng `ddpPriceUsd` không nhân `qty` — hai lỗi ngược chiều, không triệt tiêu ở dòng lẻ (chỉ `totalAmount` ở đầu route tính đúng vì nó nhân `qty`). Không đụng route MVPO/CIPL (dùng `supplierUnitPrice`, không liên quan)
+- [x] Xoá trang legacy + code cũ:
+  - `cbu-calc/legacy-page.tsx` (904 dòng) + nhánh `?legacy=1` và import trong `page.tsx`; link "Giao diện cũ" trong `workspace-bar.tsx` (kéo theo dọn prop `rfqId` không dùng nữa ở `WorkspaceBar`)
+  - Adapter cũ `calculateCBU()` (`src/lib/cbu/legacy.ts`, tự ghi chú "Remove this file together with the legacy page (phase C5)") + shim gốc `lib/cbu-engine.ts`
+  - Route alias `POST /api/rfq/[id]/calculate-cbu` (chỉ phục vụ trang cũ) + `legacyBodyToSaveInput` (`src/lib/cbu/db/legacy-body.ts`) + `legacyCalculateCbuSchema`/`LegacyCalculateCbuBody` (`src/lib/schemas/cbu.schemas.ts`)
+  - `src/components/rfq/cbu-form.tsx` (433 dòng) — phát hiện thêm: không được trang nào import, đã mồ côi từ trước, dọn luôn
+  - Test đi kèm: xoá `__tests__/cbu/legacy-adapter.test.ts`; gỡ describe "legacy body → v2 input" khỏi `__tests__/schemas/cbu.schemas.test.ts`; đổi bài test "legacy page body với số giả mạo" trong `__tests__/cbu/db/service.test.ts` thành gửi thẳng body v2 có số giả mạo (giữ nguyên mục đích: chứng minh server bỏ qua số client, chỉ đổi đường vào)
+  - Cập nhật `CLAUDE.md` (cấu trúc thư mục, trạng thái CBU, mục "Modify CBU calculation", số lượng test) và `SPEC.md` §11 (banner trạng thái, bảng kế hoạch C5)
+- [x] Nghiệm thu: `npm test -- --runInBand` 14 suite / 314 test pass (327 trước đó − 8 test adapter cũ − 5 test schema cũ); `npx tsc --noEmit` 0 lỗi; `npm run lint` không thêm cảnh báo mới (chỉ còn các warning cũ không liên quan CBU); `npm run build` thành công, route `/api/rfq/[id]/calculate-cbu` không còn trong danh sách route, `cbu-calc` giảm còn 25.7 kB (không còn gộp cả 2 trang)
 
 ### 6.4 Kết quả audit giá đã lưu trên DB thật (21/09/2026, chỉ đọc)
 
@@ -281,12 +289,12 @@ Quyết định trong C4:
 
 Không chặn C1–C3 vì đã có mặc định tạm; cần trả lời trước khi chốt C4/C5:
 
-- [ ] **Q1** 4 tham số "(Bỏ)": loại thật khỏi công thức hay chỉ ẩn? *(đang giữ trong công thức)*
-- [ ] **Q2** Cơ sở tính thuế: theo Excel (Material + toàn bộ Logistics) hay CIF thực (hàng + cước quốc tế + bảo hiểm)?
-- [ ] **Q3** Named range pool trỏ cột **R (Min insurance)** thay vì **S (Insurance)** — có phải lỗi trong Excel gốc?
-- [ ] **Q4** (còn mở sau C4 — mặc định 0.05% / min $35 / base nhập tay) Baker Hughes: phí *International receive* (0.05% hay 0.005%; min $35 hay $5; base nhập tay?)
-- [ ] **Q5–Q7** Bỏ `bookingExchangeRate`/effective margin · mặc định thông quan/nội địa về 0 · Baker dùng tham số chung (lb→kg 0.4536)
-- [ ] **Q8** RFQ đã `QUOTED_TO_CLIENT` có giá lệch: giữ giá đã báo hay báo lại? *(quyết định thương mại — cấp quản lý PSBV)*
+- [ ] **Q1** 4 tham số "(Bỏ)": loại thật khỏi công thức hay chỉ ẩn? *(đang giữ trong công thức)* # Ẩn đi
+- [ ] **Q2** Cơ sở tính thuế: theo Excel (Material + toàn bộ Logistics) hay CIF thực (hàng + cước quốc tế + bảo hiểm)? # Theo CIF thực
+- [ ] **Q3** Named range pool trỏ cột **R (Min insurance)** thay vì **S (Insurance)** — có phải lỗi trong Excel gốc? # Không rõ
+- [ ] **Q4** (còn mở sau C4 — mặc định 0.05% / min $35 / base nhập tay) Baker Hughes: phí *International receive* (0.05% hay 0.005%; min $35 hay $5; base nhập tay?) # Nhập tay
+- [ ] **Q5–Q7** Bỏ `bookingExchangeRate`/effective margin · mặc định thông quan/nội địa về 0 · Baker dùng tham số chung (lb→kg 0.4536) # Mặc định thông quan/nội địa về 0 ·
+- [ ] **Q8** RFQ đã `QUOTED_TO_CLIENT` có giá lệch: giữ giá đã báo hay báo lại? *(quyết định thương mại — cấp quản lý PSBV)* # Quyết định thương mại — cấp quản lý PSBV
 
 ### 6.6 Lưu ý phối hợp với các sprint khác
 

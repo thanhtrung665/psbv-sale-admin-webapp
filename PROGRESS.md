@@ -1,6 +1,6 @@
 # PROGRESS.md — Tiến độ dự án PSBV Sales Agent Platform
 
-**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C2 đã hoàn thành về mã nguồn** (engine v2, lưu/đọc + API, migration SQL tay đã kiểm chứng; 182 test pass) — **migration chưa áp lên DB thật**
+**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C2 đã hoàn thành về mã nguồn** (engine v2, lưu/đọc + API, migration SQL tay đã kiểm chứng; 182 test pass) — **migration chưa áp lên DB thật** · **Cập nhật 22/09/2026:** CBU Module v2 Phase C0–C5 xong (§6); 4/4 lỗ hổng P0-1..P0-4 trong `SECURITY_AND_REMEDIATION.md` đã vá (§4 SPRINT 0) — chỉ còn "rotate `APITEMPLATE_API_KEY`" (thao tác trên Vercel, cần người có quyền) và rà giá RFQ đã gửi khách (Q8, thương mại) đang mở
 **Cơ sở đối soát:** `SPEC.md`, `CLAUDE.md`, `TECHNICAL_REPORT_V2.md`, `SECURITY_AND_REMEDIATION.md` (cả 3 báo cáo lập ngày 11/09/2026) so với mã nguồn thực tế tại thời điểm hôm nay.
 **Phương pháp:** Đọc trực tiếp source code + chạy lại các lệnh kiểm chứng (`npm test`, `npx tsc --noEmit`, `git log`, grep) — không suy đoán.
 
@@ -54,7 +54,7 @@ $ git log --oneline 0b02859..HEAD
 
 Tất cả các mục dưới đây đã được **kiểm chứng lại trực tiếp** hôm nay, không chỉ trích dẫn báo cáo cũ.
 
-### 3.1 Vẫn còn nguyên — 6/6 lỗi P0
+### 3.1 Vẫn còn nguyên — 6/6 lỗi P0 (ảnh chụp 18/09/2026 — xem §4 SPRINT 0 để biết trạng thái vá hiện tại: 4/4 P0-1..P0-4 đã vá 22/09, P0-5/P0-6 đã vá trong CBU v2 21/09)
 
 | ID | Vấn đề | Verify hôm nay |
 | ---- | -------- | ----------------- |
@@ -96,12 +96,12 @@ $ grep SUPABASE_SERVICE_ROLE_KEY .env
 
 Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMEDIATION.md` §7 (đã đúng, chỉ chưa ai chạy) — không cần thiết kế lại. Đây là bảng theo dõi, cập nhật trạng thái khi từng mục được làm xong.
 
-### SPRINT 0 — Vá khẩn cấp (2 ngày) — **CHƯA BẮT ĐẦU**
+### SPRINT 0 — Vá khẩn cấp (2 ngày) — **4/4 lỗ hổng P0 đã vá 22/09; phần "rà giá đã gửi khách" (thương mại) vẫn mở**
 
-- [ ] P0-2 Auth cho `split-cipl` + giới hạn 20MB
-- [ ] P0-1 Viết lại `download-pdf`: auth + allow-list host + sanitise filename (gộp luôn P1-4)
-- [ ] P0-4 Gỡ API key khỏi response lỗi `generate-pdf` + **rotate `APITEMPLATE_API_KEY`**
-- [ ] P0-3 Wire `updateRfqSchema` (đã viết sẵn, test sẵn) vào `PATCH /api/rfq/[id]`
+- [x] P0-2 Auth cho `split-cipl` + giới hạn 20MB — *xong 22/09*: thêm `getServerSession` (401 nếu chưa đăng nhập) và chặn file > 20MB (413) trước khi OCR/tách PDF
+- [x] P0-1 Viết lại `download-pdf`: auth + allow-list host + sanitise filename (gộp luôn P1-4) — *xong 22/09*: thêm `getServerSession`; `url` phải là `https:` và host khớp đúng project Supabase (`NEXT_PUBLIC_SUPABASE_URL`) — chặn SSRF tới mạng nội bộ/metadata endpoint; `filename` được lọc `\/\r\n"` trước khi đưa vào header `Content-Disposition` — chặn header injection
+- [x] P0-4 Gỡ API key khỏi response lỗi `generate-pdf` — *xong 22/09*: thông báo lỗi không còn chèn `${apiKey}`. ⚠️ **Rotate `APITEMPLATE_API_KEY` trên Vercel vẫn cần người có quyền truy cập Vercel tự làm** — tôi không có quyền đó
+- [x] P0-3 Wire `updateRfqSchema` (đã viết sẵn, test sẵn) vào `PATCH /api/rfq/[id]` — *xong 22/09*: route giờ validate qua `validateBody`/`validatePathParam` trước khi gọi Prisma; rà soát toàn bộ frontend không có nơi nào gọi `PATCH /api/rfq/[id]` trực tiếp nên không có rủi ro breaking change
 - [x] P1-1 Sửa `jest.config.js` (thêm `moduleNameMapper`) — *xong 21/09 (CBU C0)*: 4/4 suite chạy được
 - [x] P0-5 *(phần engine — xong 21/09, CBU C1)* Đối chiếu Excel gốc (`CBU-AC0084_DDP_VN_MARGIN_INPUT.xlsx`), sửa công thức phân bổ logistics/insurance → **thực hiện trong CBU v2 Phase C1** (§6, SPEC §11.11); fixture lấy từ file md, không sửa fixture cho khớp code
 - [x] P0-6 *(phần engine — xong 21/09, CBU C1)* Sửa `pct()` bỏ auto-detect → `pctToFrac = v/100`. Lỗi lưu/đọc F5–F7 đã sửa ở C2 (mã nguồn). ⚠️ **Còn lại để nghiệm thu trọn vẹn:** áp migration lên DB thật, và rà **giá đã lưu/đã gửi khách** bằng `scripts/cbu-audit.ts` (Q8 — quyết định thương mại)

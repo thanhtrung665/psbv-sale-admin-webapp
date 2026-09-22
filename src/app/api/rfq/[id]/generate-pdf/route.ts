@@ -73,9 +73,9 @@ export async function GET(
     const templateId = rawTemplateId.replace(/['"]/g, '').trim();
 
     if (!apiKey || apiKey === "undefined" || !templateId) {
-      return NextResponse.json({ 
-        success: false, 
-        message: `[VERCEL ENV ERROR] Không tìm thấy API Key hoặc Template ID. Giá trị hiện tại: API_KEY=${apiKey}` 
+      return NextResponse.json({
+        success: false,
+        message: "[ENV ERROR] Thiếu APITEMPLATE_API_KEY hoặc APITEMPLATE_QUOTATION_TEMPLATE_ID.",
       }, { status: 500 });
     }
 

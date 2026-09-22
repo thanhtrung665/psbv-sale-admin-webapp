@@ -3,9 +3,8 @@
  * Data = the AC0084 AIR block (SPEC §11.10), so the whole DB → engine → DB path is held to the Excel numbers.
  */
 import { CbuHttpError } from "../../../src/lib/cbu/db/errors";
-import { legacyBodyToSaveInput } from "../../../src/lib/cbu/db/legacy-body";
 import { loadCbuSheet, saveCbuSheet, type CbuDb } from "../../../src/lib/cbu/db/service";
-import { legacyCalculateCbuSchema, saveCbuSchema } from "../../../src/lib/schemas/cbu.schemas";
+import { saveCbuSchema } from "../../../src/lib/schemas/cbu.schemas";
 import { AC0084_AIR, AC0084_LOGISTICS, AC0084_PARAMS, AC0084_TOTALS } from "../fixtures/ac0084";
 
 type Row = Record<string, unknown>;
@@ -288,39 +287,30 @@ describe("the server ignores numbers computed by the client (SPEC §11.6-5)", ()
     expect(JSON.stringify(parsed)).not.toMatch(/totalRevenue|totalCost|ddpPriceVnd|unitCostUsd|apportioned|"ddpPriceUsd"/);
   });
 
-  it("legacy page body with TAMPERED totals and prices still saves the Excel numbers", async () => {
+  it("v2 body with TAMPERED totals and prices still saves the Excel numbers", async () => {
     const { db, state } = makeDb(airRfq(), airItems());
-    const body = legacyCalculateCbuSchema.parse({
-      finalize: false,
-      cbuMode: "MARGIN_INPUT",
-      targetMarginPercent: 25,
-      commissionRate: 3,
-      citOnCommission: 20,
-      // forged results the old page would have computed in the browser:
-      totalCostUsd: 1,
+    const input = saveCbuSchema.parse({
+      mode: "MARGIN_INPUT",
+      // forged results a client would have computed in the browser: none of these are read
       totalRevenueUsd: 999999,
       totalRevenueVnd: 1,
-      totalMarginUsd: 999999,
-      actualMarginPct: 99,
+      params: { targetMarginPct: 25, commissionPct: 3, citPct: 20, totalCostUsd: 1 },
       items: AC0084_AIR.map((r) => ({
         id: `l${r.lineNo}`,
-        supplierUnitPrice: r.materialUsd,
-        netWeightLbs: r.totalWeightLb / r.qty, // the legacy page sends the weight of ONE unit
-        dutyPercent: 0,
-        marginPercent: null,
-        marginOverrideUsd: 0,
-        targetDdpPriceUsd: 0,
+        materialUsd: r.materialUsd,
+        totalWeightLb: r.totalWeightLb,
+        dutyPct: 0,
+        marginPctOverride: null,
         ddpPriceUsd: 0.01, // forged
         totalRevenueUsd: 1, // forged
       })),
     });
-    const input = saveCbuSchema.parse(legacyBodyToSaveInput(body));
     await saveCbuSheet(db, "rfq1", input, "draft");
 
     expect(state.rfq.totalRevenueVnd).toBe(BigInt(AC0084_TOTALS.air.totalRevenueVnd));
     expect(state.rfq.totalRevenueUsd as number).toBeCloseTo(AC0084_TOTALS.air.ddpPriceUsd, 2);
     expect(lineById(state, "l1").ddpPriceUsd).toBeCloseTo(7.1, 9);
     expect(lineById(state, "l1").marginPercent).toBeNull();
-    expect(lineById(state, "l1").extWeightLbs).toBeCloseTo(121.6, 9); // per-unit × STORED qty
+    expect(lineById(state, "l1").extWeightLbs).toBeCloseTo(121.6, 9);
   });
 });

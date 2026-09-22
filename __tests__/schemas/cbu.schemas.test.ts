@@ -1,5 +1,4 @@
-import { cbuParamsSchema, legacyCalculateCbuSchema, saveCbuSchema } from "@/lib/schemas";
-import { legacyBodyToSaveInput } from "@/lib/cbu/db/legacy-body";
+import { cbuParamsSchema, saveCbuSchema } from "@/lib/schemas";
 
 const messages = (r: { success: boolean; error?: { errors: { path: (string | number)[]; message: string }[] } }) =>
   r.success ? [] : (r.error?.errors ?? []).map((e) => `${e.path.join(".")}: ${e.message}`);
@@ -61,56 +60,5 @@ describe("saveCbuSchema", () => {
   it("policy constants are not client-editable (receive VAT factor, USD rounding decimals are stripped)", () => {
     const p = cbuParamsSchema.parse({ bank: { receiveVatFactor: 5 }, usdRoundingDecimals: 0 });
     expect(JSON.stringify(p)).not.toMatch(/receiveVatFactor|usdRoundingDecimals/);
-  });
-});
-
-describe("legacy body → v2 input", () => {
-  const body = legacyCalculateCbuSchema.parse({
-    finalize: true,
-    cbuMode: "MARGIN_INPUT",
-    exchangeRate: 26500,
-    freightFixed: 500,
-    freightRatePerKg: 2.5,
-    chargeableWeightKg: 1300,
-    clearanceCost: 150,
-    inlandCost: null,
-    docFee: 0,
-    bankVatFactor: 1.1,
-    remittanceRatePercent: 0.2,
-    targetMarginPercent: 25,
-    commissionRate: 3,
-    citOnCommission: 20,
-    items: [{ id: "a", supplierUnitPrice: 4.37, netWeightLbs: 0.38, dutyPercent: 0, marginPercent: null, marginOverrideUsd: 0, targetDdpPriceUsd: 0 }],
-  });
-
-  it("renames fields and keeps units (percent numbers stay percent numbers)", () => {
-    const input = legacyBodyToSaveInput(body);
-    expect(input.mode).toBe("MARGIN_INPUT");
-    expect(input.params?.fx).toBe(26500);
-    expect(input.params?.logistics).toMatchObject({ freightFixedUsd: 500, freightRatePerKg: 2.5, chargeableKg: 1300, clearanceUsd: 150, otherUsd: 0 });
-    expect(input.params?.bank).toMatchObject({ remitRatePct: 0.2, remitVatFactor: 1.1 });
-    expect(input.params?.commissionPct).toBe(3);
-    expect(input.params?.citPct).toBe(20);
-  });
-
-  it("null in the legacy body means 'keep the stored value' (undefined), not 0", () => {
-    const input = legacyBodyToSaveInput(body);
-    expect(input.params?.logistics?.inlandUsd).toBeUndefined();
-  });
-
-  it("per-unit weight travels as weightLbPerUnit; a blank margin override stays null, never 0", () => {
-    const item = legacyBodyToSaveInput(body).items?.[0];
-    expect(item).toMatchObject({ id: "a", materialUsd: 4.37, weightLbPerUnit: 0.38, marginPctOverride: null, marginUsdOverride: 0 });
-    expect(item).not.toHaveProperty("totalWeightLb");
-  });
-
-  it("the converted input passes the v2 schema (bounds are enforced on the legacy path too)", () => {
-    expect(saveCbuSchema.safeParse(legacyBodyToSaveInput(body)).success).toBe(true);
-    const bad = legacyCalculateCbuSchema.parse({ targetMarginPercent: 120, items: [] });
-    expect(saveCbuSchema.safeParse(legacyBodyToSaveInput(bad)).success).toBe(false);
-  });
-
-  it("rejects non-finite numbers in the legacy body itself", () => {
-    expect(legacyCalculateCbuSchema.safeParse({ exchangeRate: "x" }).success).toBe(false);
   });
 });

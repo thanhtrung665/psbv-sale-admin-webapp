@@ -69,8 +69,7 @@ src/
     ├── cbu/             # CBU engine v2 (SPEC §11.8): calculateCbu(), pools, pricing, checks, profiles/
     └── utils.ts         # Utilities (cn() helper)
 
-lib/                     # ⚠️ thư mục gốc, KHÔNG phải src/lib (webpack alias @/lib trỏ vào đây)
-└── cbu-engine.ts        # shim: re-export adapter cũ calculateCBU() từ src/lib/cbu/legacy.ts
+lib/                     # ⚠️ thư mục gốc, KHÔNG phải src/lib (webpack alias @/lib trỏ vào đây); không còn cbu-engine.ts (đã xoá ở Phase C5)
 ```
 
 ---
@@ -107,7 +106,7 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 
 ## CBU Module (đang tái cấu trúc — CBU v2)
 
-**Trạng thái (22/09/2026):** Phase C0–C4 **xong** (C4 = profile `FCA_DAP` Baker Hughes: `src/lib/cbu/profiles/fca-dap.ts`, kịch bản = điều khoản thanh toán, `quoteBasis` FCA/DAP, bỏ chặn "Nước ngoài" ở modal) — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là mặc định, trang cũ ở `?legacy=1`; **có kịch bản Air/Sea + so sánh** (kịch bản đầu = nền ở cột phẳng RFQ, kịch bản được chọn quyết định giá lưu và tổng — SPEC §11.3). 327 test pass. **Migration bước 1 đã áp lên DB thật (22/09); bước 2 (backfill `marginPercent`) CHỈ áp sau khi deploy code.** C5 (payload Quotation PDF, xoá code cũ) chưa làm. Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+**Trạng thái (22/09/2026):** Phase C0–C5 **xong** (C4 = profile `FCA_DAP` Baker Hughes: `src/lib/cbu/profiles/fca-dap.ts`, kịch bản = điều khoản thanh toán, `quoteBasis` FCA/DAP, bỏ chặn "Nước ngoài" ở modal; C5 = sửa payload Quotation PDF, xoá trang legacy + adapter cũ) — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là **duy nhất** (trang cũ `?legacy=1`, adapter `calculateCBU()`, route `calculate-cbu`, và `lib/cbu-engine.ts` đã bị xoá); **có kịch bản Air/Sea + so sánh** (kịch bản đầu = nền ở cột phẳng RFQ, kịch bản được chọn quyết định giá lưu và tổng — SPEC §11.3). 314 test pass. **Migration bước 1 đã áp lên DB thật (22/09); bước 2 (backfill `marginPercent`) CHỈ áp sau khi deploy code.** Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
 
 ### Nguồn sự thật nghiệp vụ
 `documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
@@ -130,7 +129,7 @@ DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`.
 
 ### Lệnh hữu ích
 ```bash
-npm test -- --runInBand          # 15 suite / 327 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
+npm test -- --runInBand          # 14 suite / 314 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
 npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
 npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
@@ -236,7 +235,7 @@ RESEND_API_KEY
 
 ### Modify CBU calculation
 - **Đọc mục "CBU Module" bên dưới trước.** Đổi công thức = sửa golden test trước, rồi mới sửa engine.
-- Engine v2: `src/lib/cbu/` — dùng `import { calculateCbu } from "@/lib/cbu"`. `lib/cbu-engine.ts` (gốc) chỉ là shim của adapter cũ `calculateCBU()`; **không dùng cho code mới**, sẽ bị xoá ở Phase C5.
+- Engine v2: `src/lib/cbu/` — dùng `import { calculateCbu } from "@/lib/cbu"`. Adapter cũ `calculateCBU()` và shim `lib/cbu-engine.ts` đã bị xoá ở Phase C5 — không còn tồn tại, đừng import.
 - Trang `cbu-calc/page.tsx` **chỉ hiển thị và gọi engine** — không chứa công thức.
 
 ### Add new email template

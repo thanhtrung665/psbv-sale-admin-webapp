@@ -229,11 +229,11 @@ export async function POST(req: NextRequest) {
           leadtime: "1-2 days",
           quantity: String(item?.qty ?? 0),
           uom: item?.uom || "Ea",
-          unit_price: Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0).toLocaleString("en-US", {
+          unit_price: Number(item.ddpPriceUsd ?? 0).toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           }),
-          amount: Number(item.ddpPriceUsd ?? 0).toLocaleString("en-US", {
+          amount: Number((item.ddpPriceUsd ?? 0) * (item.qty ?? 0)).toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           }),

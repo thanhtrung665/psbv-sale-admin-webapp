@@ -293,7 +293,6 @@ export function CbuWorkspace({ rfqId, initialType, initialGroup }: { rfqId: stri
   return (
     <div className="space-y-4">
       <WorkspaceBar
-        rfqId={rfqId}
         rfqCode={sheet.rfq.rfqCode}
         clientName={sheet.rfq.clientName}
         incoTerm={sheet.rfq.incoTerm}

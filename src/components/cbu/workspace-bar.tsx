@@ -150,7 +150,6 @@ function Kpi({ label, value, sub, tone }: { label: string; value: React.ReactNod
 // ─── Top bar ─────────────────────────────────────────────────────────────────
 
 interface BarProps {
-  rfqId: string;
   rfqCode: string;
   clientName: string | null;
   incoTerm: string | null;
@@ -172,7 +171,7 @@ interface BarProps {
   profile?: CbuProfile;
 }
 
-export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, rfqId, scenarioLabel, scenarioChosen, profile = "DDP_IMPORT" }: BarProps) {
+export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, status, route, mode, onModeChange, result, targetMarginPct, invalidInputs, dirty, savedAt, busy, scenarioLabel, scenarioChosen, profile = "DDP_IMPORT" }: BarProps) {
   const t = result.totals;
   const hasRevenue = t.revenueUsd > 0;
   const tone = marginTone(t.marginPct, hasRevenue, targetMarginPct);
@@ -205,9 +204,6 @@ export function WorkspaceBar({ rfqCode, clientName, incoTerm, paymentTerm, statu
           ) : savedAt ? (
             <span className="text-slate-400">Đã lưu {savedAt}</span>
           ) : null}
-          <Link href={`/rfq/${rfqId}/cbu-calc?legacy=1`} className="text-slate-400 underline-offset-2 hover:text-slate-600 hover:underline" title="Giao diện cũ (sẽ bị gỡ)">
-            Giao diện cũ
-          </Link>
         </div>
       </div>
 

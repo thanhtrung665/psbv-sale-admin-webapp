@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateRfoId } from "@/lib/rfq-code";
 import { parseInquiryWithGemini } from "@/lib/gemini-inquiry";
+import { checkAiRouteLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -14,11 +15,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const createdById = (session.user as any).id as string;
+  const rl = checkAiRouteLimit(createdById);
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds!);
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const emailText = formData.get("emailText") as string | null;
-    const createdById = (session.user as any).id as string;
 
     // ── Read header fields from FormData ──────────────────────────────────
     const opportunityName = (formData.get("opportunityName") as string) || null;

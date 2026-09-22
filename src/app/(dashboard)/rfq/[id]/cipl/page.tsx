@@ -50,10 +50,12 @@ type CiplRecord = {
 // ─── Editable Field ──────────────────────────────────────────────────────────
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const id = `cipl-field-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+      <label htmlFor={id} className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</label>
       <input
+        id={id}
         type="text"
         value={value}
         onChange={e => onChange(e.target.value)}

@@ -127,10 +127,13 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 ### Cảnh báo migration
 DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`. **Không chạy `npx prisma migrate dev`** — Prisma sẽ đề nghị reset và xoá dữ liệu. Migration CBU được viết **SQL tay, idempotent** (`prisma/migrations/20260921120000_cbu_v2/migration.sql`); kiểm chứng bằng `node scripts/verify-cbu-migration.mjs` (Postgres nhúng, không đụng DB thật). Migration tách 2 bước: `20260921120000_cbu_v2` (chỉ thêm cột/default — an toàn với code cũ) và `20260921120100_cbu_v2_margin_cleanup` (backfill `marginPercent` — **chỉ sau khi code mới đã deploy**, vì `GET /api/rfq/[id]` bản cũ ép `null → 0` và trang cũ coi đó là override 0%). Thứ tự bắt buộc: **backup → bước 1 → deploy code → bước 2** (deploy mà chưa áp bước 1 thì mọi truy vấn `RFQ` lỗi). **Trạng thái: bước 1 ĐÃ áp lên Supabase (22/09/2026), bước 2 chưa.** Máy dev chạy nhánh này với .env trỏ Supabase cần bước 1 (nếu thiếu, mọi truy vấn RFQ lỗi và trang CBU không tải được). Đừng ghi vào DB dùng chung (Supabase) khi chưa được người dùng cho phép rõ ràng. Migration Prisma mới cho phần CBU cũng nên viết tay và có script kiểm chứng tương tự. Xem SPEC §11.8.
 
+Cùng lý do lệch migration: `prisma/migrations` trước đây chưa từng tạo 6 model `Task`/`AiConfig`/`MasterPart`/`Supplier`/`CiplRecord`/`CiplItem` (+ enum `TaskStatus`) dù `schema.prisma` đã khai báo từ lâu và code production đang dùng — soạn (**chưa áp lên DB thật**) ở `prisma/migrations/20260922130000_missing_models/migration.sql`, cùng phong cách hand-written/idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE TYPE`/`ADD CONSTRAINT` bọc trong `DO $$ … EXCEPTION WHEN duplicate_object`); kiểm chứng bằng `node scripts/verify-missing-models-migration.mjs` (Postgres nhúng, gồm cả kịch bản bảng đã tồn tại sẵn ngoài migration — trường hợp thực tế của DB production). **Trước khi áp lên DB thật: backup, rồi xác nhận cột hiện có khớp `schema.prisma`** (migration này bỏ qua hoàn toàn nếu bảng đã tồn tại, không tự sửa lệch cột) — chỉ làm khi người dùng đồng ý rõ ràng.
+
 ### Lệnh hữu ích
 ```bash
-npm test -- --runInBand          # 14 suite / 314 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
+npm test -- --runInBand          # 15 suite / 318 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
+node scripts/verify-missing-models-migration.mjs  # kiểm chứng migration 6 model thiếu (không cần DB)
 npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
 npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
 node scripts/e2e-cbu-sandbox.cjs       # 48 kiểm tra API end-to-end trên sandbox, gồm Baker (đổi dữ liệu — khởi động lại sandbox trước mỗi lần chạy lại)

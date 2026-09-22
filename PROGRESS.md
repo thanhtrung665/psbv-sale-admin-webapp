@@ -108,9 +108,9 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [ ] Chạy đối chiếu các RFQ đã gửi khách để phát hiện sai lệch giá do P0-5/P0-6 (**quyết định thương mại cần cấp quản lý**, không phải việc kỹ thuật thuần)
 - [ ] Nghiệm thu: `npm test` 52/52 pass, `npx tsc --noEmit` 0 lỗi
 
-### SPRINT 1 — Củng cố (5 ngày) — **CHƯA BẮT ĐẦU**
+### SPRINT 1 — Củng cố (5 ngày) — **đang làm**
 
-- [ ] Wire Zod vào 6 route còn lại (`clients` POST/PUT, `tasks` POST, `rfq/create-manual`, `rfq/save-supplier-quote`, `rfq/save-customer-po`)
+- [x] Wire Zod vào 6 route còn lại (`clients` POST/PUT, `tasks` POST, `rfq/create-manual`, `rfq/save-supplier-quote`, `rfq/save-customer-po`) — *xong 22/09*: cả 6 route đã dùng schema có sẵn (`createClientSchema`/`updateClientSchema`/`createTaskSchema`/`createRfqManualSchema`/`saveSupplierQuoteSchema`/`saveCustomerPoSchema`) qua `validateBody`/`validatePathParam`, thay cho check tay `if (!x) return 400`. Phát hiện khi wire: 2 chỗ cần fallback cho field bắt buộc không-null khi Zod trả `undefined` — `Client.companyName` (upsert `update`) và `RFQItem.rawPartNumber` (create từ supplier quote/customer PO), cả hai đều required ở `schema.prisma`
 - [ ] Backup DB + sinh migration cho 7 model thiếu (`Task`, `AiConfig`, `MasterPart`, `Supplier`, `CiplRecord`, `CiplItem`, `TaskStatus`)
 - [ ] Bổ sung `SUPABASE_SERVICE_ROLE_KEY`, bỏ fallback base64-vào-DB
 - [ ] Rate limiting cho route AI (`parse-*`, `cipl/extract`)

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { saveSupplierQuoteSchema } from "@/lib/schemas";
+import { validateBody } from "@/lib/validation";
 
 /**
  * POST /api/rfq/save-supplier-quote
@@ -34,30 +36,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { rfqCode, rfqId: bodyRfqId, supplierQuoteCode, supplierName, rows } = body as {
-      rfqCode?: string;
-      rfqId?: string;
-      supplierQuoteCode?: string;
-      supplierName?: string;
-      rows: {
-        lineNo: number;
-        partNumber: string;
-        description: string;
-        qty: number;
-        unitPrice: number;
-        netWeightLbs: number;
-        leadtime: string;
-        rfqItemId: string | null;
-      }[];
-    };
-
-    if ((!rfqCode && !bodyRfqId) || !rows || rows.length === 0) {
-      return NextResponse.json(
-        { success: false, message: "Thiếu rfqCode/rfqId hoặc danh sách rows." },
-        { status: 400 }
-      );
-    }
+    const bodyCheck = await validateBody(req, saveSupplierQuoteSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
+    const { rfqCode, rfqId: bodyRfqId, supplierQuoteCode, supplierName, rows } = bodyCheck.data;
 
     // ── Resolve the RFQ ────────────────────────────────────────────────────
     const rfq = await prisma.rFQ.findUnique({
@@ -97,7 +78,7 @@ export async function POST(req: NextRequest) {
             data: {
               rfqId: rfq.id,
               lineNo: row.lineNo,
-              rawPartNumber: row.partNumber,
+              rawPartNumber: row.partNumber || "",
               rawDescription: row.description,
               supplierDescription: row.description,
               supplierUnitPrice: row.unitPrice,

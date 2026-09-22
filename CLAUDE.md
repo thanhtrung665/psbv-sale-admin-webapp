@@ -63,13 +63,12 @@ src/
 │   ├── ui/              # shadcn/ui components
 │   ├── rfq/             # RFQ-specific components
 │   └── shared/          # Sidebar, etc.
-└── lib/
-    ├── ms-graph.ts      # MS Graph API client
-    ├── email-builder.ts  # Email HTML templates
+└── lib/                 # DUY NHẤT (thư mục gốc lib/ đã hợp nhất vào đây ở Sprint 2 — không còn webpack alias @/lib, @/* chỉ trỏ src/*)
+    ├── ms-graph.ts      # MS Graph API client — transport email duy nhất (Resend/nodemailer đã gỡ)
+    ├── email-builder.ts  # Email HTML templates (RFO — "no client info")
+    ├── auth.ts, prisma.ts, gemini-*.ts, catalog-matcher.ts, rfq-code.ts, supabase/, schemas/  # phần còn lại của lib cũ, giữ nguyên hành vi
     ├── cbu/             # CBU engine v2 (SPEC §11.8): calculateCbu(), pools, pricing, checks, profiles/
     └── utils.ts         # Utilities (cn() helper)
-
-lib/                     # ⚠️ thư mục gốc, KHÔNG phải src/lib (webpack alias @/lib trỏ vào đây); không còn cbu-engine.ts (đã xoá ở Phase C5)
 ```
 
 ---
@@ -117,7 +116,7 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 ### Quy tắc bắt buộc khi đụng vào CBU
 1. **Đơn vị %**: mọi `…Percent` / `…Rate` / `…Pct` là số phần trăm (3 = 3%). Engine chia 100 (`pctToFrac`). **Không** khôi phục kiểu auto-detect "≤ 1 là phân số" (`pct()` cũ — đó là lỗi P0-6).
 2. **Trọng lượng chuẩn** của engine v2 = tổng trọng lượng của dòng (lb) = `RFQItem.extWeightLbs` (`totalWeightLb`). Trọng lượng/đơn vị = `ext ÷ qty`. Riêng adapter cũ, `netWeightLbs` = **một đơn vị** (đúng nghĩa DB) — đừng trộn hai nghĩa (đó là lỗi P0-5).
-3. **Công thức lõi** (đã kiểm chứng khớp Excel — SPEC §11.4): pool logistics = freight + thông quan + nội địa + **insurance**, phân bổ theo trọng lượng; bank fee = phí NH phân bổ theo Material + chi phí vốn; `Duty = (Material + Logistics) × %Duty`; `DDP = ROUNDUP(base ÷ (1 − margin − q·(1+c)), 2)`; Commission/CIT tính **sau** khi có giá bán.
+3. **Công thức lõi** (đã kiểm chứng khớp Excel — SPEC §11.4): pool logistics = freight + thông quan + nội địa + **insurance**, phân bổ theo trọng lượng; bank fee = phí NH phân bổ theo Material + chi phí vốn; `DDP = ROUNDUP(base ÷ (1 − margin − q·(1+c)), 2)`; Commission/CIT tính **sau** khi có giá bán. **Duty base (profile `DDP_IMPORT`) = `Material + Freight phân bổ + Insurance phân bổ`** (CIF thực — **không** dùng công thức Excel col L `Material + toàn bộ Logistics`, vì Logistics còn gồm thông quan/nội địa/other không thuộc trị giá tính thuế; quyết định SPEC §11.12 Q2, áp dụng 22/09/2026). Profile `FCA_DAP` (Baker) không có khái niệm Duty.
 4. **Chi phí theo lô hàng mặc định = 0**; chỉ tham số chính sách (biểu phí NH, bảo hiểm, days/year, lb→kg, bước làm tròn VND) mới có mặc định, và đặt ở **một** file.
 5. **Server là nguồn quyết định giá**: API tính lại từ input; không ghi số client gửi lên. Đã thực hiện ở `src/lib/cbu/db/service.ts` — route chỉ validate (Zod) rồi gọi service; đừng thêm đường ghi giá/tổng trực tiếp từ body.
 6. **Mỗi phiên tính phải qua các check** C1–C4 (SPEC §11.4); finalize bị chặn khi check lỗi.
@@ -131,9 +130,10 @@ Cùng lý do lệch migration: `prisma/migrations` trước đây chưa từng t
 
 ### Lệnh hữu ích
 ```bash
-npm test -- --runInBand          # 15 suite / 318 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
+npm test -- --runInBand          # 16 suite / 334 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
 node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
 node scripts/verify-missing-models-migration.mjs  # kiểm chứng migration 6 model thiếu (không cần DB)
+node scripts/verify-fk-indexes-migration.mjs  # kiểm chứng migration index cho 7 cột FK (không cần DB)
 npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
 npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
 node scripts/e2e-cbu-sandbox.cjs       # 48 kiểm tra API end-to-end trên sandbox, gồm Baker (đổi dữ liệu — khởi động lại sandbox trước mỗi lần chạy lại)
@@ -171,9 +171,9 @@ export async function GET(req: NextRequest) {
 - Role-based access: `ADMIN` và `SALE_ADMIN`
 
 ### 3. Email Sending
-- **MS Graph (Primary):** Dùng `sendEmailViaGraph()` từ `@/lib/ms-graph`
+- **MS Graph — transport duy nhất** (Sprint 2, 22/09/2026: gỡ bỏ Resend/nodemailer khỏi `send-rfo`, `send-rfq`/`quick-email-modal`; trước đó 2 route này gửi thật qua sandbox domain `onboarding@resend.dev`, không phải domain công ty). Dùng `sendEmailViaGraph()` từ `@/lib/ms-graph`
   - Auto lấy token từ Azure AD credentials
-  - Hỗ trợ PDF attachments
+  - Hỗ trợ PDF attachments (tham số `attachmentUrl`/`fileName` optional — email không đính kèm vẫn gửi được)
   - Email gửi từ `drilling@psbvn.com`
 
 ```typescript
@@ -189,7 +189,7 @@ await sendEmailViaGraph({
 ```
 
 ### 4. AI Document Parsing
-- Dùng Gemini API qua `lib/gemini.ts`, `lib/gemini-quote.ts`
+- Dùng Gemini API qua `src/lib/gemini-inquiry.ts`, `gemini-quote.ts`, `gemini-po.ts`, `gemini-cipl.ts`
 - AI config lưu trong database (`AiConfig` model)
 
 ### 5. PDF Generation
@@ -217,10 +217,7 @@ AZURE_CLIENT_SECRET
 MS_GRAPH_MAILBOX=drilling@psbvn.com
 ```
 
-**Local-only** (gitignored):
-```bash
-RESEND_API_KEY
-```
+(Không còn `RESEND_API_KEY` — Sprint 2 đã gỡ Resend/nodemailer, MS Graph là transport email duy nhất. Cột `AiConfig.resendApiKey` trong DB vẫn còn nhưng không còn được code đọc/ghi.)
 
 ---
 

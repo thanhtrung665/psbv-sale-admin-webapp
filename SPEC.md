@@ -15,7 +15,7 @@
 | **AI** | Google Gemini API 0.24 |
 | **Document** | APITemplate.io |
 | **Storage** | Supabase Storage |
-| **Email** | Microsoft Graph API + Resend (backup) |
+| **Email** | Microsoft Graph API (transport duy nhất — xem §5.3) |
 | **Deployment** | Vercel |
 
 ---
@@ -262,16 +262,17 @@ psbv-sales-agent-saas/
 
 | Module | File | Purpose |
 |--------|------|---------|
-| Inquiry Parsing | `lib/gemini.ts` | Parse customer inquiry PDF |
-| Quote Parsing | `lib/gemini-quote.ts` | Parse supplier quote |
-| PO Parsing | `lib/gemini-po.ts` | Parse customer PO |
+| Inquiry Parsing | `src/lib/gemini-inquiry.ts` | Parse customer inquiry PDF |
+| Quote Parsing | `src/lib/gemini-quote.ts` | Parse supplier quote |
+| PO Parsing | `src/lib/gemini-po.ts` | Parse customer PO |
 
 ### 5.3 Email System
 
 | Provider | File | Usage |
 |----------|------|-------|
-| MS Graph | `lib/ms-graph.ts` | Primary - Outlook email với attachments |
-| Resend | `lib/email.ts` | Backup - General email |
+| MS Graph | `src/lib/ms-graph.ts` | Duy nhất — mọi email (RFO, Quotation, dispatch, mail nhanh) qua Outlook, hỗ trợ PDF attachment optional |
+
+Resend/nodemailer đã gỡ bỏ hoàn toàn ở Sprint 2 (22/09/2026) — trước đó `send-rfo` và `send-rfq` (quick-email-modal) gửi thật qua sandbox domain `onboarding@resend.dev`, không phải domain công ty. Xem PROGRESS.md §4 SPRINT 2.
 
 ### 5.4 Document Generation
 
@@ -432,7 +433,7 @@ Kiểm chứng bằng cách nạp 16 dòng AIR của AC0084 vào `lib/cbu-engine
 | F1 | **Phân bổ logistics sai ~2 bậc độ lớn.** Engine dùng `netWeightLbs` theo hai nghĩa trái ngược: `extWeight = net × qty` (coi là *đơn vị*) nhưng `weightPerUnit = net ÷ qty` (coi là *tổng dòng*) | Σ(logistics+insurance)×qty = **14.78** trong khi pool = **4,253** (chỉ 0.35%). Excel: bằng pool | 🔴 P0 |
 | F2 | **`pct()` tự đoán đơn vị**: giá trị ≤ 1 bị coi là *phân số*. Duty 1% → 100%; Insurance rate `0.01` (=0.01%) → 1%; Remittance `0.2` (=0.2%) → 20% | Duty 1% trên base 100 → **100** (đúng: 1). Insurance **253.23** (Excel 15.00). Bank fee dòng 1 **0.975** (Excel 0.025, gấp 39 lần) | 🔴 P0 |
 | F2b | **F1 và F2 lệch ngược chiều nên triệt tiêu ở mức tổng** — tổng cost chỉ lệch +0.8% (24,775.72 vs 24,576.98) nên nhìn tổng tưởng đúng; sai nằm ở từng dòng (giá bán dòng 1: 7.49 vs **7.10**, +5.5%). Đây cũng là lý do test "pass" sau khi sửa fixture `0.2 → 0.002` | | 🔴 |
-| F3 | **Duty base**: Excel = `(Material + Logistics đã phân bổ, GỒM insurance) × %Duty`; engine loại insurance ra khỏi base | Lệch nhỏ khi Duty > 0 | 🟠 |
+| F3 | **Duty base**: Excel = `(Material + Logistics đã phân bổ, GỒM insurance) × %Duty`; engine cũ loại insurance ra khỏi base. *(C1 sửa khớp Excel; 22/09 đổi tiếp sang CIF thực theo quyết định Q2 — xem §11.12)* | Lệch nhỏ khi Duty > 0 | 🟠 |
 | F4 | **Mặc định chi phí lô hàng không nhất quán**: Excel không có `docFee`; schema mặc định 0 nhưng trang/route fallback **15** (`safeNum(rawData.docFee, 15)`, `docFee ?? 15`) — hiện ít kích hoạt vì Prisma trả 0, nhưng là bẫy. Ngược lại `clearanceCost 150` / `inlandCost 100` (số của một lô mẫu) **đang là mặc định thật** trong schema → mọi RFQ mới tự mang 250 USD chi phí | Đọc `schema.prisma`, `cbu-calc/page.tsx`, `calculate-cbu/route.ts` | 🟡 |
 | F5 | **Không lưu được**: `cbuMode`, `targetMarginPercent`, `commissionRate`, `citOnCommission`, `marginOverrideUsd` không có cột DB; route không ghi `supplierUnitPrice` / trọng lượng đã sửa → mở lại là mất | Đọc `prisma/schema.prisma` + `calculate-cbu/route.ts` | 🟠 |
 | F6 | **Mở lại RFQ đã lưu → margin 0%**: `RFQItem.marginPercent` có `@default(25)`; route ghi `item.marginPercent ?? 0` (dòng không ghi đè → `null` → **0**); trang tải lại coi `0` là override hợp lệ (`!== null`) → mọi dòng thành margin 0%, giá bán = giá vốn. Trước lần lưu đầu thì mọi dòng mang override ngầm 25%. Cả hai trường hợp làm Target margin toàn đơn mất tác dụng | Suy ra từ đọc code (chưa chạy trên DB) | 🔴 |
@@ -492,8 +493,12 @@ bankTotal = remit + receive + otherBank
 # (4) Từng dòng (Sheet Margin Analysis)
 financing_i  = material_i × pctFinanced × (interest × days ÷ daysPerYear)
 bankFee_i    = financing_i + bankTotal × material_i ÷ M           # cột J "Bank fee & Financial cost"
-logistics_i  = pool × w_i ÷ W                                     # cột K (đã gồm insurance)
-duty_i       = (material_i + logistics_i) × dutyPct_i             # cột L
+logistics_i  = pool × w_i ÷ W                                     # cột K (đã gồm insurance) — dùng để cộng vào base_i
+freightShare_i  = freight × w_i ÷ W                               # phần cước quốc tế phân bổ cho dòng i
+insuranceShare_i = insurance × w_i ÷ W                            # phần bảo hiểm phân bổ cho dòng i
+dutyBase_i   = material_i + freightShare_i + insuranceShare_i     # CIF thực — KHÔNG dùng cột L Excel (Material + logistics_i,
+               #  vốn gồm cả clearance/inland/other không thuộc trị giá tính thuế). Quyết định Q2, 22/09/2026 — xem §11.12
+duty_i       = dutyBase_i × dutyPct_i
 base_i       = material_i + bankFee_i + logistics_i + duty_i + custom_i
 k            = 1 − commissionPct × (1 + citPct)
 
@@ -729,18 +734,18 @@ Thứ tự **C1 trước UI**: giá sai đang đi ra khách hàng, còn giao di�
 
 ### 11.12 Câu hỏi mở cần quyết định nghiệp vụ
 
-Mỗi mục có **mặc định tạm dùng** để không chặn C1–C3; đổi khi có quyết định.
+**Đã chốt 22/09/2026** (7/8 — chỉ Q3 chưa rõ, Q8 ngoài phạm vi kỹ thuật). Cột "Trạng thái" ghi có cần sửa code hay quyết định trùng khớp mặc định tạm sẵn có.
 
-| # | Câu hỏi | Mặc định tạm |
-|---|---------|--------------|
-| Q1 | 4 tham số gắn "(Bỏ)": *Target margin, % Value financed, Interest rate, Financing days* — thật sự loại khỏi công thức, hay chỉ ẩn khỏi màn hình chính? Lưu ý Target margin là gốc của mode MARGIN_INPUT | **Giữ nguyên trong công thức**, chuyển vào "Nâng cao" |
-| Q2 | Cơ sở tính thuế: Excel dùng `Material + toàn bộ Logistics (gồm thông quan, nội địa, bảo hiểm)`. CIF thực tế chỉ gồm `hàng + cước quốc tế + bảo hiểm`. Giữ theo Excel? | **Theo Excel** |
-| Q3 | Named range `AirLogisticsPool = Logistic!M5 + Logistic!R5` trỏ vào cột **R = "Min insurance"** chứ không phải **S = "Insurance"**. Hai giá trị trùng nhau (15) trong file mẫu nên chưa lộ; khi phí bảo hiểm tính ra > mức tối thiểu, Excel sẽ sai. Xác nhận là lỗi công thức trong file gốc? | Engine dùng **S (Insurance tính ra)** |
-| Q4 | Baker Hughes — phí *International receive*: nhãn 0.05% nhưng công thức 0.005%; Min $35 (Hoàng Sơn: $5); base = DAP revenue (rủi ro vòng lặp). Dùng số nào và có nhập tay base như DDP không? | Rate 0.05%, Min $35, base **nhập tay** |
-| Q5 | Bỏ hẳn `bookingExchangeRate` và "Effective margin" (md ghi đã loại khỏi workbook)? | **Bỏ** khỏi UI/engine, giữ cột DB |
-| Q6 | Mặc định Thông quan 150 / Nội địa 100 (schema hiện có, F4) là số của 1 lô mẫu — đặt về 0 và để trống bắt buộc nhập? | **0** |
-| Q7 | Baker Hughes — tỷ giá 25,500, hệ số lb→kg 0.46 và trọng lượng 43.2 lb đang hardcode trong công thức; dùng tham số chung (0.4536) và dữ liệu DB? | **Tham số chung** |
-| Q8 | Với RFQ đã `QUOTED_TO_CLIENT` có giá lệch do F1/F2: giữ nguyên giá đã báo, hay báo lại? | Ngoài phạm vi kỹ thuật — chờ quản lý |
+| # | Câu hỏi | Quyết định | Trạng thái |
+|---|---------|--------------|------------|
+| Q1 | 4 tham số gắn "(Bỏ)": *Target margin, % Value financed, Interest rate, Financing days* — thật sự loại khỏi công thức, hay chỉ ẩn khỏi màn hình chính? Lưu ý Target margin là gốc của mode MARGIN_INPUT | **Ẩn đi** (chỉ ẩn khỏi màn hình chính, giữ nguyên trong công thức) | ✅ Không cần sửa — đã đúng từ C3: `targetMarginPct` ở nhóm "basic" (Target margin là input hàng ngày), 3 tham số còn lại đã ở nhóm "policy" (thu gọn) trong `src/lib/cbu/ui/draft.ts` |
+| Q2 | Cơ sở tính thuế: Excel dùng `Material + toàn bộ Logistics (gồm thông quan, nội địa, bảo hiểm)`. CIF thực tế chỉ gồm `hàng + cước quốc tế + bảo hiểm`. Giữ theo Excel? | **Theo CIF thực** (đổi khỏi mặc định tạm "Theo Excel") | ✅ Đã sửa 22/09: `dutyBase_i = material_i + freightShare_i + insuranceShare_i` thay vì `material_i + logistics_i` — `src/lib/cbu/profiles/ddp-import.ts`. Chỉ ảnh hưởng dòng có `dutyPct > 0` (AC0084 golden = 0 nên không đổi số vàng; test hồi quy F3 trong `ddp-import.golden.test.ts` đã cập nhật công thức kỳ vọng). Baker (`FCA_DAP`) không có Duty, không ảnh hưởng |
+| Q3 | Named range `AirLogisticsPool = Logistic!M5 + Logistic!R5` trỏ vào cột **R = "Min insurance"** chứ không phải **S = "Insurance"**. Hai giá trị trùng nhau (15) trong file mẫu nên chưa lộ; khi phí bảo hiểm tính ra > mức tối thiểu, Excel sẽ sai. Xác nhận là lỗi công thức trong file gốc? | **Không rõ** — chưa chốt | ⏳ Giữ mặc định tạm: engine dùng **S (Insurance tính ra)** |
+| Q4 | Baker Hughes — phí *International receive*: nhãn 0.05% nhưng công thức 0.005%; Min $35 (Hoàng Sơn: $5); base = DAP revenue (rủi ro vòng lặp). Dùng số nào và có nhập tay base như DDP không? | **Nhập tay** (base) | ✅ Không cần sửa — đã đúng từ C4: `PROFILE_DEFAULTS.FCA_DAP.bank.minReceiveUsd = 35`, `receiveBaseUsd` mặc định 0 và là ô nhập trong `defaults.ts`/`draft.ts` |
+| Q5 | Bỏ hẳn `bookingExchangeRate` và "Effective margin" (md ghi đã loại khỏi workbook)? | **Bỏ** khỏi UI/engine, giữ cột DB | ✅ Không cần sửa — đã bỏ khỏi engine/UI từ C3; `CbuParams` không có 2 trường này |
+| Q6 | Mặc định Thông quan 150 / Nội địa 100 (schema hiện có, F4) là số của 1 lô mẫu — đặt về 0 và để trống bắt buộc nhập? | **0** | ✅ Không cần sửa — đã đúng từ C2: `CBU_DEFAULTS.logistics.clearanceUsd/inlandUsd = 0` trong `defaults.ts`, migration `20260921120000_cbu_v2` đổi default cột DB |
+| Q7 | Baker Hughes — tỷ giá 25,500, hệ số lb→kg 0.46 và trọng lượng 43.2 lb đang hardcode trong công thức; dùng tham số chung (0.4536) và dữ liệu DB? | **Tham số chung** | ✅ Không cần sửa — đã đúng từ C4: Baker dùng `fx`/`lbToKg` chung, không hardcode (weight/duty/insurance vốn đã ẩn hoàn toàn ở Baker) |
+| Q8 | Với RFQ đã `QUOTED_TO_CLIENT` có giá lệch do F1/F2: giữ nguyên giá đã báo, hay báo lại? | Ngoài phạm vi kỹ thuật — chờ quản lý PSBV | ⏳ Không có RFQ nào ở `QUOTED_TO_CLIENT` tính đến 21/09 (audit §6.4) nên chưa cấp bách; AC0005 (margin=0% bất thường) vẫn chờ Sale Admin xác nhận |
 
 ### 11.13 Định nghĩa "Xong" (Definition of Done)
 

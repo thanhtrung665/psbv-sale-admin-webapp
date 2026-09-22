@@ -23,7 +23,6 @@ export async function GET() {
           inquiryPrompt: "",
           quotePrompt: "",
           toolsConfig: "",
-          resendApiKey: process.env.RESEND_API_KEY || ""
         }
       });
     }
@@ -52,7 +51,6 @@ export async function POST(req: Request) {
         inquiryPrompt: body.inquiryPrompt,
         quotePrompt: body.quotePrompt,
         toolsConfig: body.toolsConfig,
-        resendApiKey: body.resendApiKey
       },
       update: {
         apiKey: body.apiKey,
@@ -60,7 +58,6 @@ export async function POST(req: Request) {
         inquiryPrompt: body.inquiryPrompt,
         quotePrompt: body.quotePrompt,
         toolsConfig: body.toolsConfig,
-        resendApiKey: body.resendApiKey
       }
     });
 
@@ -79,7 +76,6 @@ export async function POST(req: Request) {
             inquiryPrompt: body.inquiryPrompt,
             quotePrompt: body.quotePrompt,
             toolsConfig: body.toolsConfig,
-            resendApiKey: body.resendApiKey
           }
         });
         return NextResponse.json(existing);

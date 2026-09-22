@@ -16,7 +16,6 @@ export default function AiConfigPage() {
     inquiryPrompt: "",
     quotePrompt: "",
     toolsConfig: "",
-    resendApiKey: ""
   });
 
   useEffect(() => {
@@ -131,33 +130,16 @@ export default function AiConfigPage() {
             />
           </div>
 
-        </form>
-      </div>
-
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">Cấu hình Resend Mail</h2>
-        <div className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Resend API Key</label>
-            <input
-              type="password"
-              value={config.resendApiKey || ""}
-              onChange={e => setConfig({ ...config, resendApiKey: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="re_..."
-            />
-          </div>
           <div className="pt-4 flex justify-end">
             <button
-              onClick={handleSave}
-              form="config-form"
+              type="submit"
               disabled={saving}
               className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? "Đang lưu..." : "Lưu Tất Cả Cấu Hình"}
+              {saving ? "Đang lưu..." : "Lưu Cấu Hình"}
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );

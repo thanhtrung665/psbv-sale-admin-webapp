@@ -3,6 +3,10 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { ClipboardList, TrendingUp, Banknote, PieChart, Eye, Inbox } from "lucide-react";
+import { revenueByMonth, statusBreakdown, topClients } from "@/lib/analytics/aggregate";
+import { RevenueTrendChart } from "@/components/analytics/revenue-trend-chart";
+import { StatusFunnelChart } from "@/components/analytics/status-funnel-chart";
+import { TopClientsChart } from "@/components/analytics/top-clients-chart";
 
 export const dynamic = "force-dynamic"; // Always fresh data
 
@@ -58,6 +62,15 @@ export default async function OverviewPage() {
 
   const avgMarginPct = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
   const recentRfqs = allRfqs.slice(0, 10); // top 10
+
+  // Chart data (SPEC.md §12) — pure aggregation, same `allRfqs` fetch, no extra DB round-trip.
+  const trendData = revenueByMonth(allRfqs);
+  const statusChartData = statusBreakdown(allRfqs).map((row) => ({
+    status: row.status,
+    label: statusCounts[row.status]?.label ?? row.status,
+    count: row.count,
+  }));
+  const topClientsData = topClients(allRfqs);
 
   const kpiCards = [
     { 
@@ -124,14 +137,23 @@ export default async function OverviewPage() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+      {/* Revenue & Margin Trend */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4 border-b border-slate-200 pb-3">
+          Doanh thu &amp; Lợi nhuận theo tháng
+        </h2>
+        <RevenueTrendChart data={trendData} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
         {/* Status Breakdown */}
-        <div className="lg:col-span-1 bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4 border-b border-slate-200 pb-3">
             Trạng thái Đơn hàng
           </h2>
-          <div className="space-y-3">
+          <StatusFunnelChart data={statusChartData} />
+          <div className="space-y-3 mt-4">
             {Object.entries(statusCounts).map(([key, data]) => {
               const pct = totalRfqs > 0 ? (data.count / totalRfqs) * 100 : 0;
               return (
@@ -160,8 +182,18 @@ export default async function OverviewPage() {
           </div>
         </div>
 
+        {/* Top Clients */}
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider mb-4 border-b border-slate-200 pb-3">
+            Top Khách hàng theo Doanh thu
+          </h2>
+          <TopClientsChart data={topClientsData} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6">
         {/* Recent RFQs */}
-        <div className="lg:col-span-2 bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col shadow-sm">
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col shadow-sm">
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-white">
             <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Đơn hàng mới nhất</h2>
             <Link href="/rfq" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">

@@ -18,8 +18,8 @@ module.exports = {
     }],
   },
   moduleNameMapper: {
-    // Mirrors tsconfig paths: '@/*' -> ['./src/*', './*'] (src first, then repo root).
-    '^@/(.*)$': ['<rootDir>/src/$1', '<rootDir>/$1'],
+    // Mirrors tsconfig paths: '@/*' -> './src/*'.
+    '^@/(.*)$': '<rootDir>/src/$1',
   },
   transformIgnorePatterns: [
     '/node_modules/',

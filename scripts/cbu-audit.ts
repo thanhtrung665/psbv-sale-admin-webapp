@@ -57,7 +57,7 @@ async function main() {
   }
 
   // Imported lazily so `--help` never opens a database connection.
-  const { prisma } = await import("../lib/prisma");
+  const { prisma } = await import("../src/lib/prisma");
 
   const rfqs = await prisma.rFQ.findMany({
     where: { status: { in: args.statuses as never[] } },

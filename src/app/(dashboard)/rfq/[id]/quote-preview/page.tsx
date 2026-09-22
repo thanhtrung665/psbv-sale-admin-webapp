@@ -40,6 +40,27 @@ export default function QuotePreviewPage() {
   const [bodyHtml, setBodyHtml] = useState("");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  // Email Review Agent v1 (SPEC.md §13): drafts subject/body with Gemini. Never sends anything — this only
+  // fills the fields below, which the Sale Admin can still edit before "DUYỆT & GỬI". Falls back to the
+  // static template already in place (set by fetchRFQ) if the AI call fails, so the send flow never blocks.
+  const draftEmailWithAgent = useCallback(async () => {
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const res = await fetch(`/api/rfq/${rfqId}/agent/draft-quotation-email`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "Không soạn được nháp.");
+      if (data.subject) setSubject(data.subject);
+      if (data.bodyHtml) setBodyHtml(data.bodyHtml);
+    } catch (err: any) {
+      setDraftError(err.message || "Không soạn được nháp bằng AI — giữ nội dung mặc định.");
+    } finally {
+      setDrafting(false);
+    }
+  }, [rfqId]);
 
   const fetchRFQ = useCallback(async () => {
     const res = await fetch(`/api/rfq/${rfqId}`);
@@ -63,8 +84,11 @@ export default function QuotePreviewPage() {
   }, [rfqId]);
 
   useEffect(() => {
-    fetchRFQ().then(() => generatePreviewPdf());
-  }, [fetchRFQ, generatePreviewPdf]);
+    fetchRFQ().then(() => {
+      generatePreviewPdf();
+      draftEmailWithAgent();
+    });
+  }, [fetchRFQ, generatePreviewPdf, draftEmailWithAgent]);
 
   const handleApproveAndSend = async () => {
     if (!confirm("Xác nhận phê duyệt & gửi báo giá cho khách hàng?")) return;
@@ -177,10 +201,28 @@ export default function QuotePreviewPage() {
           
           {/* Email Draft Form */}
           <div className="bg-white border border-gray-200 rounded-2xl p-5 flex-1 flex flex-col shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider flex items-center gap-2">
-              <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-              Email Dispatch Draft
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                <svg className="w-4 h-4 text-violet-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                Email Dispatch Draft
+              </h2>
+              <button
+                onClick={draftEmailWithAgent}
+                disabled={drafting}
+                title="Soạn lại tiêu đề & nội dung email bằng AI (Gemini) — bạn vẫn sửa được trước khi gửi"
+                className="flex items-center gap-1.5 text-xs font-medium text-violet-700 bg-violet-50 border border-violet-200 hover:bg-violet-100 disabled:opacity-60 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                {drafting ? (
+                  <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                ) : "🤖"}
+                {drafting ? "Đang soạn..." : "Soạn lại bằng AI"}
+              </button>
+            </div>
+            {draftError && (
+              <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                ⚠ {draftError}
+              </p>
+            )}
             <div className="flex flex-col gap-4 flex-1">
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5 font-medium">Người nhận (To)</label>

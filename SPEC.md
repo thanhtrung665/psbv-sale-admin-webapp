@@ -825,7 +825,7 @@ Mở rộng `/overview` hiện có (không tạo trang trùng lặp) với biể
 
 ## 13. Email Review Agent — kế hoạch triển khai (Phase 2)
 
-**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — đây là kế hoạch, chưa có code.** Theo dõi tiến độ: `PROGRESS.md` §8.
+**Trạng thái (22/09/2026): v1 xong (E1–E5).** Trang gửi Quotation (`quote-preview`) giờ tự soạn nháp subject/body bằng Gemini dựa trên dữ liệu RFQ thật (RFQ code, Incoterm, Payment Term, số dòng hàng), có nút soạn lại, con người luôn xem/sửa/duyệt trước khi gửi qua route thật (`send-quote`, không đổi). Theo dõi tiến độ: `PROGRESS.md` §8.
 
 ### 13.1 Hiện trạng đã kiểm chứng
 

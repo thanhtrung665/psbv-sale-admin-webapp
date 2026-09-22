@@ -145,7 +145,7 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm run lint` không thêm cảnh bá
 - [ ] Thêm CIPL vào sidebar điều hướng chính thức — *kiểm chứng lại 22/09: tính năng tách file CIPL (`/api/pdf/split-cipl`) và bóc tách dữ liệu CIPL (`/api/cipl/*`) đều **đã xây xong, chạy thật** (không phải mock), nhưng cả hai đều không có trong sidebar — chỉ vào được qua "Xử lý File" (tab "Tách CIPL") hoặc "Generate File" (chọn "File CIPL") trên trang danh sách RFQ. Hai luồng này cũng chưa nối với nhau (kết quả tách file không tự động nạp vào bước bóc tách dữ liệu)*
 - [ ] Template APITemplate riêng cho COC/COO (hiện dùng nhầm template Quotation)
 - [x] Dashboard analytics (revenue, margin KPI) — **v1 xong 22/09, xem §7 và SPEC.md §12**
-- [ ] Email Review Agent thật — **kế hoạch chi tiết đã viết 22/09, xem §8 và SPEC.md §13**
+- [x] Email Review Agent thật — **v1 xong 22/09, xem §8 và SPEC.md §13**
 - [ ] Đổi mật khẩu seed mặc định `Admin@123` trên production nếu chưa đổi (P3-3)
 
 ---
@@ -340,7 +340,7 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm test -- --runInBand` 16 suite/334
 
 ## 8. Email Review Agent — kế hoạch (Phase 2)
 
-**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — mới lên kế hoạch, chưa có code.** Đặc tả đầy đủ: `SPEC.md` §13.
+**Trạng thái (22/09/2026): v1 xong (E1–E5).** Đặc tả đầy đủ: `SPEC.md` §13.
 
 ### 8.1 Hiện trạng đã kiểm chứng (22/09)
 
@@ -357,11 +357,11 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm test -- --runInBand` 16 suite/334
 
 ### 8.3 Checklist thực thi
 
-- [ ] **E1** `src/lib/agent/draft-quotation-email.ts` + `src/lib/schemas/agent.schemas.ts` (validate JSON Gemini trả về) + test (mock Gemini client, không gọi mạng)
-- [ ] **E2** `POST /api/rfq/[id]/agent/draft-quotation-email` (auth + rate-limit, chỉ đọc DB + gọi Gemini, không gửi email/không ghi DB) + test tích hợp (mock Gemini + mock Prisma)
-- [ ] **E3** Nối dây UI: đọc lại `quote-preview/page.tsx` (hoặc trang tương đương) khi bắt tay vào, thay luồng gõ tay bằng gọi E2 lấy nháp → render `EmailReviewCard` → Sale Admin duyệt → gửi qua `send-quote` (không đổi)
-- [ ] **E4** Xoá `src/app/api/agent/route.ts` (mock cũ) sau khi E3 chạy ổn
-- [ ] **E5** Nghiệm thu: `tsc` 0 lỗi, test mới xanh, không giảm số test hiện có, output Gemini luôn qua Zod trước khi hiển thị
+- [x] **E1** `src/lib/agent/draft-quotation-email.ts` (`draftQuotationEmailWithGemini`, hàm không phụ thuộc Prisma — nhận `apiKey`/`modelName` qua tham số để route tự tra `AiConfig`) + `src/lib/schemas/agent.schemas.ts` + 7 test (mock `@google/generative-ai`, không gọi mạng)
+- [x] **E2** `POST /api/rfq/[id]/agent/draft-quotation-email` (auth + `checkAiRouteLimit`, chỉ đọc DB + gọi Gemini, không gửi email/không ghi DB) + 5 test tích hợp (mock Gemini + mock Prisma, gọi thẳng route handler thật)
+- [x] **E3** *(quyết định khi làm — khác kế hoạch gốc)*: đọc `quote-preview/page.tsx` mới phát hiện trang này **đã có sẵn form review/sửa/gửi hoàn chỉnh** (không phải "gõ tay" trơ — có ô To/CC/BCC/Subject/Body sửa được, xem PDF trực tiếp, nút "DUYỆT & GỬI" có `confirm()`), chỉ là nội dung Subject/Body khởi tạo bằng **template tĩnh**, không phải AI soạn. Thay vì ráp `EmailReviewCard` (sẽ phải viết lại toàn bộ UI PDF-preview đã có, rủi ro không cần thiết), giữ nguyên UI, chỉ đổi nguồn nội dung: gọi E2 ngay sau khi tải RFQ (nội dung tĩnh vẫn hiện trước như fallback, không chặn luồng nếu AI lỗi/chậm) + thêm nút "🤖 Soạn lại bằng AI" để soạn lại theo yêu cầu. `EmailReviewCard` xoá ở E4 (mồ côi thật, không dùng)
+- [x] **E4** Xoá `src/app/api/agent/route.ts` (mock cũ) và `src/components/agent/email-review-card.tsx` (mồ côi, không ai render, xem 8.1) sau khi E3 chạy ổn
+- [x] **E5** Nghiệm thu: `tsc` 0 lỗi ✅, `lint` không cảnh báo mới ✅, test xanh toàn bộ ✅ (25 suite/394, từ 23/382), output Gemini luôn qua Zod trước khi hiển thị ✅. Đã xem trực quan thật trên trình duyệt (đăng nhập `admin@psbv.com`, mở `quote-preview` của AC0006 — RFQ thật, dữ liệu Supabase thật): nháp AI tải tự động sau khi vào trang (dùng đúng Incoterm "DDP"/Payment Term "60 Days Net" thật của RFQ, không bịa dữ liệu thiếu như tên khách hàng rỗng), nút "Soạn lại bằng AI" tạo ra nội dung khác mỗi lần bấm (xác nhận gọi Gemini thật, không cache), không lỗi console. `npm run build` **không xác minh được lần này** — máy dev hết RAM khả dụng (~1.1GB/16GB) cả 2 lần thử, cùng lỗi "Fatal process out of memory" như lần Dashboard Analytics — không phải lỗi code (đã có `tsc`/test/lint/kiểm tra trực tiếp trên trình duyệt làm bằng chứng thay thế); cần chạy lại khi máy rảnh RAM hơn
 
 ---
 

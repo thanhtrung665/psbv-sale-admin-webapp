@@ -242,9 +242,9 @@ MS_GRAPH_MAILBOX=drilling@psbvn.com
 - Email builder trong `src/lib/email-builder.ts`
 - Các functions hiện có: `buildRfoEmailHtml()`, `buildOrderTableHtml()` (dùng cho RFO gửi hãng — ràng buộc "không chứa thông tin khách hàng"). Không còn `buildQuotationEmailHtml()` — đã xoá ở Sprint 2 vì mồ côi (không ai import) và tự ký sai domain
 
-### Dashboard Analytics (Phase 2 — chưa bắt đầu)
-- Kế hoạch chi tiết: `SPEC.md` §12. Theo dõi: `PROGRESS.md` §7.
-- Mở rộng `/overview` hiện có (đã có KPI + status breakdown, chưa có biểu đồ) — không tạo trang mới. Thư viện chọn: `recharts` (chưa cài). Tầng gộp số ở `src/lib/analytics/` (hàm thuần, có test, không phụ thuộc DB).
+### Dashboard Analytics (Phase 2 — v1 xong 22/09)
+- Chi tiết: `SPEC.md` §12. Theo dõi: `PROGRESS.md` §7.
+- `/overview` đã có biểu đồ xu hướng doanh thu/margin theo tháng, phễu trạng thái, top khách hàng — dùng `recharts`. Tầng gộp số thuần ở `src/lib/analytics/aggregate.ts` (`revenueByMonth`, `statusBreakdown`, `topClients` — không phụ thuộc Prisma, có test). Component biểu đồ ở `src/components/analytics/`.
 
 ### Email Review Agent (Phase 2 — chưa bắt đầu)
 - Kế hoạch chi tiết: `SPEC.md` §13. Theo dõi: `PROGRESS.md` §8.

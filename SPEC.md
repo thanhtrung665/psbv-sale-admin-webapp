@@ -770,7 +770,7 @@ Thứ tự **C1 trước UI**: giá sai đang đi ra khách hàng, còn giao di�
 
 ## 12. Dashboard Analytics — kế hoạch triển khai (Phase 2)
 
-**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — đây là kế hoạch, chưa có code.** Theo dõi tiến độ: `PROGRESS.md` §7.
+**Trạng thái (22/09/2026): v1 xong (A1–A6).** `/overview` giờ có biểu đồ xu hướng doanh thu/margin, phễu trạng thái, top khách hàng — dùng `recharts`, tầng gộp số thuần có test ở `src/lib/analytics/`. Theo dõi tiến độ: `PROGRESS.md` §7.
 
 ### 12.1 Hiện trạng đã kiểm chứng
 
@@ -801,7 +801,7 @@ Mở rộng `/overview` hiện có (không tạo trang trùng lặp) với biể
 
 - **A1 — Nền tảng dữ liệu:** cài `recharts`; viết `revenueByMonth()`, `statusBreakdown()`, `topClients()` (hàm thuần) + test đơn vị (không cần DB, đưa mảng RFQ giả vào).
 - **A2 — Biểu đồ xu hướng doanh thu/margin:** bar hoặc line chart theo tháng (12 tháng gần nhất), đặt trên `/overview`.
-- **A3 — Biểu đồ phễu trạng thái:** thay thanh CSS hiện tại bằng bar chart ngang qua `recharts`, giữ đúng 7 status và thứ tự lifecycle.
+- **A3 — Biểu đồ phễu trạng thái:** bar chart ngang qua `recharts`, giữ đúng 7 status và thứ tự lifecycle. *(Quyết định khi làm 22/09 — khác chút với câu chữ ban đầu "thay thanh CSS": danh sách trạng thái cũ **không bị xoá**, vì nó còn là điều hướng thật (bấm vào lọc `/rfq?status=...`) — xoá sẽ mất chức năng chỉ để đổi giao diện. Biểu đồ được **thêm** phía trên danh sách đó, cùng 1 card.)*
 - **A4 — Top khách hàng:** bar chart hoặc bảng xếp hạng 5 khách hàng theo tổng doanh thu.
 - **A5 — Test:** test đơn vị cho 3 hàm gộp số; test component (React Testing Library, theo đúng khuôn Sprint 3) cho các wrapper biểu đồ mới — kiểm tra render đúng dữ liệu, không kiểm tra pixel.
 - **A6 — Tài liệu:** cập nhật `PROGRESS.md` §7, `CLAUDE.md` khi từng giai đoạn xong.

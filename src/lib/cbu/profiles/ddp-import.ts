@@ -72,12 +72,17 @@ export function calculateDdpImport(rawLines: CbuLineInput[], p: CbuParams): CbuR
     const share = safeDiv(l.weightKgPerUnit, totalWeightKg);
     const logisticsUsd = logisticsPoolUsd * share;
     const insuranceShareUsd = insuranceUsd * share;
+    const freightShareUsd = freightUsd * share;
     if (totalWeightKg > 0 && l.qty > 0 && l.weightKgPerUnit <= 0) {
       lineWarnings.push("Thiếu trọng lượng — logistics chưa phân bổ được cho dòng này.");
     }
 
-    // Excel col L: Duty = (Material + Logistics) × %Duty — logistics already includes insurance.
-    const dutyUsd = (l.materialUsd + logisticsUsd) * pctToFrac(l.dutyPct);
+    // Duty base = real CIF value (Material + international freight + insurance), NOT the Excel
+    // column L formula (Material + full Logistics pool, which also bundles customs clearance,
+    // inland trucking and other local fees that are not part of a customs CIF valuation).
+    // SPEC §11.12 Q2 — decided 22/09/2026, overriding the "keep Excel" temporary default.
+    const dutyBaseUsd = l.materialUsd + freightShareUsd + insuranceShareUsd;
+    const dutyUsd = dutyBaseUsd * pctToFrac(l.dutyPct);
     const base = l.materialUsd + bankFeeUsd + logisticsUsd + dutyUsd + l.customUsd;
 
     const priced = priceLine(l.src, {

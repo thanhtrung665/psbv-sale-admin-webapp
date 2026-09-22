@@ -181,8 +181,8 @@ describe("regressions (SPEC §11.2)", () => {
   it("F2 · percent inputs are always 0-100: duty 1% is 1%, never 100%", () => {
     const one: CbuLineInput[] = [{ id: "a", qty: 1, materialUsd: 100, totalWeightLb: 1, dutyPct: 1 }];
     const r = calculateCbu(one, { ...paramsFor("air"), logistics: { freightFixedUsd: 0 } });
-    // Only the minimum insurance ($15) is in the pool → base = 100 + 15 → 1% = 1.15 (the old engine gave 100).
-    expect(r.lines[0].dutyUsd).toBeCloseTo((100 + r.lines[0].logisticsUsd) * 0.01, 9);
+    // No freight (0) + minimum insurance ($15) → CIF base = 100 + 15 → 1% = 1.15 (the old engine gave 100).
+    expect(r.lines[0].dutyUsd).toBeCloseTo((100 + r.pools.insuranceUsd) * 0.01, 9);
     expect(r.lines[0].dutyUsd).toBeLessThan(2);
   });
 
@@ -206,12 +206,20 @@ describe("regressions (SPEC §11.2)", () => {
     expect(half.ddpPriceUsd).toBeLessThan(300);
   });
 
-  it("F3 · duty base = material + allocated logistics INCLUDING insurance (Excel col L)", () => {
+  it("F3/Q2 · duty base = real CIF (material + allocated freight + allocated insurance), " +
+      "NOT the Excel col L formula (material + full logistics, which also bundles customs " +
+      "clearance / inland / other local fees — decided 22/09/2026, SPEC §11.12 Q2)", () => {
     const withDuty = lines.map((l) => ({ ...l, dutyPct: 10 }));
     const r = calculateCbu(withDuty, paramsFor("air"));
+    const totalWeightKg = r.pools.totalWeightKg;
     for (const l of r.lines) {
       const material = withDuty.find((x) => x.id === l.id)!.materialUsd;
-      expect(l.dutyUsd).toBeCloseTo((material + l.logisticsUsd) * 0.1, 9);
+      const share = l.weightKgPerUnit / totalWeightKg;
+      const freightShare = r.pools.freightUsd * share;
+      const insuranceShare = r.pools.insuranceUsd * share;
+      expect(l.dutyUsd).toBeCloseTo((material + freightShare + insuranceShare) * 0.1, 9);
+      // Sanity: with non-zero clearance/inland in the AIR fixture, this differs from the old Excel base.
+      expect(l.dutyUsd).not.toBeCloseTo((material + l.logisticsUsd) * 0.1, 6);
     }
   });
 

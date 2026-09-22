@@ -142,7 +142,7 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm run lint` không thêm cảnh bá
 
 ### Sau khi 4 sprint trên xong — hạng mục tính năng còn thiếu
 
-- [ ] Thêm CIPL vào sidebar điều hướng chính thức — *kiểm chứng lại 22/09: tính năng tách file CIPL (`/api/pdf/split-cipl`) và bóc tách dữ liệu CIPL (`/api/cipl/*`) đều **đã xây xong, chạy thật** (không phải mock), nhưng cả hai đều không có trong sidebar — chỉ vào được qua "Xử lý File" (tab "Tách CIPL") hoặc "Generate File" (chọn "File CIPL") trên trang danh sách RFQ. Hai luồng này cũng chưa nối với nhau (kết quả tách file không tự động nạp vào bước bóc tách dữ liệu)*
+- [x] Thêm lối vào CIPL dễ thấy hơn — **xong 22/09**: trang `/rfq/[id]/cipl` (xem dữ liệu CIPL đã bóc tách, tải PDF) trước đó chỉ vào được qua URL trực tiếp, không có nút nào dẫn tới; đã thêm icon "CIPL" (FileText) vào cột hành động của từng dòng RFQ trên `src/app/(dashboard)/rfq/page.tsx`, cạnh icon "Tính CBU". Không thêm mục cấp cao nhất vào `src/components/shared/sidebar.tsx` vì trang này cần `rfqId` cụ thể (giống cách "Tính CBU"/"Xem chi tiết" đã làm), một link sidebar tĩnh sẽ không trỏ đi đâu được. *Còn treo*: 2 luồng "Xử lý File → Tách CIPL" và "bóc tách dữ liệu CIPL" vẫn chưa nối nhau (kết quả tách file không tự động nạp vào bước bóc tách) — chưa làm trong lần này.
 - [ ] Template APITemplate riêng cho COC/COO (hiện dùng nhầm template Quotation)
 - [x] Dashboard analytics (revenue, margin KPI) — **v1 xong 22/09, xem §7 và SPEC.md §12**
 - [x] Email Review Agent thật — **v1 xong 22/09, xem §8 và SPEC.md §13**

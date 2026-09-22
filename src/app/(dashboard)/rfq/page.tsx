@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Plus, Calculator, Search, Inbox, Eye, FileSearch, Trash2 } from "lucide-react";
+import { Plus, Calculator, Search, Inbox, Eye, FileSearch, FileText, Trash2 } from "lucide-react";
 
 import { GenerateFileModal } from "@/components/rfq/generate-file-modal";
 import { QuickEmailModal } from "@/components/rfq/quick-email-modal";
@@ -248,6 +248,13 @@ export default function RFQListPage() {
                               title="Tính CBU"
                             >
                               <Calculator className="w-4 h-4" />
+                            </Link>
+                            <Link
+                              href={`/rfq/${rfq.id}/cipl`}
+                              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-500 hover:text-slate-900 shadow-sm transition-all"
+                              title="CIPL (Invoice & Packing List)"
+                            >
+                              <FileText className="w-4 h-4" />
                             </Link>
                             <Link
                               href={rfq.status === 'QUOTATION_DRAFTED' || rfq.status === 'QUOTED_TO_CLIENT' 

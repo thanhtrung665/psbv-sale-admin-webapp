@@ -386,10 +386,10 @@ Vercel tự động deploy khi có push lên GitHub.
 Sửa đúng công thức theo workbook đã chuẩn hoá, lưu/đọc đầy đủ, dựng lại giao diện, thêm kịch bản Air/Sea và profile Baker Hughes (FCA/DAP). Chi tiết & tiêu chí nghiệm thu: **§11**. Theo dõi tiến độ: `PROGRESS.md` §6.
 
 ### Phase 2 — Feature Completion (v0.2)
-- [x] CI/PL Editing với template — *thực tế đã xong từ lâu* (3 API route, trang UI, model DB riêng); chỉ thiếu link trong sidebar điều hướng chính thức (xem `PROGRESS.md` §2.1, §9 "Việc đã làm 22/09 (2)")
-- [ ] COC/COO document handling — `CERTIFICATE_COC_COO_PDF` vẫn dùng nhầm template Quotation (P3-5), chưa có template APITemplate riêng
-- [ ] Email Review Agent (human-in-the-loop) — **kế hoạch chi tiết: §13**
-- [ ] Dashboard analytics (revenue, margin KPIs) — **kế hoạch chi tiết: §12**
+- [x] CI/PL Editing với template — 3 API route, trang UI, model DB riêng; đã có link vào `/rfq/[id]/cipl` trong action row của danh sách RFQ (22/09)
+- [ ] COC/COO document handling — `CERTIFICATE_COC_COO_PDF` vẫn dùng nhầm template Quotation (P3-5), chưa có template APITemplate riêng — cần thiết kế template mới trong dashboard APITemplate.io (ngoài phạm vi code) rồi thêm `APITEMPLATE_COC_COO_TEMPLATE_ID`
+- [x] Email Review Agent (human-in-the-loop) v1 — **xong, xem §13 và `PROGRESS.md` §8**: Gemini soạn nháp subject/body email Quotation trên `quote-preview`, Sale Admin luôn duyệt/sửa trước khi gửi qua `send-quote`
+- [x] Dashboard analytics (revenue, margin KPIs) v1 — **xong, xem §12 và `PROGRESS.md` §7**: `/overview` có biểu đồ xu hướng doanh thu/margin, phễu trạng thái, top khách hàng
 
 ### Phase 3 — Automation (v0.3)
 - [ ] Full AI Agent orchestration

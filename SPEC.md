@@ -386,10 +386,10 @@ Vercel tự động deploy khi có push lên GitHub.
 Sửa đúng công thức theo workbook đã chuẩn hoá, lưu/đọc đầy đủ, dựng lại giao diện, thêm kịch bản Air/Sea và profile Baker Hughes (FCA/DAP). Chi tiết & tiêu chí nghiệm thu: **§11**. Theo dõi tiến độ: `PROGRESS.md` §6.
 
 ### Phase 2 — Feature Completion (v0.2)
-- [ ] CI/PL Editing với template
-- [ ] COC/COO document handling
-- [ ] Email Review Agent (human-in-the-loop)
-- [ ] Dashboard analytics (revenue, margin KPIs)
+- [x] CI/PL Editing với template — *thực tế đã xong từ lâu* (3 API route, trang UI, model DB riêng); chỉ thiếu link trong sidebar điều hướng chính thức (xem `PROGRESS.md` §2.1, §9 "Việc đã làm 22/09 (2)")
+- [ ] COC/COO document handling — `CERTIFICATE_COC_COO_PDF` vẫn dùng nhầm template Quotation (P3-5), chưa có template APITemplate riêng
+- [ ] Email Review Agent (human-in-the-loop) — **kế hoạch chi tiết: §13**
+- [ ] Dashboard analytics (revenue, margin KPIs) — **kế hoạch chi tiết: §12**
 
 ### Phase 3 — Automation (v0.3)
 - [ ] Full AI Agent orchestration
@@ -765,3 +765,119 @@ Thứ tự **C1 trước UI**: giá sai đang đi ra khách hàng, còn giao di�
 - **Kết luận: xác nhận đây là lỗi công thức thật trong file Excel gốc của PSBV** (không phải lỗi của bản `.md` chuyển đổi hay của việc đọc hiểu công thức) — nếu giá trị hàng đủ lớn để phí bảo hiểm tính ra vượt mức sàn, cột K (phân bổ cho từng dòng) trong Excel sẽ tính thiếu, trong khi ô tổng T ở sheet Logistic vẫn hiển thị đúng — hai nơi trong cùng workbook lệch nhau mà không cảnh báo.
 - File Baker Hughes (2 file) không có mẫu công thức này (không có khái niệm insurance theo đúng thiết kế của profile `FCA_DAP`).
 - **Không cần sửa code**: engine v2 (`src/lib/cbu/pools.ts` → `computeInsurance()`) đã tính đúng theo S (MAX-floored) ngay từ Phase C1, không lặp lại lỗi này. Chỉ cần ghi nhận để giải thích chênh lệch nếu ai đó đối chiếu số của engine với Excel gốc trong trường hợp bảo hiểm vượt sàn.
+
+---
+
+## 12. Dashboard Analytics — kế hoạch triển khai (Phase 2)
+
+**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — đây là kế hoạch, chưa có code.** Theo dõi tiến độ: `PROGRESS.md` §7.
+
+### 12.1 Hiện trạng đã kiểm chứng
+
+Đọc trực tiếp code (không suy đoán):
+
+- `src/app/(dashboard)/overview/page.tsx` (236 dòng) **không phải trang trống** — đã có: 4 thẻ KPI (Tổng đơn hàng, Tổng giá trị USD, Tổng lợi nhuận, Margin trung bình) tính từ `prisma.rFQ.findMany()` một lần; panel "Trạng thái Đơn hàng" đếm theo `status` với thanh tiến trình CSS tự vẽ (không dùng thư viện); bảng "Đơn hàng mới nhất" (10 RFQ gần nhất).
+- **Chưa có thư viện vẽ biểu đồ nào** trong `package.json` (đã kiểm tra recharts/chart.js/victory/nivo/d3/apexcharts — không có gói nào).
+- **Chưa có biểu đồ xu hướng theo thời gian** (mọi số hiện tại là snapshot hiện tại, không có "theo tháng").
+- Trường dữ liệu đã có sẵn để dùng ngay (không cần đổi schema): `RFQ.status`, `totalRevenueUsd`, `totalMarginUsd`, `actualMarginPct`, `totalRevenueVnd` (BigInt), `createdAt`, `cbuCalculatedAt`, quan hệ `client`.
+- **Không có theo dõi "thắng/thua" (won/lost)** ngoài 7 status hiện có — không thể dựng "tỷ lệ chốt đơn" thật (chuyển đổi Inquiry → Quoted) nếu không thêm field mới. **Không làm ở v1** (xem câu hỏi mở §12.6).
+
+### 12.2 Mục tiêu v1
+
+Mở rộng `/overview` hiện có (không tạo trang trùng lặp) với biểu đồ xu hướng, giữ nguyên 3 khối đã có (KPI, status, recent) làm nền — chỉ thay thanh CSS tự vẽ bằng chart thật và thêm 2 biểu đồ mới.
+
+### 12.3 Kiến trúc
+
+- **Thư viện chọn: `recharts`** — SVG-based, chạy tốt trong React Server/Client Component pattern của Next.js App Router đang dùng, nhẹ hơn Chart.js cho nhu cầu bar/line chart cơ bản, không cần canvas.
+- **Tầng dữ liệu — hàm thuần, tách khỏi Prisma, có test** (theo đúng phong cách `src/lib/cbu/` — logic thuần tách khỏi I/O để test không cần DB):
+  ```
+  src/lib/analytics/
+    aggregate.ts   # revenueByMonth(rfqs), statusBreakdown(rfqs), topClients(rfqs) — nhận mảng RFQ đã fetch, trả số đã gộp
+    types.ts       # kiểu dữ liệu input/output của các hàm trên
+  ```
+- Trang `/overview` (Server Component) giữ nguyên **một** query `prisma.rFQ.findMany()` hiện có, truyền kết quả qua các hàm `aggregate.ts`, rồi render xuống các Client Component biểu đồ (`"use client"`, nhận props đã tính sẵn — không tự fetch, không tự tính).
+
+### 12.4 Kế hoạch theo giai đoạn
+
+- **A1 — Nền tảng dữ liệu:** cài `recharts`; viết `revenueByMonth()`, `statusBreakdown()`, `topClients()` (hàm thuần) + test đơn vị (không cần DB, đưa mảng RFQ giả vào).
+- **A2 — Biểu đồ xu hướng doanh thu/margin:** bar hoặc line chart theo tháng (12 tháng gần nhất), đặt trên `/overview`.
+- **A3 — Biểu đồ phễu trạng thái:** thay thanh CSS hiện tại bằng bar chart ngang qua `recharts`, giữ đúng 7 status và thứ tự lifecycle.
+- **A4 — Top khách hàng:** bar chart hoặc bảng xếp hạng 5 khách hàng theo tổng doanh thu.
+- **A5 — Test:** test đơn vị cho 3 hàm gộp số; test component (React Testing Library, theo đúng khuôn Sprint 3) cho các wrapper biểu đồ mới — kiểm tra render đúng dữ liệu, không kiểm tra pixel.
+- **A6 — Tài liệu:** cập nhật `PROGRESS.md` §7, `CLAUDE.md` khi từng giai đoạn xong.
+
+### 12.5 Định nghĩa "Xong" (v1)
+
+- `/overview` có: KPI cards (giữ nguyên) + biểu đồ xu hướng doanh thu/margin theo tháng + biểu đồ trạng thái + top khách hàng.
+- 3 hàm gộp số trong `src/lib/analytics/aggregate.ts` có test đơn vị, không phụ thuộc DB.
+- `npx tsc --noEmit` 0 lỗi, `npm run lint` không thêm cảnh báo, `npm test` xanh toàn bộ (bao gồm test mới).
+- Không đổi `prisma/schema.prisma` — v1 chỉ đọc, không thêm cột/bảng.
+
+### 12.6 Câu hỏi mở (không chặn v1, để mặc định nêu trong ngoặc)
+
+| # | Câu hỏi | Mặc định tạm |
+|---|---------|---------------|
+| D1 | Có cần bộ lọc khoảng thời gian (date range picker) không, hay cố định 12 tháng gần nhất? | Cố định 12 tháng, chưa có UI lọc |
+| D2 | Có cần theo dõi "thắng/thua" (RFQ bị huỷ/khách từ chối) để tính tỷ lệ chốt đơn thật không — sẽ cần thêm field/status mới? | Chưa làm — ngoài phạm vi v1 |
+| D3 | Hiển thị doanh thu bằng USD, VND, hay cả hai? | USD (khớp field đã tổng hợp sẵn `totalRevenueUsd`) |
+
+---
+
+## 13. Email Review Agent — kế hoạch triển khai (Phase 2)
+
+**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — đây là kế hoạch, chưa có code.** Theo dõi tiến độ: `PROGRESS.md` §8.
+
+### 13.1 Hiện trạng đã kiểm chứng
+
+Đọc trực tiếp code (không suy đoán):
+
+- `POST /api/agent` (`src/app/api/agent/route.ts`, 64 dòng) — tự ghi chú "This is a placeholder for the actual AI Agent endpoint". Nhận `{prompt}`, **bỏ qua hoàn toàn**, trả cứng một `toolCalls` mẫu (`prepare_email_dispatch` với dữ liệu giả `AC0485`/`client@example.com`/`mock-pdf-url.pdf`) — không gọi AI thật, không có logic thật.
+- `src/components/agent/email-review-card.tsx` (239 dòng) — **component đã dựng đầy đủ UI** (form To/CC/BCC/Người gửi/Subject/Body HTML + xem trước PDF trực tiếp + nút "DUYỆT & BẮN MAIL MS GRAPH" gọi thẳng `/api/rfq/send-dispatch` — route thật, đã dùng MS Graph). **Nhưng không có nơi nào trong `src/` import/render component này** — hoàn toàn mồ côi, không ai dùng được. Nội dung To/Subject/Body của nó phải được truyền từ ngoài vào qua props (`initialTo`, `initialSubject`, `initialBody`) — hiện không có gì truyền vào vì không ai render nó.
+- **Kết luận: tính năng "Email Review Agent" hiện KHÔNG tồn tại ở bất kỳ hình thức nào người dùng chạm tới được** — không phải "đã xây rồi chỉ cần nối dây", mà là hai mảnh rời rạc (route mock + component mồ côi) chưa từng được ráp lại, cộng thêm chưa có logic AI thật ở đâu cả.
+- Luồng gửi email thật đang dùng hôm nay (đã qua Sprint 2, dùng MS Graph): `send-quote` (gửi Quotation), `send-rfo` (gửi RFO hãng), `send-dispatch` (gửi chung) — cả 3 đều nhận nội dung **gõ tay/điền sẵn tĩnh** (xem `quick-email-modal.tsx`'s `EMAIL_ACTIONS` — subject/body mẫu cố định, không có AI soạn).
+
+### 13.2 Phạm vi v1 — quyết định thiết kế
+
+Tên "Email Review Agent (human-in-the-loop)" trong roadmap gốc (SPEC §10) đã tự giới hạn phạm vi: **agent không bao giờ tự gửi email** — chỉ soạn nháp, con người (Sale Admin) xem/sửa/duyệt trước khi bấm gửi. Đây vừa là yêu cầu nghiệp vụ (an toàn, tránh AI gửi nhầm cho khách) vừa khớp đúng tên gọi đã ghi trong roadmap từ trước — không phải quyết định tự đặt ra.
+
+**v1 chỉ làm MỘT việc cụ thể** (không dựng khung "nhiều tool" như mock cũ — hiện chỉ có đúng 1 ca dùng thật, dựng khung tổng quát cho 1 người gọi là thừa trừu tượng): khi RFQ ở trạng thái `QUOTATION_DRAFTED` và Sale Admin chuẩn bị gửi báo giá cho khách, agent dùng Gemini (đã có sẵn `GOOGLE_GEMINI_API_KEY`/`@google/generative-ai`, không thêm nhà cung cấp AI mới) soạn nháp subject + body tiếng Việt/Anh dựa trên dữ liệu RFQ thật (mã đơn, tên khách, số dòng hàng, tổng tiền, điều khoản thanh toán) thay vì template tĩnh hiện tại — hiển thị trong `EmailReviewCard` (component có sẵn, chỉ cần nối dây) để Sale Admin sửa rồi bấm gửi qua route thật đã có (`send-quote`).
+
+**Không làm ở v1** (có thể mở rộng sau, xem §13.6): soạn nháp RFO cho hãng, đa-tool orchestration, tự động gửi không cần duyệt, theo dõi/nhắc follow-up.
+
+### 13.3 Kiến trúc
+
+```
+src/lib/agent/
+  draft-quotation-email.ts   # draftQuotationEmailWithGemini(context) → { subject, bodyHtml } sau khi validate qua Zod
+src/lib/schemas/
+  agent.schemas.ts           # draftQuotationEmailOutputSchema — validate JSON Gemini trả về (theo đúng khuôn gemini.schemas.ts của Sprint 2)
+src/app/api/rfq/[id]/agent/draft-quotation-email/route.ts   # POST — auth + rate-limit (dùng lại src/lib/rate-limit.ts), CHỈ đọc DB + gọi Gemini, KHÔNG gửi email, KHÔNG ghi DB
+```
+
+- Route mới **không** thay thế `send-quote` — nó chỉ trả về `{subject, bodyHtml}` để điền sẵn vào `EmailReviewCard`; việc gửi thật vẫn qua `send-quote` như hiện tại, không đổi.
+- Áp dụng lại đúng khuôn bảo mật/validate đã có: `getServerSession` bắt buộc, `validateBody`/Zod cho input, rate-limit như 7 route gọi Gemini khác (Sprint 0), output Gemini luôn qua Zod trước khi trả về client (không tin thẳng JSON AI trả — bài học từ Sprint 2's `gemini.schemas.ts`).
+- Xoá `POST /api/agent` (mock) sau khi route thật lên — theo đúng convention dọn code chết của dự án (đã làm với `cbu-form.tsx`, trang CBU legacy…).
+
+### 13.4 Kế hoạch theo giai đoạn
+
+- **E1 — Hàm soạn nháp + schema + test:** `draftQuotationEmailWithGemini()`, `agent.schemas.ts`; test với Gemini client giả lập (mock `@google/generative-ai`, không gọi mạng thật) — theo đúng khuôn `__tests__/schemas/gemini.schemas.test.ts`.
+- **E2 — API route:** `POST /api/rfq/[id]/agent/draft-quotation-email`; test tích hợp (mock Gemini + mock Prisma, gọi thẳng route handler) theo đúng khuôn Sprint 3 (`__tests__/api/*.route.test.ts`).
+- **E3 — Nối dây UI:** đọc kỹ trang gửi báo giá hiện tại (`quote-preview/page.tsx` hoặc nơi tương đương — cần đọc lại khi bắt tay vào E3, chưa giả định trước) để thay luồng gõ tay hiện tại bằng: gọi route E2 lấy nháp → render `EmailReviewCard` với nháp đó → Sale Admin sửa/duyệt → gửi qua `send-quote` (không đổi route gửi).
+- **E4 — Dọn dẹp:** xoá `src/app/api/agent/route.ts` (mock) sau khi E3 chạy ổn.
+- **E5 — Test + tài liệu:** cập nhật `PROGRESS.md` §8, `CLAUDE.md`.
+
+### 13.5 Định nghĩa "Xong" (v1)
+
+- Sale Admin mở luồng gửi Quotation, thấy nháp subject/body do Gemini soạn (không phải template tĩnh), sửa được, bấm gửi thật qua MS Graph — không có bước nào AI tự gửi mà không qua con người.
+- `POST /api/agent` (mock cũ) đã xoá, không còn code chết.
+- Output Gemini luôn qua Zod trước khi hiển thị (không tin thẳng).
+- `npx tsc --noEmit` 0 lỗi, test mới xanh, không giảm số test hiện có.
+
+### 13.6 Câu hỏi mở / mở rộng tương lai (không chặn v1)
+
+| # | Câu hỏi | Mặc định tạm |
+|---|---------|---------------|
+| M1 | Có soạn nháp luôn cho RFO gửi hãng (không chỉ Quotation gửi khách) không? | Chưa làm ở v1 — chỉ Quotation |
+| M2 | Ngôn ngữ nháp: tiếng Việt, tiếng Anh, hay theo khách hàng? | Theo đúng ngôn ngữ template tĩnh hiện có cho từng loại (khớp `quick-email-modal.tsx`), Sale Admin tự sửa nếu cần |
+| M3 | Có cache/tái dùng nháp đã soạn, hay soạn lại mỗi lần bấm? | Soạn lại mỗi lần — đơn giản, khối lượng RFQ hiện còn nhỏ, chưa cần cache |
+| M4 | Phase 3 roadmap ("Full AI Agent orchestration", "Automated follow-up emails") có phụ thuộc vào kiến trúc v1 này không? | Chưa thiết kế — v1 cố tình đơn giản (1 hàm, 1 route), không dựng khung tổng quát trước khi có ca dùng thứ 2 thật sự cần nó |

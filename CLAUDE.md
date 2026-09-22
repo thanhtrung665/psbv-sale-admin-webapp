@@ -240,7 +240,15 @@ MS_GRAPH_MAILBOX=drilling@psbvn.com
 
 ### Add new email template
 - Email builder trong `src/lib/email-builder.ts`
-- Các functions: `buildRfoEmailHtml()`, `buildQuotationEmailHtml()`
+- Các functions hiện có: `buildRfoEmailHtml()`, `buildOrderTableHtml()` (dùng cho RFO gửi hãng — ràng buộc "không chứa thông tin khách hàng"). Không còn `buildQuotationEmailHtml()` — đã xoá ở Sprint 2 vì mồ côi (không ai import) và tự ký sai domain
+
+### Dashboard Analytics (Phase 2 — chưa bắt đầu)
+- Kế hoạch chi tiết: `SPEC.md` §12. Theo dõi: `PROGRESS.md` §7.
+- Mở rộng `/overview` hiện có (đã có KPI + status breakdown, chưa có biểu đồ) — không tạo trang mới. Thư viện chọn: `recharts` (chưa cài). Tầng gộp số ở `src/lib/analytics/` (hàm thuần, có test, không phụ thuộc DB).
+
+### Email Review Agent (Phase 2 — chưa bắt đầu)
+- Kế hoạch chi tiết: `SPEC.md` §13. Theo dõi: `PROGRESS.md` §8.
+- `POST /api/agent` hiện là **mock hoàn toàn** (tự ghi chú "placeholder", trả cứng dữ liệu giả); `src/components/agent/email-review-card.tsx` đã dựng UI đầy đủ nhưng **mồ côi, không ai render**. Chưa có logic AI thật ở đâu. v1: chỉ soạn nháp email Quotation gửi khách bằng Gemini, con người luôn phải duyệt trước khi gửi (route gửi thật không đổi, vẫn `send-quote` qua MS Graph).
 
 ---
 

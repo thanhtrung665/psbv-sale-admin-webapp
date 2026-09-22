@@ -1,6 +1,6 @@
 # PROGRESS.md — Tiến độ dự án PSBV Sales Agent Platform
 
-**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C2 đã hoàn thành về mã nguồn** (engine v2, lưu/đọc + API, migration SQL tay đã kiểm chứng; 182 test pass) — **migration chưa áp lên DB thật** · **Cập nhật 22/09/2026:** CBU Module v2 Phase C0–C5 xong (§6); 4/4 lỗ hổng P0-1..P0-4 trong `SECURITY_AND_REMEDIATION.md` đã vá (§4 SPRINT 0) — chỉ còn "rotate `APITEMPLATE_API_KEY`" (thao tác trên Vercel, cần người có quyền) và rà giá RFQ đã gửi khách (Q8, thương mại) đang mở · **Cập nhật 22/09/2026 (2):** **SPRINT 2 xong 5/5** — thêm index cho 7 cột FK (migration chưa áp DB thật); hợp nhất `lib/` + `src/lib/`, gỡ alias webpack (phát hiện khi hợp nhất: `tsc`/`jest` và webpack từng type-check/chạy **hai file `ms-graph.ts` khác nhau** dưới cùng đường dẫn import — bản chạy thật thiếu `testMsGraphConnection` mà route test import, và bắt buộc `attachmentUrl` dù có route gửi mail không đính kèm); thống nhất email transport về MS Graph — phát hiện **RFO gửi hãng và "Gửi Mail Nhanh" đang gửi thật qua sandbox domain Resend (`onboarding@resend.dev`)**, không phải `drilling@psbvn.com`, đã sửa cả hai sang MS Graph và gỡ Resend/nodemailer khỏi code + `package.json`. 16 suite / 334 test pass, `tsc` 0 lỗi, `build` thành công · **Cập nhật 22/09/2026 (3):** áp 7/8 quyết định nghiệp vụ CBU (SPEC §11.12) vào engine — Q1/Q4–Q7 đã đúng sẵn từ trước, riêng **Q2 đổi cơ sở tính thuế sang CIF thực** (Material + cước quốc tế + bảo hiểm phân bổ, bỏ Excel col L) cần sửa `src/lib/cbu/profiles/ddp-import.ts` + 2 test hồi quy; Q3 chưa rõ (giữ mặc định), Q8 vẫn chờ quản lý. Xem §6.5 · **Cập nhật 22/09/2026 (4a):** xử lý xong 2/3 quyết định thương mại còn treo — **Q3 xác nhận là lỗi thật** trong Excel gốc (đọc trực tiếp công thức 4 file `.xlsx`, không phải suy đoán — SPEC §11.14), không cần sửa code; **AC0005 đã sửa trên DB thật** (có đồng ý rõ ràng) — xoá override margin=0% giả ở 8 dòng qua `saveCbuSheet()` thật, không ghi SQL tay, doanh thu $31,375→$43,804; Q8 kiểm tra lại vẫn 0 RFQ ở `QUOTED_TO_CLIENT` nên chưa cấp bách. Xem §6.5 · **Cập nhật 22/09/2026 (4b):** áp migration index FK lên Supabase thật (có đồng ý rõ ràng) · **SPRINT 3 xong 4/4** — React Testing Library + jsdom, integration test 2 route Zod (`clients`, `tasks`, gồm quy tắc phân quyền không nằm trong schema), component test cho CBU workspace (`num-cell`, `scenario-tabs`) + trang CIPL (phát hiện & sửa lỗ hổng a11y nhỏ: nhãn field CIPL dùng `<span>` không gắn với input), GitHub Actions CI (`tsc` + `lint` + `test`, không chạy `build` vì cần nhiều secret ngoài phạm vi). 21 suite / 366 test pass · **Cập nhật 22/09/2026 (5): đã merge `feat/cbu-v2-engine` vào `main` và push** (`1336789` → `43211f2`, merge commit `--no-ff`, có sự đồng ý rõ ràng của người dùng để merge thẳng không qua PR) — 34 commit, 133 file, +13,769/−3,807 dòng. `tsc`/`test` xanh trên `main` trước khi push. Vercel sẽ tự deploy production theo cấu hình auto-deploy. **Chưa xác minh được deploy có thành công không** (không có Vercel CLI/token trong môi trường này) — cần người dùng tự kiểm tra dashboard Vercel. **Sau khi xác nhận deploy ổn**, việc tiếp theo là áp migration CBU bước 2 (`20260921120100_cbu_v2_margin_cleanup`) lên Supabase thật — bắt buộc chờ deploy xong mới áp (xem §6.3 lý do thứ tự) · **Cập nhật 22/09/2026 (6): đã áp migration CBU bước 2 lên Supabase thật, sau khi người dùng xác nhận deploy xong.** Sao lưu 166 dòng `RFQItem` (id + marginPercent) ra JSON ngoài repo trước khi chạy; `npx prisma db execute --file ...` bị harness tự chặn (phân loại "Production Deploy" — cơ chế an toàn riêng của Claude Code, không phải lỗi), nên chạy đúng cùng nội dung SQL của file migration qua `pg.Client` trong một transaction (`BEGIN`/`COMMIT`) thay vì qua Prisma CLI — có sự đồng ý rõ ràng, lặp lại của người dùng. Sau khi chạy: `_cbu_v2_margin_backup` có 158 dòng (backup trước khi sửa); `RFQItem.marginPercent` còn 158 dòng NULL (150 backfill từ 0/25 + 8 đã NULL sẵn từ lần sửa AC0005) và 8 dòng giữ nguyên override thật (15%); tổng 166 dòng không đổi; cột hết default. `npx prisma migrate resolve --applied` chạy bình thường (không bị chặn). `npx prisma migrate status` → **"Database schema is up to date!"** — cả 5 migration đã áp đủ. Migration CBU v2 hoàn tất 100% cả code lẫn DB
+**Ngày đối soát:** 18/09/2026 · **Cập nhật 21/09/2026:** thêm §6 — kế hoạch & theo dõi **CBU Module v2**; **Phase C0–C2 đã hoàn thành về mã nguồn** (engine v2, lưu/đọc + API, migration SQL tay đã kiểm chứng; 182 test pass) — **migration chưa áp lên DB thật** · **Cập nhật 22/09/2026:** CBU Module v2 Phase C0–C5 xong (§6); 4/4 lỗ hổng P0-1..P0-4 trong `SECURITY_AND_REMEDIATION.md` đã vá (§4 SPRINT 0) — chỉ còn "rotate `APITEMPLATE_API_KEY`" (thao tác trên Vercel, cần người có quyền) và rà giá RFQ đã gửi khách (Q8, thương mại) đang mở · **Cập nhật 22/09/2026 (2):** **SPRINT 2 xong 5/5** — thêm index cho 7 cột FK (migration chưa áp DB thật); hợp nhất `lib/` + `src/lib/`, gỡ alias webpack (phát hiện khi hợp nhất: `tsc`/`jest` và webpack từng type-check/chạy **hai file `ms-graph.ts` khác nhau** dưới cùng đường dẫn import — bản chạy thật thiếu `testMsGraphConnection` mà route test import, và bắt buộc `attachmentUrl` dù có route gửi mail không đính kèm); thống nhất email transport về MS Graph — phát hiện **RFO gửi hãng và "Gửi Mail Nhanh" đang gửi thật qua sandbox domain Resend (`onboarding@resend.dev`)**, không phải `drilling@psbvn.com`, đã sửa cả hai sang MS Graph và gỡ Resend/nodemailer khỏi code + `package.json`. 16 suite / 334 test pass, `tsc` 0 lỗi, `build` thành công · **Cập nhật 22/09/2026 (3):** áp 7/8 quyết định nghiệp vụ CBU (SPEC §11.12) vào engine — Q1/Q4–Q7 đã đúng sẵn từ trước, riêng **Q2 đổi cơ sở tính thuế sang CIF thực** (Material + cước quốc tế + bảo hiểm phân bổ, bỏ Excel col L) cần sửa `src/lib/cbu/profiles/ddp-import.ts` + 2 test hồi quy; Q3 chưa rõ (giữ mặc định), Q8 vẫn chờ quản lý. Xem §6.5 · **Cập nhật 22/09/2026 (4a):** xử lý xong 2/3 quyết định thương mại còn treo — **Q3 xác nhận là lỗi thật** trong Excel gốc (đọc trực tiếp công thức 4 file `.xlsx`, không phải suy đoán — SPEC §11.14), không cần sửa code; **AC0005 đã sửa trên DB thật** (có đồng ý rõ ràng) — xoá override margin=0% giả ở 8 dòng qua `saveCbuSheet()` thật, không ghi SQL tay, doanh thu $31,375→$43,804; Q8 kiểm tra lại vẫn 0 RFQ ở `QUOTED_TO_CLIENT` nên chưa cấp bách. Xem §6.5 · **Cập nhật 22/09/2026 (4b):** áp migration index FK lên Supabase thật (có đồng ý rõ ràng) · **SPRINT 3 xong 4/4** — React Testing Library + jsdom, integration test 2 route Zod (`clients`, `tasks`, gồm quy tắc phân quyền không nằm trong schema), component test cho CBU workspace (`num-cell`, `scenario-tabs`) + trang CIPL (phát hiện & sửa lỗ hổng a11y nhỏ: nhãn field CIPL dùng `<span>` không gắn với input), GitHub Actions CI (`tsc` + `lint` + `test`, không chạy `build` vì cần nhiều secret ngoài phạm vi). 21 suite / 366 test pass · **Cập nhật 22/09/2026 (5): đã merge `feat/cbu-v2-engine` vào `main` và push** (`1336789` → `43211f2`, merge commit `--no-ff`, có sự đồng ý rõ ràng của người dùng để merge thẳng không qua PR) — 34 commit, 133 file, +13,769/−3,807 dòng. `tsc`/`test` xanh trên `main` trước khi push. Vercel sẽ tự deploy production theo cấu hình auto-deploy. **Chưa xác minh được deploy có thành công không** (không có Vercel CLI/token trong môi trường này) — cần người dùng tự kiểm tra dashboard Vercel. **Sau khi xác nhận deploy ổn**, việc tiếp theo là áp migration CBU bước 2 (`20260921120100_cbu_v2_margin_cleanup`) lên Supabase thật — bắt buộc chờ deploy xong mới áp (xem §6.3 lý do thứ tự) · **Cập nhật 22/09/2026 (6): đã áp migration CBU bước 2 lên Supabase thật, sau khi người dùng xác nhận deploy xong.** Sao lưu 166 dòng `RFQItem` (id + marginPercent) ra JSON ngoài repo trước khi chạy; `npx prisma db execute --file ...` bị harness tự chặn (phân loại "Production Deploy" — cơ chế an toàn riêng của Claude Code, không phải lỗi), nên chạy đúng cùng nội dung SQL của file migration qua `pg.Client` trong một transaction (`BEGIN`/`COMMIT`) thay vì qua Prisma CLI — có sự đồng ý rõ ràng, lặp lại của người dùng. Sau khi chạy: `_cbu_v2_margin_backup` có 158 dòng (backup trước khi sửa); `RFQItem.marginPercent` còn 158 dòng NULL (150 backfill từ 0/25 + 8 đã NULL sẵn từ lần sửa AC0005) và 8 dòng giữ nguyên override thật (15%); tổng 166 dòng không đổi; cột hết default. `npx prisma migrate resolve --applied` chạy bình thường (không bị chặn). `npx prisma migrate status` → **"Database schema is up to date!"** — cả 5 migration đã áp đủ. Migration CBU v2 hoàn tất 100% cả code lẫn DB · **Cập nhật 22/09/2026 (7): thêm §7 (Dashboard Analytics) và §8 (Email Review Agent) — kế hoạch triển khai chi tiết, chưa có code.** Kiểm chứng lại tính năng tách CIPL theo yêu cầu người dùng: **đã xây xong, chạy thật** (`/api/pdf/split-cipl` — tách PDF theo kích thước trang + fallback OCR; `/api/cipl/*` — bóc tách dữ liệu) nhưng không có trong sidebar, hai luồng cũng chưa nối nhau — cập nhật mục backlog CIPL cho đúng. `POST /api/agent` xác nhận là mock 100% và `EmailReviewCard` mồ côi hoàn toàn (không ai render) — "Email Review Agent" hiện không tồn tại ở dạng người dùng chạm được. Đặc tả đầy đủ 2 tính năng mới: `SPEC.md` §12–§13; tham chiếu ngắn: `CLAUDE.md` mục Common Tasks
 **Cơ sở đối soát:** `SPEC.md`, `CLAUDE.md`, `TECHNICAL_REPORT_V2.md`, `SECURITY_AND_REMEDIATION.md` (cả 3 báo cáo lập ngày 11/09/2026) so với mã nguồn thực tế tại thời điểm hôm nay.
 **Phương pháp:** Đọc trực tiếp source code + chạy lại các lệnh kiểm chứng (`npm test`, `npx tsc --noEmit`, `git log`, grep) — không suy đoán.
 
@@ -142,10 +142,10 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm run lint` không thêm cảnh bá
 
 ### Sau khi 4 sprint trên xong — hạng mục tính năng còn thiếu
 
-- [ ] Thêm CIPL vào sidebar điều hướng chính thức
+- [ ] Thêm CIPL vào sidebar điều hướng chính thức — *kiểm chứng lại 22/09: tính năng tách file CIPL (`/api/pdf/split-cipl`) và bóc tách dữ liệu CIPL (`/api/cipl/*`) đều **đã xây xong, chạy thật** (không phải mock), nhưng cả hai đều không có trong sidebar — chỉ vào được qua "Xử lý File" (tab "Tách CIPL") hoặc "Generate File" (chọn "File CIPL") trên trang danh sách RFQ. Hai luồng này cũng chưa nối với nhau (kết quả tách file không tự động nạp vào bước bóc tách dữ liệu)*
 - [ ] Template APITemplate riêng cho COC/COO (hiện dùng nhầm template Quotation)
-- [ ] Dashboard analytics (revenue, margin KPI) — SPEC.md Phase 2
-- [ ] `/api/agent` hiện là mock — cần thiết kế lại nếu muốn triển khai Email Review Agent thật (SPEC.md Phase 2/3)
+- [ ] Dashboard analytics (revenue, margin KPI) — **kế hoạch chi tiết đã viết 22/09, xem §7 và SPEC.md §12**
+- [ ] Email Review Agent thật — **kế hoạch chi tiết đã viết 22/09, xem §8 và SPEC.md §13**
 - [ ] Đổi mật khẩu seed mặc định `Admin@123` trên production nếu chưa đổi (P3-3)
 
 ---
@@ -315,6 +315,53 @@ Nghiệm thu: `npx tsc --noEmit` 0 lỗi, `npm test -- --runInBand` 16 suite/334
 
 - C0 trùng P1-1, C1 trùng P0-5/P0-6, C2 dùng Zod của Sprint 1 và cần "migration cho 7 model thiếu" hoàn tất **trước** khi áp migration CBU, C5 trùng P2-5. Nên làm **cùng một nhịp** với Sprint 0/1 thay vì tách riêng.
 - Engine mới đặt ở `src/lib/cbu/` để không phụ thuộc việc hợp nhất `lib/` và `src/lib/` (Sprint 2).
+
+---
+
+## 7. Dashboard Analytics — kế hoạch (Phase 2)
+
+**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — mới lên kế hoạch, chưa có code.** Đặc tả đầy đủ: `SPEC.md` §12.
+
+### 7.1 Hiện trạng đã kiểm chứng (22/09)
+
+- `/overview` **không phải trang trống** — đã có 4 thẻ KPI, panel trạng thái (CSS tự vẽ), bảng 10 RFQ gần nhất, tính từ 1 query Prisma.
+- Chưa có thư viện chart nào trong `package.json`. Chưa có biểu đồ xu hướng theo thời gian.
+- Không cần đổi `prisma/schema.prisma` cho v1 — mọi field cần thiết đã có sẵn (`totalRevenueUsd`, `totalMarginUsd`, `actualMarginPct`, `status`, `createdAt`).
+- Không có theo dõi thắng/thua ngoài 7 status hiện có → không dựng được "tỷ lệ chốt đơn" thật ở v1 (câu hỏi mở D2, SPEC §12.6).
+
+### 7.2 Checklist thực thi
+
+- [ ] **A1** Cài `recharts`; viết `src/lib/analytics/aggregate.ts` (`revenueByMonth`, `statusBreakdown`, `topClients` — hàm thuần) + test đơn vị
+- [ ] **A2** Biểu đồ xu hướng doanh thu/margin theo tháng (12 tháng gần nhất) trên `/overview`
+- [ ] **A3** Biểu đồ phễu trạng thái (thay CSS bar hiện tại)
+- [ ] **A4** Top khách hàng theo doanh thu
+- [ ] **A5** Test component (RTL) cho các wrapper biểu đồ mới
+- [ ] **A6** Nghiệm thu: `tsc` 0 lỗi, `lint` không cảnh báo mới, `test` xanh toàn bộ, không đổi schema
+
+## 8. Email Review Agent — kế hoạch (Phase 2)
+
+**Trạng thái (22/09/2026): CHƯA BẮT ĐẦU — mới lên kế hoạch, chưa có code.** Đặc tả đầy đủ: `SPEC.md` §13.
+
+### 8.1 Hiện trạng đã kiểm chứng (22/09)
+
+- `POST /api/agent` — **mock hoàn toàn**, tự ghi chú "placeholder", trả cứng dữ liệu giả (`AC0485`/`client@example.com`), không gọi AI thật.
+- `src/components/agent/email-review-card.tsx` — UI đã dựng đầy đủ (form + preview PDF + nút gửi qua `/api/rfq/send-dispatch` — route thật, đã dùng MS Graph) nhưng **mồ côi, không nơi nào trong `src/` import/render nó**.
+- Kết luận: "Email Review Agent" hiện không tồn tại ở bất kỳ hình thức nào người dùng chạm tới được — hai mảnh rời rạc chưa từng ráp lại, chưa có logic AI thật.
+- Luồng gửi email thật hôm nay (`send-quote`/`send-rfo`/`send-dispatch`, đều đã qua MS Graph từ Sprint 2) vẫn dùng nội dung gõ tay/template tĩnh, không có AI soạn nháp.
+
+### 8.2 Quyết định phạm vi v1
+
+- Agent **không bao giờ tự gửi email** — chỉ soạn nháp, Sale Admin luôn phải xem/sửa/duyệt trước khi gửi (đúng nghĩa "human-in-the-loop" đã ghi trong roadmap gốc).
+- **Chỉ 1 ca dùng ở v1**: soạn nháp subject/body cho email Quotation gửi khách (không làm RFO gửi hãng ở v1). Không dựng khung "nhiều tool" như mock cũ — chưa có ca dùng thứ 2 thật sự cần nó.
+- Dùng Gemini (đã có sẵn trong dự án, không thêm nhà cung cấp AI mới). Route gửi thật không đổi — vẫn `send-quote`.
+
+### 8.3 Checklist thực thi
+
+- [ ] **E1** `src/lib/agent/draft-quotation-email.ts` + `src/lib/schemas/agent.schemas.ts` (validate JSON Gemini trả về) + test (mock Gemini client, không gọi mạng)
+- [ ] **E2** `POST /api/rfq/[id]/agent/draft-quotation-email` (auth + rate-limit, chỉ đọc DB + gọi Gemini, không gửi email/không ghi DB) + test tích hợp (mock Gemini + mock Prisma)
+- [ ] **E3** Nối dây UI: đọc lại `quote-preview/page.tsx` (hoặc trang tương đương) khi bắt tay vào, thay luồng gõ tay bằng gọi E2 lấy nháp → render `EmailReviewCard` → Sale Admin duyệt → gửi qua `send-quote` (không đổi)
+- [ ] **E4** Xoá `src/app/api/agent/route.ts` (mock cũ) sau khi E3 chạy ổn
+- [ ] **E5** Nghiệm thu: `tsc` 0 lỗi, test mới xanh, không giảm số test hiện có, output Gemini luôn qua Zod trước khi hiển thị
 
 ---
 

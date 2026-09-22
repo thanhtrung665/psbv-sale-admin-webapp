@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createTaskSchema } from "@/lib/schemas";
+import { validateBody } from "@/lib/validation";
 
 export async function GET() {
   try {
@@ -32,7 +34,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -40,8 +42,10 @@ export async function POST(req: Request) {
     }
 
     const user = session.user as any;
-    const body = await req.json();
-    
+    const bodyCheck = await validateBody(req, createTaskSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
+    const body = bodyCheck.data;
+
     // If not admin, they can only assign tasks to themselves
     const assigneeId = (user.role === "ADMIN" && body.assigneeId) ? body.assigneeId : user.id;
 

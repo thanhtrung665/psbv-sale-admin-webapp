@@ -10,6 +10,7 @@ import { QuickEmailModal } from "@/components/rfq/quick-email-modal";
 import { ProcessFileModal } from "@/components/rfq/process-file-modal";
 import { RfqSelector } from "@/components/rfq/RfqSelector";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { ORDER_STATUSES } from "@/lib/order-status";
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; text: string; border: string }> = {
   INQUIRY_RECEIVED:     { label: "Yêu cầu Mới",          bg: "bg-slate-100",   text: "text-slate-700",   border: "border-slate-200" },
@@ -42,16 +43,7 @@ export default function RFQListPage() {
   const fetchRfqs = useCallback(async () => {
     setLoading(true);
     // Only add ?status= if activeStatus is a real status value (not ALL/Tất cả/empty)
-    const VALID_STATUSES = [
-      "INQUIRY_RECEIVED",
-      "RFO_PENDING_ADMIN",
-      "RFO_SENT_TO_SUPPLIER",
-      "SUPPLIER_QUOTED",
-      "CBU_PENDING_ADMIN",
-      "QUOTATION_DRAFTED",
-      "QUOTED_TO_CLIENT",
-    ];
-    const url = activeStatus && VALID_STATUSES.includes(activeStatus)
+    const url = activeStatus && (ORDER_STATUSES as readonly string[]).includes(activeStatus)
       ? `/api/rfq?status=${activeStatus}`
       : "/api/rfq";
     const res = await fetch(url);
@@ -296,11 +288,6 @@ function CbuCalcModal() {
 
   const handleSubmit = async () => {
     if (!rfqCode.trim()) return;
-    
-    if (customerGroup !== "DOMESTIC") {
-      setNavError("Tính năng cho nhóm khách này đang được phát triển. Vui lòng chọn Nhóm khách: Nội địa.");
-      return;
-    }
 
     setNavigating(true);
     setNavError(null);

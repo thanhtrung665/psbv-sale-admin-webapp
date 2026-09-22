@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseSupplierQuoteWithGemini } from "@/lib/gemini-quote";
+import { checkAiRouteLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = checkAiRouteLimit((session.user as any).id as string);
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds!);
 
   try {
     const formData = await req.formData();

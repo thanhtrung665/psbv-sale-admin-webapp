@@ -1,5 +1,7 @@
 # CBU ENGINE - BÁO CÁO PHÂN TÍCH & CẢI TIẾN
 
+> ⚠️ **LỖI THỜI — đã bị thay thế bởi `SPEC.md` §11 (cập nhật 21/09/2026).** Đã chạy lại engine với dữ liệu AC0084 và đối chiếu file md mới: (1) §3.1 *Insurance tính 2 lần* và §3.3 *Financing tính 2 lần* **không phải lỗi** (insurance nằm trong pool cùng driver trọng lượng; `totalFinancingCostUsd` chỉ là số hiển thị); (2) §3.4 Commission/CIT ở PRICE_INPUT là **đúng**; (3) bản "sửa logistics" ở §7 **chưa đúng** — lỗi thật là `netWeightLbs` bị dùng theo hai nghĩa trái ngược (Σ phân bổ 14.78 vs pool 4,253) và `pct()` tự đoán đơn vị (SPEC §11.2 F1–F2). Giữ file này chỉ để tham khảo lịch sử.
+
 **Ngày:** 2026-08-27  
 **Người thực hiện:** Claude (Software Engineer / CTO)  
 **File phân tích:** `lib/cbu-engine.ts` và `cbu-calc/page.tsx`

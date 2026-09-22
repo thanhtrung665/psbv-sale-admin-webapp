@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-
-const VALID_STATUSES = [
-  "INQUIRY_RECEIVED",
-  "RFO_PENDING_ADMIN",
-  "RFO_SENT_TO_SUPPLIER",
-  "SUPPLIER_QUOTED",
-  "CBU_PENDING_ADMIN",
-  "QUOTATION_DRAFTED",
-  "QUOTED_TO_CLIENT",
-];
+import { orderStatusSchema } from "@/lib/schemas";
 
 export async function PATCH(
   req: NextRequest,
@@ -21,7 +12,7 @@ export async function PATCH(
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { status } = await req.json();
-  if (!VALID_STATUSES.includes(status)) {
+  if (!orderStatusSchema.safeParse(status).success) {
     return NextResponse.json({ error: "Invalid status." }, { status: 400 });
   }
 

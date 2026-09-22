@@ -63,10 +63,11 @@ src/
 │   ├── ui/              # shadcn/ui components
 │   ├── rfq/             # RFQ-specific components
 │   └── shared/          # Sidebar, etc.
-└── lib/
-    ├── ms-graph.ts      # MS Graph API client
-    ├── email-builder.ts  # Email HTML templates
-    ├── cbu-engine.ts    # CBU calculation (client-side)
+└── lib/                 # DUY NHẤT (thư mục gốc lib/ đã hợp nhất vào đây ở Sprint 2 — không còn webpack alias @/lib, @/* chỉ trỏ src/*)
+    ├── ms-graph.ts      # MS Graph API client — transport email duy nhất (Resend/nodemailer đã gỡ)
+    ├── email-builder.ts  # Email HTML templates (RFO — "no client info")
+    ├── auth.ts, prisma.ts, gemini-*.ts, catalog-matcher.ts, rfq-code.ts, supabase/, schemas/  # phần còn lại của lib cũ, giữ nguyên hành vi
+    ├── cbu/             # CBU engine v2 (SPEC §11.8): calculateCbu(), pools, pricing, checks, profiles/
     └── utils.ts         # Utilities (cn() helper)
 ```
 
@@ -102,6 +103,47 @@ SUPPLIER_QUOTED → CBU_PENDING_ADMIN → QUOTATION_DRAFTED → QUOTED_TO_CLIENT
 
 ---
 
+## CBU Module (đang tái cấu trúc — CBU v2)
+
+**Trạng thái (22/09/2026):** Phase C0–C5 **xong** (C4 = profile `FCA_DAP` Baker Hughes: `src/lib/cbu/profiles/fca-dap.ts`, kịch bản = điều khoản thanh toán, `quoteBasis` FCA/DAP, bỏ chặn "Nước ngoài" ở modal; C5 = sửa payload Quotation PDF, xoá trang legacy + adapter cũ) — engine v2 khớp Excel từng dòng; lưu/đọc + API v2 (`src/lib/cbu/db/`, `/api/rfq/[id]/cbu`) tính lại phía server; giao diện mới ở `src/components/cbu/` (logic thuần ở `src/lib/cbu/ui/`) là **duy nhất** (trang cũ `?legacy=1`, adapter `calculateCBU()`, route `calculate-cbu`, và `lib/cbu-engine.ts` đã bị xoá); **có kịch bản Air/Sea + so sánh** (kịch bản đầu = nền ở cột phẳng RFQ, kịch bản được chọn quyết định giá lưu và tổng — SPEC §11.3). 314 test pass. **Migration bước 1 đã áp lên DB thật (22/09); bước 2 (backfill `marginPercent`) CHỈ áp sau khi deploy code.** Đặc tả: `SPEC.md` §11 · Theo dõi: `PROGRESS.md` §6.
+
+### Nguồn sự thật nghiệp vụ
+`documents/CBU_docx/` — 4 file `.md` do đội nghiệp vụ chuyển từ Excel:
+- `CBU_Margin_Input/…AC0084_DDP_VN_MARGIN_INPUT.md` · `CBU_DDPPrice_Input/…PRICE_INPUT.md` — profile `DDP_IMPORT` (Hoàng Sơn, Air/Sea)
+- `CBU_BakerHughes_MarginnInput/…` · `CBU_BakerHughes_PriceInput/…` — profile `FCA_DAP` (Baker Hughes, FCA/DAP, Payment/Net 60)
+- `CBU_ANALYSIS_REPORT.md` — **LỖI THỜI (27/08), đừng làm theo**: 3 "lỗi" nó nêu không phải lỗi, bản sửa logistics của nó chưa đúng.
+
+### Quy tắc bắt buộc khi đụng vào CBU
+1. **Đơn vị %**: mọi `…Percent` / `…Rate` / `…Pct` là số phần trăm (3 = 3%). Engine chia 100 (`pctToFrac`). **Không** khôi phục kiểu auto-detect "≤ 1 là phân số" (`pct()` cũ — đó là lỗi P0-6).
+2. **Trọng lượng chuẩn** của engine v2 = tổng trọng lượng của dòng (lb) = `RFQItem.extWeightLbs` (`totalWeightLb`). Trọng lượng/đơn vị = `ext ÷ qty`. Riêng adapter cũ, `netWeightLbs` = **một đơn vị** (đúng nghĩa DB) — đừng trộn hai nghĩa (đó là lỗi P0-5).
+3. **Công thức lõi** (đã kiểm chứng khớp Excel — SPEC §11.4): pool logistics = freight + thông quan + nội địa + **insurance**, phân bổ theo trọng lượng; bank fee = phí NH phân bổ theo Material + chi phí vốn; `DDP = ROUNDUP(base ÷ (1 − margin − q·(1+c)), 2)`; Commission/CIT tính **sau** khi có giá bán. **Duty base (profile `DDP_IMPORT`) = `Material + Freight phân bổ + Insurance phân bổ`** (CIF thực — **không** dùng công thức Excel col L `Material + toàn bộ Logistics`, vì Logistics còn gồm thông quan/nội địa/other không thuộc trị giá tính thuế; quyết định SPEC §11.12 Q2, áp dụng 22/09/2026). Profile `FCA_DAP` (Baker) không có khái niệm Duty.
+4. **Chi phí theo lô hàng mặc định = 0**; chỉ tham số chính sách (biểu phí NH, bảo hiểm, days/year, lb→kg, bước làm tròn VND) mới có mặc định, và đặt ở **một** file.
+5. **Server là nguồn quyết định giá**: API tính lại từ input; không ghi số client gửi lên. Đã thực hiện ở `src/lib/cbu/db/service.ts` — route chỉ validate (Zod) rồi gọi service; đừng thêm đường ghi giá/tổng trực tiếp từ body.
+6. **Mỗi phiên tính phải qua các check** C1–C4 (SPEC §11.4); finalize bị chặn khi check lỗi.
+7. **Golden test lấy số từ file md**, không sửa fixture cho khớp code. Bug này từng bị che vì hai lỗi triệt tiêu ở mức tổng — luôn so **từng dòng**, không chỉ tổng.
+8. **Tên chỉ số trên giao diện CBU dùng đúng tiếng Anh của workbook** (cột, tham số, KPI, hàng tổng hợp: `Material Cost`, `Unit Cost`, `DDP Price (USD)`, `Sales Price`, `% Margin`, `TOTAL BANK FEE`, `Incoterm 1 — FCA`, `Freight per Logistic (reference)`…). Lấy từ 4 file md trước, giữ nguyên chữ hoa/viết tắt; tiếng Việt chỉ cho giải thích (hint), thông báo, nút. Không tự đặt tên tiếng Việt cho thuật ngữ đã có trong workbook. Nhãn nằm ở `src/lib/cbu/ui/draft.ts` (`PARAM_FIELDS`, `FCA_DAP_TEXT`) và các component trong `src/components/cbu/`.
+
+### Cảnh báo migration
+DB đang **lệch migration cả ở mức cột** so với `prisma/migrations`. **Không chạy `npx prisma migrate dev`** — Prisma sẽ đề nghị reset và xoá dữ liệu. Migration CBU được viết **SQL tay, idempotent** (`prisma/migrations/20260921120000_cbu_v2/migration.sql`); kiểm chứng bằng `node scripts/verify-cbu-migration.mjs` (Postgres nhúng, không đụng DB thật). Migration tách 2 bước: `20260921120000_cbu_v2` (chỉ thêm cột/default — an toàn với code cũ) và `20260921120100_cbu_v2_margin_cleanup` (backfill `marginPercent` — **chỉ sau khi code mới đã deploy**, vì `GET /api/rfq/[id]` bản cũ ép `null → 0` và trang cũ coi đó là override 0%). Thứ tự bắt buộc: **backup → bước 1 → deploy code → bước 2** (deploy mà chưa áp bước 1 thì mọi truy vấn `RFQ` lỗi). **Trạng thái: bước 1 ĐÃ áp lên Supabase (22/09/2026), bước 2 chưa.** Máy dev chạy nhánh này với .env trỏ Supabase cần bước 1 (nếu thiếu, mọi truy vấn RFQ lỗi và trang CBU không tải được). Đừng ghi vào DB dùng chung (Supabase) khi chưa được người dùng cho phép rõ ràng. Migration Prisma mới cho phần CBU cũng nên viết tay và có script kiểm chứng tương tự. Xem SPEC §11.8.
+
+Cùng lý do lệch migration: `prisma/migrations` trước đây chưa từng tạo 6 model `Task`/`AiConfig`/`MasterPart`/`Supplier`/`CiplRecord`/`CiplItem` (+ enum `TaskStatus`) dù `schema.prisma` đã khai báo từ lâu và code production đang dùng — soạn ở `prisma/migrations/20260922130000_missing_models/migration.sql`, cùng phong cách hand-written/idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE TYPE`/`ADD CONSTRAINT` bọc trong `DO $$ … EXCEPTION WHEN duplicate_object`); kiểm chứng bằng `node scripts/verify-missing-models-migration.mjs` (Postgres nhúng, gồm cả kịch bản bảng đã tồn tại sẵn ngoài migration — trường hợp thực tế của DB production). **Trạng thái: ĐÃ áp lên Supabase thật (22/09/2026)**, có sự đồng ý rõ ràng của người dùng — đọc `information_schema` trước khi áp xác nhận cả 6 bảng đã tồn tại và khớp 100% `schema.prisma`, nên đây là no-op thật sự trên schema, chỉ đồng bộ sổ sách `_prisma_migrations`. Xem PROGRESS.md §4 SPRINT 1 để biết chi tiết quy trình.
+
+### Lệnh hữu ích
+```bash
+npm test -- --runInBand          # 21 suite / 366 test phải xanh (--runInBand: worker song song có thể hết RAM trên máy yếu)
+node scripts/verify-cbu-migration.mjs  # kiểm chứng migration SQL tay (không cần DB)
+node scripts/verify-missing-models-migration.mjs  # kiểm chứng migration 6 model thiếu (không cần DB)
+node scripts/verify-fk-indexes-migration.mjs  # kiểm chứng migration index cho 7 cột FK (không cần DB)
+npx tsx scripts/cbu-audit.ts --help    # audit giá đã lưu vs engine v2 (chỉ đọc, cần DATABASE_URL)
+npx tsx scripts/dev-cbu-sandbox.ts     # sandbox: Postgres nhúng + dữ liệu AC0084 + next dev (localhost:3100), KHÔNG dùng DB thật
+node scripts/e2e-cbu-sandbox.cjs       # 48 kiểm tra API end-to-end trên sandbox, gồm Baker (đổi dữ liệu — khởi động lại sandbox trước mỗi lần chạy lại)
+npx jest __tests__/cbu            # chỉ test CBU (golden AC0084 + AC0481, tích hợp, render)
+node scripts/gen-cbu-fixture.mjs  # sinh lại fixture từ file md (không sửa tay fixture)
+npx tsc --noEmit                  # phải 0 lỗi
+```
+
+---
+
 ## Important Patterns
 
 ### 1. API Routes
@@ -129,9 +171,9 @@ export async function GET(req: NextRequest) {
 - Role-based access: `ADMIN` và `SALE_ADMIN`
 
 ### 3. Email Sending
-- **MS Graph (Primary):** Dùng `sendEmailViaGraph()` từ `@/lib/ms-graph`
+- **MS Graph — transport duy nhất** (Sprint 2, 22/09/2026: gỡ bỏ Resend/nodemailer khỏi `send-rfo`, `send-rfq`/`quick-email-modal`; trước đó 2 route này gửi thật qua sandbox domain `onboarding@resend.dev`, không phải domain công ty). Dùng `sendEmailViaGraph()` từ `@/lib/ms-graph`
   - Auto lấy token từ Azure AD credentials
-  - Hỗ trợ PDF attachments
+  - Hỗ trợ PDF attachments (tham số `attachmentUrl`/`fileName` optional — email không đính kèm vẫn gửi được)
   - Email gửi từ `drilling@psbvn.com`
 
 ```typescript
@@ -147,7 +189,7 @@ await sendEmailViaGraph({
 ```
 
 ### 4. AI Document Parsing
-- Dùng Gemini API qua `lib/gemini.ts`, `lib/gemini-quote.ts`
+- Dùng Gemini API qua `src/lib/gemini-inquiry.ts`, `gemini-quote.ts`, `gemini-po.ts`, `gemini-cipl.ts`
 - AI config lưu trong database (`AiConfig` model)
 
 ### 5. PDF Generation
@@ -175,10 +217,7 @@ AZURE_CLIENT_SECRET
 MS_GRAPH_MAILBOX=drilling@psbvn.com
 ```
 
-**Local-only** (gitignored):
-```bash
-RESEND_API_KEY
-```
+(Không còn `RESEND_API_KEY` — Sprint 2 đã gỡ Resend/nodemailer, MS Graph là transport email duy nhất. Cột `AiConfig.resendApiKey` trong DB vẫn còn nhưng không còn được code đọc/ghi.)
 
 ---
 
@@ -195,8 +234,9 @@ RESEND_API_KEY
 3. Dùng `cn()` từ `@/lib/utils` cho className
 
 ### Modify CBU calculation
-- CBU engine nằm trong `src/lib/cbu-engine.ts` (client-side)
-- Công thức tính toán trong `src/app/(dashboard)/rfq/[id]/cbu-calc/page.tsx`
+- **Đọc mục "CBU Module" bên dưới trước.** Đổi công thức = sửa golden test trước, rồi mới sửa engine.
+- Engine v2: `src/lib/cbu/` — dùng `import { calculateCbu } from "@/lib/cbu"`. Adapter cũ `calculateCBU()` và shim `lib/cbu-engine.ts` đã bị xoá ở Phase C5 — không còn tồn tại, đừng import.
+- Trang `cbu-calc/page.tsx` **chỉ hiển thị và gọi engine** — không chứa công thức.
 
 ### Add new email template
 - Email builder trong `src/lib/email-builder.ts`

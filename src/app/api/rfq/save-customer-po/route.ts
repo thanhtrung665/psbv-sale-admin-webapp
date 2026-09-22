@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { saveCustomerPoSchema } from "@/lib/schemas";
+import { validateBody } from "@/lib/validation";
 
 /**
  * POST /api/rfq/save-customer-po
@@ -33,39 +35,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const {
-      rfqCode,
-      rfqId: bodyRfqId,
-      poNumber,
-      customerName,
-      deliveryDate,
-      currency,
-      rows,
-    } = body as {
-      rfqCode?: string;
-      rfqId?: string;
-      poNumber?: string;
-      customerName?: string;
-      deliveryDate?: string;
-      currency?: string;
-      rows: {
-        lineNo: number;
-        partNumber: string;
-        description: string;
-        qty: number;
-        uom: string;
-        agreedDdpPrice: number;
-        deliveryDate: string;
-      }[];
-    };
-
-    if ((!rfqCode && !bodyRfqId) || !rows || rows.length === 0) {
-      return NextResponse.json(
-        { success: false, message: "Thiếu rfqCode/rfqId hoặc danh sách rows." },
-        { status: 400 }
-      );
-    }
+    const bodyCheck = await validateBody(req, saveCustomerPoSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
+    const { rfqCode, rfqId: bodyRfqId, poNumber, rows } = bodyCheck.data;
 
     // ── Resolve the RFQ ────────────────────────────────────────────────────
     const rfq = await prisma.rFQ.findUnique({
@@ -88,10 +60,11 @@ export async function POST(req: NextRequest) {
     for (const row of rows) {
       // Match against existing RFQ items by part number
       const dbItems = rfq.items as any[];
+      const rowPartNumber = row.partNumber || "";
       const dbMatch = dbItems.find(
         (db: any) =>
-          NORMALIZE(db.rawPartNumber) === NORMALIZE(row.partNumber) ||
-          NORMALIZE(db.standardPartNo || "") === NORMALIZE(row.partNumber)
+          NORMALIZE(db.rawPartNumber) === NORMALIZE(rowPartNumber) ||
+          NORMALIZE(db.standardPartNo || "") === NORMALIZE(rowPartNumber)
       );
 
       if (dbMatch) {
@@ -102,7 +75,7 @@ export async function POST(req: NextRequest) {
             data: {
               qty: row.qty,
               uom: row.uom || dbMatch.uom || "PCS",
-              ddpPriceUsd: row.agreedDdpPrice > 0 ? row.agreedDdpPrice : undefined,
+              ddpPriceUsd: (row.agreedDdpPrice ?? 0) > 0 ? row.agreedDdpPrice : undefined,
             },
           })
         );

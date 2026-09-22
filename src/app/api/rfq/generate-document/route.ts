@@ -66,6 +66,13 @@ export async function POST(req: NextRequest) {
       }, { status: 500 });
     }
 
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({
+        success: false,
+        message: "[ENV ERROR] Thiếu SUPABASE_SERVICE_ROLE_KEY.",
+      }, { status: 500 });
+    }
+
     if (docType === "MVPO_SUPPLIER_PDF") {
       // ── MVPO: Purchase Order sent to Supplier ──────────────────────────────
       const rawMvpoTemplateId = process.env.APITEMPLATE_MVPO_TEMPLATE_ID || "";
@@ -229,11 +236,11 @@ export async function POST(req: NextRequest) {
           leadtime: "1-2 days",
           quantity: String(item?.qty ?? 0),
           uom: item?.uom || "Ea",
-          unit_price: Number(item.ddpPriceUsd ? (item.ddpPriceUsd / item.qty) : 0).toLocaleString("en-US", {
+          unit_price: Number(item.ddpPriceUsd ?? 0).toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           }),
-          amount: Number(item.ddpPriceUsd ?? 0).toLocaleString("en-US", {
+          amount: Number((item.ddpPriceUsd ?? 0) * (item.qty ?? 0)).toLocaleString("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           }),
@@ -289,33 +296,29 @@ export async function POST(req: NextRequest) {
 
     const fileName = `${rfqCode}_${fileTypeSuffix}_${Date.now()}.pdf`;
 
-    let fileUrl: string;
-    try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(`rfq/${rfqCode}/${fileName}`, pdfBuffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(`rfq/${rfqCode}/${fileName}`, pdfBuffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(`rfq/${rfqCode}/${fileName}`);
-
-      fileUrl = urlData.publicUrl;
-    } catch (uploadErr: any) {
-      console.error("[generate-document] Upload error:", uploadErr);
-      const base64 = pdfBuffer.toString("base64");
-      fileUrl = `data:application/pdf;base64,${base64}`;
+    if (uploadError) {
+      console.error("[generate-document] Upload error:", uploadError);
+      throw new Error("Không thể lưu file PDF vào Supabase Storage: " + uploadError.message);
     }
+
+    const { data: urlData } = supabase.storage
+      .from("documents")
+      .getPublicUrl(`rfq/${rfqCode}/${fileName}`);
+
+    const fileUrl = urlData.publicUrl;
 
     await prisma.document.create({
       data: {

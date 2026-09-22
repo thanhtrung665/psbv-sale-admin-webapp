@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createClientSchema } from "@/lib/schemas";
+import { validateBody } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +49,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const { name, companyName, email, phone, address } = body;
-
-    if (!name || !companyName || !email) {
-      return NextResponse.json({ success: false, message: "Vui lòng nhập đầy đủ Tên, Công ty và Email." }, { status: 400 });
-    }
+    const bodyCheck = await validateBody(req, createClientSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
+    const { name, companyName, email, phone, address } = bodyCheck.data;
 
     // Check email exists
     const existingClient = await prisma.client.findUnique({ where: { email } });

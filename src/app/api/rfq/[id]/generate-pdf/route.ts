@@ -73,9 +73,16 @@ export async function GET(
     const templateId = rawTemplateId.replace(/['"]/g, '').trim();
 
     if (!apiKey || apiKey === "undefined" || !templateId) {
-      return NextResponse.json({ 
-        success: false, 
-        message: `[VERCEL ENV ERROR] Không tìm thấy API Key hoặc Template ID. Giá trị hiện tại: API_KEY=${apiKey}` 
+      return NextResponse.json({
+        success: false,
+        message: "[ENV ERROR] Thiếu APITEMPLATE_API_KEY hoặc APITEMPLATE_QUOTATION_TEMPLATE_ID.",
+      }, { status: 500 });
+    }
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json({
+        success: false,
+        message: "[ENV ERROR] Thiếu SUPABASE_SERVICE_ROLE_KEY.",
       }, { status: 500 });
     }
 
@@ -109,33 +116,29 @@ export async function GET(
     
     const fileName = `Quotation_${rfq.rfqCode}_${Date.now()}.pdf`;
 
-    let fileUrl: string;
-    try {
-      const { createClient } = await import("@supabase/supabase-js");
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from("documents")
-        .upload(`rfq/${rfq.rfqCode}/${fileName}`, pdfBuffer, {
-          contentType: "application/pdf",
-          upsert: true,
-        });
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(`rfq/${rfq.rfqCode}/${fileName}`, pdfBuffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
 
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage
-        .from("documents")
-        .getPublicUrl(`rfq/${rfq.rfqCode}/${fileName}`);
-
-      fileUrl = urlData.publicUrl;
-    } catch (uploadErr: any) {
-      console.error("[generate-pdf] Upload error:", uploadErr);
-      const base64 = pdfBuffer.toString("base64");
-      fileUrl = `data:application/pdf;base64,${base64}`;
+    if (uploadError) {
+      console.error("[generate-pdf] Upload error:", uploadError);
+      throw new Error("Không thể lưu file PDF vào Supabase Storage: " + uploadError.message);
     }
+
+    const { data: urlData } = supabase.storage
+      .from("documents")
+      .getPublicUrl(`rfq/${rfq.rfqCode}/${fileName}`);
+
+    const fileUrl = urlData.publicUrl;
 
     // Save to DB Document table
     const document = await prisma.document.create({

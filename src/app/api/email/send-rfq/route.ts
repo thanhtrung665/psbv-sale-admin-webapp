@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/email";
+import { sendEmailViaGraph } from "@/lib/ms-graph";
 
 const VALID_ACTIONS = [
   "SEND_RFO_SUPPLIER",
@@ -64,7 +64,6 @@ export async function POST(req: NextRequest) {
         resolvedTo = rfq.client?.email || "";
       } else if (action === "SEND_INTERNAL_APPROVAL") {
         // For internal approvals, send to the logged-in user's manager / configured email
-        const config = await prisma.aiConfig.findFirst({ where: { name: "core" } });
         resolvedTo = (session.user as any)?.email || "salesdir@psbvn.com";
       }
     }
@@ -80,11 +79,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Send email via Resend (nodemailer in lib/email.ts)
-    await sendEmail({
+    // Send email via Microsoft Graph (drilling@psbvn.com)
+    await sendEmailViaGraph({
       to: resolvedTo,
       subject,
-      html,
+      bodyHtml: html,
     });
 
     // Log the sent email as a Document record

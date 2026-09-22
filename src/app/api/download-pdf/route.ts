@@ -1,9 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+/** Only Supabase Storage (where generate-document/route.ts uploads PDFs) may be proxied — prevents SSRF (P0-1). */
+function allowedHosts(): string[] {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  try {
+    return [new URL(supabaseUrl).host];
+  } catch {
+    return [];
+  }
+}
+
+/** Strip anything that could break the Content-Disposition header or the saved filename. */
+function sanitiseFilename(raw: string): string {
+  const base = raw.replace(/[\\/\r\n"]/g, "_").trim() || "document";
+  return base.toLowerCase().endsWith(".pdf") ? base : `${base}.pdf`;
+}
+
 export async function GET(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const url = req.nextUrl.searchParams.get("url");
     const filename = req.nextUrl.searchParams.get("filename") || "document.pdf";
 
@@ -11,14 +34,24 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
     }
 
-    // Ensure the filename ends with .pdf
-    const safeFilename = filename.toLowerCase().endsWith(".pdf") ? filename : `${filename}.pdf`;
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return NextResponse.json({ error: "Invalid url parameter" }, { status: 400 });
+    }
 
-    // Fetch the file from the provided URL
-    const response = await fetch(url);
-    
+    if (parsed.protocol !== "https:" || !allowedHosts().includes(parsed.host)) {
+      return NextResponse.json({ error: "URL host is not allowed" }, { status: 400 });
+    }
+
+    const safeFilename = sanitiseFilename(filename);
+
+    // Fetch the file from the allow-listed URL only
+    const response = await fetch(parsed.toString());
+
     if (!response.ok) {
-      throw new Error(`Failed to fetch file from ${url}: ${response.statusText}`);
+      throw new Error(`Failed to fetch file from ${parsed.host}: ${response.statusText}`);
     }
 
     const arrayBuffer = await response.arrayBuffer();

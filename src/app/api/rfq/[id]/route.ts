@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { updateRfqSchema } from "@/lib/schemas";
+import { validateBody, validatePathParam } from "@/lib/validation";
 
 export async function GET(
   req: NextRequest,
@@ -65,7 +67,10 @@ export async function GET(
         dutyPercent: item.dutyPercent ?? 0,
         commissionPercent: item.commissionPercent ?? 0,
         citPercent: item.citPercent ?? 0,
-        marginPercent: item.marginPercent ?? 0,
+        // NULL = "no override, use the target margin". Coercing it to 0 turned every reopened line into a
+        // 0% margin override (CBU v2 SPEC §11.2 F6) — keep it null.
+        marginPercent: item.marginPercent ?? null,
+        marginOverrideUsd: item.marginOverrideUsd ?? null,
         unitCostUsd: item.unitCostUsd ?? 0,
         ddpPriceUsd: item.ddpPriceUsd ?? 0,
         marginPerUnitUsd: item.marginPerUnitUsd ?? 0,
@@ -113,11 +118,16 @@ export async function PATCH(
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const idCheck = validatePathParam(params.id, "id");
+  if (!idCheck.success) return idCheck.response;
+
+  const bodyCheck = await validateBody(req, updateRfqSchema);
+  if (!bodyCheck.success) return bodyCheck.response;
+
   try {
-    const body = await req.json();
     const updated = await prisma.rFQ.update({
-      where: { id: params.id },
-      data: body,
+      where: { id: idCheck.data },
+      data: bodyCheck.data,
     });
     return NextResponse.json(updated);
   } catch (error: any) {

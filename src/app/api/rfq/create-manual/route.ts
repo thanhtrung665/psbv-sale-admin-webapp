@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateRfoId } from "@/lib/rfq-code";
+import { createRfqManualSchema } from "@/lib/schemas";
+import { validateBody } from "@/lib/validation";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -11,20 +13,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
+    const bodyCheck = await validateBody(req, createRfqManualSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
     const {
       clientName, clientEmail, companyName, clientPhone,
       opportunityName, supplierName, incoTerm, paymentTerm,
       items, rfqCode: providedRfqCode,
-    } = body;
+    } = bodyCheck.data;
     const createdById = (session.user as any).id as string;
-
-    if (!clientName || !clientEmail || !items || items.length === 0) {
-      return NextResponse.json(
-        { error: "Vui lòng điền đầy đủ thông tin khách hàng và ít nhất 1 sản phẩm." },
-        { status: 400 }
-      );
-    }
 
     let rfqCode = providedRfqCode?.trim();
     if (rfqCode) {
@@ -39,7 +35,7 @@ export async function POST(req: NextRequest) {
     // Upsert client
     const client = await prisma.client.upsert({
       where: { email: clientEmail },
-      update: { name: clientName, companyName, phone: clientPhone },
+      update: { name: clientName, companyName: companyName ?? undefined, phone: clientPhone },
       create: { name: clientName, companyName: companyName || "", email: clientEmail, phone: clientPhone },
     });
 

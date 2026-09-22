@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { updateClientSchema } from "@/lib/schemas";
+import { validateBody, validatePathParam } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +14,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const clientId = params.id;
-    const body = await req.json();
-    const { name, companyName, email, phone, address } = body;
+    const idCheck = validatePathParam(params.id, "id");
+    if (!idCheck.success) return idCheck.response;
+    const clientId = idCheck.data;
 
-    if (!name || !companyName || !email) {
-      return NextResponse.json({ success: false, message: "Vui lòng nhập đầy đủ Tên, Công ty và Email." }, { status: 400 });
-    }
+    const bodyCheck = await validateBody(req, updateClientSchema);
+    if (!bodyCheck.success) return bodyCheck.response;
+    const { name, companyName, email, phone, address } = bodyCheck.data;
 
     // Check if email belongs to someone else
     const existing = await prisma.client.findFirst({

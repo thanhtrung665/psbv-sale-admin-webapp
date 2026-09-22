@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import { PDFDocument } from "pdf-lib";
 import { createWorker } from "tesseract.js";
 import { fromBuffer } from "pdf2pic";
 import path from "node:path";
 import stringSimilarity from "string-similarity";
+
+const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB — OCR/PDF processing of larger files is unbounded work (P0-2)
 
 // ====================================================================
 // Tesseract.js local model setup
@@ -167,6 +171,11 @@ export async function POST(req: NextRequest) {
   let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
 
   try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File;
     const rfqCode = (formData.get("rfqCode") as string) || "UNKNOWN";
@@ -176,6 +185,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: "Không tìm thấy file đính kèm." },
         { status: 400 }
+      );
+    }
+
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return NextResponse.json(
+        { success: false, error: `File quá lớn (${(file.size / 1024 / 1024).toFixed(1)}MB). Giới hạn 20MB.` },
+        { status: 413 }
       );
     }
 

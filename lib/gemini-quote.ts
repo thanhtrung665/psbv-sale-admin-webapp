@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import * as xlsx from "xlsx";
+import { geminiSupplierQuoteSchema } from "@/lib/schemas";
 
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
 const DEFAULT_MODEL = "gemini-2.5-pro";
@@ -167,29 +168,25 @@ export async function parseSupplierQuoteWithGemini(
     .replace(/\s*```$/i, "")
     .trim();
 
-  let parsed: ParsedSupplierQuote;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    raw = JSON.parse(jsonText);
   } catch {
     throw new Error(`Gemini trả về JSON không hợp lệ: ${rawText.substring(0, 200)}`);
   }
 
+  const validated = geminiSupplierQuoteSchema.safeParse(raw);
+  if (!validated.success) {
+    throw new Error(`Gemini trả về dữ liệu sai định dạng: ${validated.error.message}`);
+  }
+  const parsed = validated.data;
+
   const filenameCode = fileName ? extractQuoteCodeFromFilename(fileName) : null;
-  const geminiCode = parsed.supplierQuoteCode || "";
-  const finalQuoteCode = geminiCode || filenameCode || "";
+  const finalQuoteCode = parsed.supplierQuoteCode || filenameCode || "";
 
   return {
     supplierQuoteCode: finalQuoteCode,
-    supplierName: parsed.supplierName || "",
-    items: (Array.isArray(parsed.items) ? parsed.items : [])
-      .filter((item: any) => item !== null && item !== undefined && typeof item === "object")
-      .map((item: any) => ({
-        partNumber: String(item.partNumber || item.PartNumber || ""),
-        description: String(item.description || item.Description || ""),
-        supplierUnitPrice: Number(item.supplierUnitPrice ?? item.UnitPrice ?? 0) || 0,
-        netWeightLbs: Number(item.netWeightLbs ?? item.NetWeight ?? 0) || 0,
-        extWeightLbs: Number(item.extWeightLbs ?? item.ExtWeight ?? 0) || 0,
-        leadTime: String(item.leadTime || item.LeadTime || ""),
-      })),
+    supplierName: parsed.supplierName,
+    items: parsed.items,
   };
 }

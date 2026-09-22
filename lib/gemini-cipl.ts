@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { geminiCiplSchema } from "@/lib/schemas";
 
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
 const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -125,19 +126,19 @@ export async function extractCiplFromPdf(
     .replace(/```\s*$/i, "")
     .trim();
 
-  let parsed: ParsedCiplData;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(cleaned);
+    raw = JSON.parse(cleaned);
   } catch {
     throw new Error(
       "Gemini returned invalid JSON format. Raw output: " + cleaned.substring(0, 300)
     );
   }
 
-  // Ensure items array exists
-  if (!Array.isArray(parsed.items)) {
-    parsed.items = [];
+  const validated = geminiCiplSchema.safeParse(raw);
+  if (!validated.success) {
+    throw new Error("Gemini returned an unexpected data shape: " + validated.error.message);
   }
 
-  return parsed;
+  return validated.data;
 }

@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
+import { fillLineNumbers, geminiCustomerPoSchema } from "@/lib/schemas";
 
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
 const DEFAULT_MODEL = "gemini-2.5-pro";
@@ -108,28 +109,24 @@ export async function parseCustomerPoWithGemini(
     .replace(/\s*```$/i, "")
     .trim();
 
-  let parsed: ParsedCustomerPo;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    raw = JSON.parse(jsonText);
   } catch {
     throw new Error(`Gemini trả về JSON không hợp lệ: ${rawText.substring(0, 200)}`);
   }
 
+  const validated = geminiCustomerPoSchema.safeParse(raw);
+  if (!validated.success) {
+    throw new Error(`Gemini trả về dữ liệu sai định dạng: ${validated.error.message}`);
+  }
+  const parsed = validated.data;
+
   return {
-    poNumber: String(parsed.poNumber || ""),
-    customerName: String(parsed.customerName || ""),
-    deliveryDate: String(parsed.deliveryDate || ""),
-    currency: String(parsed.currency || "USD"),
-    items: (Array.isArray(parsed.items) ? parsed.items : [])
-      .filter((item: any) => item !== null && item !== undefined && typeof item === "object")
-      .map((item: any, idx: number) => ({
-        lineNo: Number(item.lineNo) || idx + 1,
-        partNumber: String(item.partNumber || ""),
-        description: String(item.description || ""),
-        qty: Number(item.qty) || 1,
-        uom: String(item.uom || "PCS"),
-        agreedDdpPrice: Number(item.agreedDdpPrice ?? 0) || 0,
-        deliveryDate: String(item.deliveryDate || ""),
-      })),
+    poNumber: parsed.poNumber,
+    customerName: parsed.customerName,
+    deliveryDate: parsed.deliveryDate,
+    currency: parsed.currency,
+    items: fillLineNumbers(parsed.items),
   };
 }

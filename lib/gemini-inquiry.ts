@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import * as xlsx from "xlsx";
+import { fillLineNumbers, geminiInquirySchema } from "@/lib/schemas";
 
 // Config defaults
 const DEFAULT_API_KEY = process.env.GEMINI_API_KEY || "";
@@ -157,26 +158,27 @@ export async function parseInquiryWithGemini(
     .replace(/\s*```$/i, "")
     .trim();
 
-  let parsed: ParsedInquiry;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(jsonText);
+    raw = JSON.parse(jsonText);
   } catch (e) {
     throw new Error(`Gemini returned invalid JSON: ${rawText.substring(0, 200)}`);
   }
 
+  const validated = geminiInquirySchema.safeParse(raw);
+  if (!validated.success) {
+    throw new Error(`Gemini returned an unexpected data shape: ${validated.error.message}`);
+  }
+  const parsed = validated.data;
+
   const itemsWithMatch = await Promise.all(
-    (parsed.items || []).map(async (item: any, idx: number) => {
-      const lineNo = item.lineNo || idx + 1;
-      const rawPartNumber = item.rawPartNumber || "";
-      const rawDescription = item.rawDescription || "";
-      const qty = Number(item.qty) || 1;
-      let uom = item.uom || "PCS";
-      const supplier = item.supplier || "";
+    fillLineNumbers(parsed.items).map(async (item) => {
+      let uom = item.uom;
       let standardPartNo = "";
 
       try {
         const { matchStandardPartNumber } = await import("./catalog-matcher");
-        const match = await matchStandardPartNumber(rawDescription, rawPartNumber);
+        const match = await matchStandardPartNumber(item.rawDescription, item.rawPartNumber);
         if (match) {
           standardPartNo = match.standardPartNo;
           uom = match.uom || uom;
@@ -185,24 +187,15 @@ export async function parseInquiryWithGemini(
         console.warn("[gemini-inquiry] Catalog matching failed, skipping:", matchErr);
       }
 
-      return {
-        lineNo,
-        rawPartNumber,
-        rawDescription,
-        qty,
-        uom,
-        supplier,
-        standardPartNo,
-      };
+      return { ...item, uom, standardPartNo };
     })
   );
 
-  // Validate and fill defaults
   return {
-    clientName: parsed.clientName || "",
-    clientEmail: parsed.clientEmail || "",
-    companyName: parsed.companyName || "",
-    clientPhone: parsed.clientPhone || "",
+    clientName: parsed.clientName,
+    clientEmail: parsed.clientEmail,
+    companyName: parsed.companyName,
+    clientPhone: parsed.clientPhone,
     items: itemsWithMatch,
   };
 }

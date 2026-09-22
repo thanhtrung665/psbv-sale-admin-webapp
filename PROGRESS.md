@@ -118,13 +118,13 @@ Giữ nguyên roadmap 4 sprint đã thiết kế sẵn trong `SECURITY_AND_REMED
 - [x] Rate limiting cho route AI (`parse-*`, `cipl/extract`) — *xong 22/09*: `src/lib/rate-limit.ts` (bộ đếm in-memory theo cửa sổ cố định, 20 request/10 phút/user, trả 429 + header `Retry-After`), wire vào cả 7 route gọi Gemini/OCR: `parse-inquiry`, `parse-quote`, `quick-parse-quote`, `rfq/parse-customer-po`, `rfq/parse-supplier-quote`, `rfq/[id]/parse-supplier-quote`, `cipl/extract`. ⚠️ **Giới hạn đã biết:** state nằm trong RAM của tiến trình, không dùng store chung (Redis/Upstash) — trên Vercel serverless mỗi cold start/instance có bộ đếm riêng nên không chặn tuyệt đối trên toàn traffic, chỉ chặn burst trên cùng 1 instance đang "ấm". Đủ để chặn vòng lặp lỗi/client bắn liên tục làm tốn phí Gemini; nếu cần giới hạn chính xác toàn cục thì phải đổi sang store chung
 - [x] Sửa `unit_price`/`amount` sai trong payload quotation PDF (P2-5) — *xong 22/09 trong CBU Phase C5, xem §6.3*
 
-### SPRINT 2 — Kiến trúc & chất lượng (5 ngày) — **CHƯA BẮT ĐẦU**
+### SPRINT 2 — Kiến trúc & chất lượng (5 ngày) — **đang làm**
 
 - [ ] Thêm `@@index` cho mọi FK trong `schema.prisma`
 - [ ] Hợp nhất `lib/` và `src/lib/`, gỡ alias webpack trong `next.config.mjs` (đặc biệt: chuyển ràng buộc "no client info" của `lib/email-builder.ts` sang bản giữ lại)
 - [ ] Thống nhất email transport về MS Graph, verify domain `psbvn.com`
-- [ ] `z.nativeEnum` thay 4 nơi hardcode `OrderStatus`
-- [ ] Zod validate output của 4 module Gemini
+- [x] `z.nativeEnum` thay 4 nơi hardcode `OrderStatus` — *xong 22/09*: tìm đúng 4 chỗ tự chép lại 7 giá trị status — `src/lib/schemas/common.schemas.ts` (định nghĩa Zod gốc, giờ `z.nativeEnum(OrderStatus)` lấy thẳng từ `@prisma/client` thay vì gõ tay), `src/app/api/rfq/[id]/status/route.ts` và `src/app/api/rfq/route.ts` (đổi mảng `VALID_STATUSES` + `.includes()` thủ công sang `orderStatusSchema.safeParse()`, bỏ luôn cast `as any`), và `src/app/(dashboard)/rfq/page.tsx` (client component — không import `@prisma/client` được vì sẽ kéo code Node vào bundle trình duyệt, nên tách hằng số `ORDER_STATUSES` không phụ thuộc gì vào `src/lib/order-status.ts` làm nguồn dùng chung phía client, có ghi chú vì sao tách riêng)
+- [x] Zod validate output của 4 module Gemini — *xong 22/09*: `src/lib/schemas/gemini.schemas.ts` (16 test) — trước đây `JSON.parse(...)` được gán thẳng vào biến kiểu `ParsedX` (ép kiểu suông, không kiểm tra runtime), mỗi call site tự viết `String(x || "")`/`Number(x) || d` rải rác. Giờ có 1 schema Zod cho từng module (`geminiInquirySchema`, `geminiSupplierQuoteSchema`, `geminiCustomerPoSchema`, `geminiCiplSchema`) mô phỏng đúng hành vi fallback cũ (kể cả fallback khoá PascalCase Gemini hay trả nhầm ở module quote, ví dụ `UnitPrice` thay vì `supplierUnitPrice`) + `fillLineNumbers()` dùng chung cho phần đánh lại `lineNo` theo index. Response không đúng dạng object giờ ném lỗi rõ ràng thay vì crash sâu trong `.map()`. Không đổi hành vi quan sát được — chỉ gom logic rải rác về 1 chỗ có test
 
 ### SPRINT 3 — Test & CI/CD (5 ngày) — **CHƯA BẮT ĐẦU**
 

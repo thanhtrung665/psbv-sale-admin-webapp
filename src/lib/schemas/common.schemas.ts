@@ -7,6 +7,7 @@
  * primitives.
  */
 import { z } from "zod";
+import { OrderStatus } from "@prisma/client";
 
 /** Accepts any Prisma `cuid`/`uuid` style identifier. Our schema uses
  * `@default(uuid())` everywhere, so we validate the UUID shape, but we keep
@@ -40,16 +41,9 @@ export const positiveNumberSchema = z.number().finite().positive();
 
 export const nonNegativeNumberSchema = z.number().finite().nonnegative();
 
-/** RFQ lifecycle — mirrors `OrderStatus` in prisma/schema.prisma. */
-export const orderStatusSchema = z.enum([
-  "INQUIRY_RECEIVED",
-  "RFO_PENDING_ADMIN",
-  "RFO_SENT_TO_SUPPLIER",
-  "SUPPLIER_QUOTED",
-  "CBU_PENDING_ADMIN",
-  "QUOTATION_DRAFTED",
-  "QUOTED_TO_CLIENT",
-]);
+/** RFQ lifecycle — sourced from the generated `OrderStatus` enum (prisma/schema.prisma) instead of a
+ * hand-duplicated list, so the two can never drift apart. */
+export const orderStatusSchema = z.nativeEnum(OrderStatus);
 
 /** Mirrors `TaskStatus` in prisma/schema.prisma. */
 export const taskStatusSchema = z.enum(["PENDING", "IN_PROGRESS", "DONE"]);
